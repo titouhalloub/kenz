@@ -1,0 +1,8 @@
+{
+  "appId": "com.kenz.finance.app",
+  "appName": "Kenz",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

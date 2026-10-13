@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kenz</string>
+    <string name="title_activity_main">Kenz</string>
+    <string name="package_name">com.kenz.finance.app</string>
+    <string name="custom_url_scheme">com.kenz.finance.app</string>
+</resources>

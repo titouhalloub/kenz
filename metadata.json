@@ -1,0 +1,6 @@
+{
+  "name": "Kenz Finance",
+  "description": "Mobile-first personal finance and safe-to-spend tracking with Supabase PostgreSQL backend.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
