@@ -13,6 +13,7 @@ import {
   Sparkles,
   BookOpen,
   Moon,
+  BarChart3,
 } from 'lucide-react';
 import {
   loadBudgetState,
@@ -75,6 +76,7 @@ import {
 } from './services/savingsChallengeStore';
 import { calculateSafeToSpend } from './domain/financialCalculations';
 import { HomeView } from './components/HomeView';
+import { AdvancedReportsView } from './components/AdvancedReportsView';
 import { TransactionsView } from './components/TransactionsView';
 import { PlanView } from './components/PlanView';
 import { DirectoryView } from './components/DirectoryView';
@@ -94,7 +96,7 @@ import { getSupabaseClient } from './services/supabase';
 import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 
-type NavTab = 'home' | 'transactions' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
@@ -475,6 +477,14 @@ export default function App() {
             Opérations
           </button>
           <button
+            onClick={() => setActiveTab('reports')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
+              activeTab === 'reports' ? 'text-violet-300 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            {budgetState.profile.locale === 'ar' ? 'التقارير' : 'Rapports'}
+          </button>
+          <button
             onClick={() => setActiveTab('plan')}
             className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
               activeTab === 'plan' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
@@ -584,6 +594,15 @@ export default function App() {
             onOpenAddModal={() => setIsAddModalOpen(true)}
             onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
             onDeleteTransaction={(id) => setBudgetState(deleteTransaction(budgetState, id))}
+            onExportCSV={handleExportCSV}
+          />
+        )}
+
+        {activeTab === 'reports' && (
+          <AdvancedReportsView
+            transactions={budgetState.transactions}
+            categories={budgetState.categories}
+            profile={budgetState.profile}
             onExportCSV={handleExportCSV}
           />
         )}
@@ -702,7 +721,7 @@ export default function App() {
         aria-label="Navigation principale"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 px-1 py-1"
       >
-        <div className="grid grid-cols-7 items-center h-16 max-w-xl mx-auto">
+        <div className="grid grid-cols-8 items-center h-16 max-w-xl mx-auto">
           {/* 1. Home Tab */}
           <button
             onClick={() => setActiveTab('home')}
@@ -723,6 +742,17 @@ export default function App() {
           >
             <Receipt className="w-4 h-4" />
             <span className="text-[9px] mt-1 tracking-tight">Opérations</span>
+          </button>
+
+          {/* 3. Advanced reports */}
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
+              activeTab === 'reports' ? 'text-violet-300 font-bold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'تقارير' : 'Rapports'}</span>
           </button>
 
           {/* 3. Nearby / Directory Tab */}
