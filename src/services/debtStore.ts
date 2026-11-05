@@ -226,6 +226,18 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
   debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
     const pending = readDebtOutbox(userId);
     if (!pending) return;
+    const { data: tombstoneRows, error: tombstoneError } = await supabase
+      .from('debt_sync_tombstones').select('debt_id').eq('user_id', userId);
+    if (tombstoneError) throw tombstoneError;
+    const cloudDeletedIds = (tombstoneRows || []).map((row) => row.debt_id as string);
+    const deletedIds = [...new Set([...pending.deletedDebtIds, ...cloudDeletedIds])];
+    if (pending.deletedDebtIds.length) {
+      const { error } = await supabase.from('debt_sync_tombstones').upsert(
+        pending.deletedDebtIds.map((debtId) => ({ debt_id: debtId, user_id: userId })),
+        { onConflict: 'debt_id' },
+      );
+      if (error) throw error;
+    }
     const { data: debtRows, error: debtError } = await supabase.from('debts').select('*').eq('user_id', userId);
     if (debtError) throw debtError;
     const remoteIds = (debtRows || []).map((row) => row.id as string);
@@ -253,11 +265,11 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
       payments: paymentsByDebt.get(row.id) || [], createdAt: row.created_at, updatedAt: row.updated_at,
     }));
 
-    if (pending.deletedDebtIds.length) {
-      const { error } = await supabase.from('debts').delete().eq('user_id', userId).in('id', pending.deletedDebtIds);
+    if (deletedIds.length) {
+      const { error } = await supabase.from('debts').delete().eq('user_id', userId).in('id', deletedIds);
       if (error) throw error;
     }
-    const merged = mergeDebtSnapshots(pending.debts, remoteDebts, pending.deletedDebtIds);
+    const merged = mergeDebtSnapshots(pending.debts, remoteDebts, deletedIds);
     const owned = merged.filter((debt) => debt.userId === userId && isUuid(debt.id));
     if (owned.length) {
       const { error } = await supabase.from('debts').upsert(owned.map((d) => ({
