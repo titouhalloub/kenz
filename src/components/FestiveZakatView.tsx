@@ -81,7 +81,7 @@ export const FestiveZakatView: React.FC<FestiveZakatViewProps> = ({
     if (target <= 0) return;
 
     const newItem: FestiveBudget = {
-      id: `fest_${Date.now()}`,
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (ch) => { const r = Math.random() * 16 | 0; return (ch === 'x' ? r : (r & 3 | 8)).toString(16); }),
       userId: profile.id,
       festivalType: newFestiveTitle,
       year: new Date().getFullYear(),

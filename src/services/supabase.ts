@@ -35,6 +35,19 @@ export function saveSupabaseConfig(config: SupabaseConfig): void {
   }
 }
 
+/**
+ * Return the current user's access token for authenticated server requests.
+ * The server must validate this token; the client-side session object is not
+ * itself an authorization decision.
+ */
+export async function getSupabaseAccessToken(): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session?.access_token || null;
+}
+
 let supabaseInstance: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient | null {

@@ -7,6 +7,7 @@ interface AddDebtModalProps {
   isOpen: boolean;
   onClose: () => void;
   businesses: Business[];
+  userId: string;
   onSave: (
     debtData: Omit<
       DebtEntry,
@@ -20,6 +21,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
   isOpen,
   onClose,
   businesses,
+  userId,
   onSave,
   preselectedBusiness,
 }) => {
@@ -61,7 +63,7 @@ export const AddDebtModal: React.FC<AddDebtModalProps> = ({
     }
 
     onSave({
-      userId: 'usr_local_1',
+      userId,
       businessId: selectedBusinessId || undefined,
       counterpartyName: counterpartyName.trim(),
       counterpartyPhone: counterpartyPhone.trim() || undefined,

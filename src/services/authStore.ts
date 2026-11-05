@@ -63,6 +63,7 @@ export async function loginUser(email: string, password: string):Promise<{ succe
           id: data.user.id,
           email: data.user.email || email,
           fullName: data.user.user_metadata?.full_name || email.split('@')[0],
+          country: data.user.user_metadata?.country || 'Algérie (DZ)',
           wilaya: data.user.user_metadata?.wilaya || '16 - Alger',
           membershipTier: data.user.user_metadata?.tier || 'Citoyen Free',
           createdAt: data.user.created_at,
@@ -92,7 +93,7 @@ export async function loginUser(email: string, password: string):Promise<{ succe
   return { success: true, user };
 }
 
-export async function registerUser(email: string, password: string, fullName: string, country: string, wilaya: string, region?: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+export async function registerUser(email: string, password: string, fullName: string, country: string, wilaya: string, region?: string): Promise<{ success: boolean; user?: UserProfile; error?: string; confirmationRequired?: boolean }> {
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -115,10 +116,13 @@ export async function registerUser(email: string, password: string, fullName: st
           wilaya,
           region,
           membershipTier: 'Citoyen Free',
-          createdAt: new Date().toISOString(),
+          createdAt: data.user.created_at || new Date().toISOString(),
         };
+        if (!data.session) {
+          return { success: true, user: profile, confirmationRequired: true };
+        }
         saveCurrentUser(profile);
-        return { success: true, user: profile };
+        return { success: true, user: profile, confirmationRequired: false };
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration error';

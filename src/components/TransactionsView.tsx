@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   Trash2,
   PlusCircle,
+  ScanLine,
   Filter,
 } from 'lucide-react';
 import { Transaction, Account, Category, UserProfile, TransactionType } from '../domain/types';
@@ -18,6 +19,7 @@ interface TransactionsViewProps {
   categories: Category[];
   profile: UserProfile;
   onOpenAddModal: () => void;
+  onOpenReceiptScanner: () => void;
   onDeleteTransaction: (id: string) => void;
   onExportCSV: () => void;
 }
@@ -28,6 +30,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   categories,
   profile,
   onOpenAddModal,
+  onOpenReceiptScanner,
   onDeleteTransaction,
   onExportCSV,
 }) => {
@@ -59,17 +62,25 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   });
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
       {/* Header bar with CSV Export & Add action */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-slate-100">Historique des opérations</h1>
+          <h1 className="text-lg font-bold text-slate-100">{profile.locale === 'ar' ? 'سجل العمليات' : profile.locale === 'en' ? 'Transaction history' : 'Historique des opérations'}</h1>
           <p className="text-xs text-slate-400">
             {filtered.length} opération{filtered.length > 1 ? 's' : ''} répertoriée{filtered.length > 1 ? 's' : ''}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={onOpenReceiptScanner}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-emerald-800/70 text-emerald-300 hover:bg-emerald-950/50 text-xs font-medium transition cursor-pointer min-h-[44px]"
+            title={profile.locale === 'ar' ? 'مسح إيصال' : profile.locale === 'en' ? 'Scan receipt' : 'Scanner un reçu'}
+          >
+            <ScanLine className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Scanner</span>
+          </button>
           <button
             onClick={onExportCSV}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-slate-100 text-xs font-medium transition cursor-pointer min-h-[44px]"
@@ -84,7 +95,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer min-h-[44px]"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>Ajouter</span>
+            <span>{profile.locale === 'ar' ? 'إضافة' : profile.locale === 'en' ? 'Add' : 'Ajouter'}</span>
           </button>
         </div>
       </div>
@@ -94,7 +105,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
           type="text"
-          placeholder="Rechercher par libellé, catégorie ou compte..."
+          placeholder={profile.locale === 'ar' ? 'ابحث بالوصف أو الفئة أو الحساب...' : profile.locale === 'en' ? 'Search description, category or account...' : 'Rechercher par libellé, catégorie ou compte...'}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full h-11 pl-10 pr-4 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
@@ -121,7 +132,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          Dépenses
+          {profile.locale === 'ar' ? 'المصاريف' : profile.locale === 'en' ? 'Expenses' : 'Dépenses'}
         </button>
         <button
           onClick={() => setFilterType('income')}
@@ -131,7 +142,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          Revenus
+          {profile.locale === 'ar' ? 'المداخيل' : profile.locale === 'en' ? 'Income' : 'Revenus'}
         </button>
         <button
           onClick={() => setFilterType('transfer')}
@@ -141,14 +152,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          Virements
+          {profile.locale === 'ar' ? 'التحويلات' : profile.locale === 'en' ? 'Transfers' : 'Virements'}
         </button>
       </div>
 
       {/* Transactions List */}
       {filtered.length === 0 ? (
         <div className="rounded-2xl bg-slate-900/40 border border-slate-800 p-8 text-center space-y-2">
-          <p className="text-sm font-semibold text-slate-300">Aucune opération trouvée</p>
+          <p className="text-sm font-semibold text-slate-300">{profile.locale === 'ar' ? 'لم يتم العثور على عمليات' : profile.locale === 'en' ? 'No transactions found' : 'Aucune opération trouvée'}</p>
           <p className="text-xs text-slate-500">
             Modifiez vos filtres ou enregistrez une nouvelle opération pour commencer.
           </p>
@@ -226,7 +237,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   <button
                     onClick={() => onDeleteTransaction(tx.id)}
                     className="p-2 text-slate-500 hover:text-rose-400 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
-                    aria-label="Supprimer cette opération"
+                    aria-label={profile.locale === 'ar' ? 'حذف هذه العملية' : profile.locale === 'en' ? 'Delete this transaction' : 'Supprimer cette opération'}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

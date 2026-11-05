@@ -1,0 +1,19 @@
+-- Cover foreign-key lookups used by deletes, joins, and ownership checks.
+CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON public.accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON public.budgets(category_id);
+CREATE INDEX IF NOT EXISTS idx_business_documents_business_id ON public.business_documents(business_id);
+CREATE INDEX IF NOT EXISTS idx_business_documents_reviewed_by ON public.business_documents(reviewed_by);
+CREATE INDEX IF NOT EXISTS idx_business_reports_business_id ON public.business_reports(business_id);
+CREATE INDEX IF NOT EXISTS idx_businesses_owner_id ON public.businesses(owner_id);
+CREATE INDEX IF NOT EXISTS idx_categories_user_id ON public.categories(user_id);
+CREATE INDEX IF NOT EXISTS idx_debt_payments_source_account_id ON public.debt_payments(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_items_category_id ON public.recurring_items(category_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_items_user_id ON public.recurring_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_savings_goals_user_id ON public.savings_goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON public.transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON public.transactions(category_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_destination_account_id ON public.transactions(destination_account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_linked_transfer_id ON public.transactions(linked_transfer_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_recurring_item_owner ON public.transactions(recurring_item_id,user_id);
+CREATE INDEX IF NOT EXISTS idx_verification_reviews_business_id ON public.verification_reviews(business_id);
+CREATE INDEX IF NOT EXISTS idx_verification_reviews_reviewer_id ON public.verification_reviews(reviewer_id);

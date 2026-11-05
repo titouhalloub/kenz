@@ -2,13 +2,197 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '8mb' }));
+
+// Small per-process limiter for public AI endpoints. Use a shared store in multi-instance deployments.
+const aiRequestBuckets = new Map<string, { count: number; resetAt: number }>();
+function rateLimitAi(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  let bucket = aiRequestBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + 60_000 };
+    aiRequestBuckets.set(key, bucket);
+  }
+  bucket.count += 1;
+  if (bucket.count > 20) {
+    res.setHeader('Retry-After', Math.ceil((bucket.resetAt - now) / 1000));
+    return res.status(429).json({ success: false, error: 'Trop de requêtes. Réessayez dans une minute.' });
+  }
+  if (aiRequestBuckets.size > 10_000) {
+    for (const [ip, entry] of aiRequestBuckets) if (entry.resetAt <= now) aiRequestBuckets.delete(ip);
+  }
+  next();
+}
+
+/**
+ * Verify every AI API request against Supabase Auth. Only development
+ * environments without server-side Supabase configuration may use the
+ * local demo fallback; production fails closed when auth is not configured.
+ */
+async function requireAuthenticatedUser(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (process.env.NODE_ENV !== 'production') return next();
+    return res.status(503).json({
+      success: false,
+      error: 'Le service d’authentification IA n’est pas configuré.',
+    });
+  }
+
+  const authorization = req.header('authorization') || '';
+  const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
+  const accessToken = tokenMatch?.[1]?.trim();
+  if (!accessToken) {
+    return res.status(401).json({ success: false, error: 'Authentification requise.' });
+  }
+
+  try {
+    // Create a request-scoped client and validate the token with Supabase Auth.
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data, error } = await authClient.auth.getUser(accessToken);
+    if (error || !data.user) {
+      return res.status(401).json({ success: false, error: 'Session invalide ou expirée.' });
+    }
+    res.locals.authUserId = data.user.id;
+    res.locals.accessToken = accessToken;
+    return next();
+  } catch {
+    return res.status(401).json({ success: false, error: 'Impossible de vérifier la session.' });
+  }
+}
+
+/**
+ * Record authenticated AI usage through the caller's RLS session. The first
+ * call reserves/debits credits before provider execution; a second call with
+ * the same idempotency key finalizes token metadata without another debit.
+ */
+async function recordMeteredAIUsage(
+  req: express.Request,
+  res: express.Response,
+  tokensInput: number,
+  tokensOutput: number,
+): Promise<{ ok: boolean; balanceCredits?: number; status?: number; error?: string }> {
+  const userId = res.locals.authUserId as string | undefined;
+  if (!userId) return { ok: true }; // local demo mode only
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const accessToken = res.locals.accessToken as string | undefined;
+  if (!supabaseUrl || !supabaseAnonKey || !accessToken) {
+    return { ok: false, status: 503, error: 'La facturation IA sécurisée n’est pas configurée.' };
+  }
+
+  const mode = req.body?.mode === 'byok' || (!req.body?.mode && Boolean(req.body?.byokKey || (req.body?.byokProvider && req.body.byokProvider !== 'google'))) ? 'byok' : 'managed';
+  const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose : 'general_query';
+  const provider = typeof req.body?.byokProvider === 'string' ? req.body.byokProvider : 'google_gemini';
+  const model = typeof req.body?.byokModel === 'string' ? req.body.byokModel : 'gemini-2.5-flash';
+  // Generate the key on the server so callers cannot replay a previous
+  // completed request by reusing a client-supplied idempotency key.
+  const idempotencyKey = (res.locals.idempotencyKey as string | undefined) || randomUUID();
+  res.locals.idempotencyKey = idempotencyKey;
+
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  try {
+    const { data, error } = await userClient.rpc('record_ai_usage', {
+      p_credits_to_debit: mode === 'byok' ? 0 : 20,
+      p_mode: mode,
+      p_provider: provider,
+      p_model: model,
+      p_tokens_input: Math.max(0, Math.trunc(tokensInput)),
+      p_tokens_output: Math.max(0, Math.trunc(tokensOutput)),
+      p_purpose: purpose,
+      p_idempotency_key: idempotencyKey,
+    });
+    if (error) {
+      const insufficient = error.message?.includes('INSUFFICIENT_CREDITS');
+      return {
+        ok: false,
+        status: insufficient ? 402 : 503,
+        error: insufficient ? 'Crédits IA insuffisants.' : 'Impossible d’enregistrer la consommation IA.',
+      };
+    }
+    const balanceCredits = Number(data);
+    res.locals.balanceCredits = balanceCredits;
+    return { ok: true, balanceCredits };
+  } catch {
+    return { ok: false, status: 503, error: 'Impossible de joindre le service de crédits IA.' };
+  }
+}
+
+async function sendMeteredAIResponse(
+  req: express.Request,
+  res: express.Response,
+  payload: Record<string, unknown>,
+) {
+  if (!res.locals.authUserId) return res.json(payload);
+  const finalized = await recordMeteredAIUsage(
+    req, res, Number(payload.tokensInput || 0), Number(payload.tokensOutput || 0),
+  );
+  if (!finalized.ok && typeof res.locals.balanceCredits !== 'number') {
+    return res.status(finalized.status || 503).json({ success: false, error: finalized.error || 'Erreur de facturation IA.' });
+  }
+  return res.json({
+    ...payload,
+    balanceCredits: finalized.balanceCredits ?? Number(res.locals.balanceCredits),
+  });
+}
+
+function trimTrailingSlashes(value: string): string {
+  let result = value;
+  while (result.endsWith('/')) result = result.slice(0, -1);
+  return result;
+}
+
+function resolveOpenAIBaseUrl(
+  provider: string,
+  preset: { defaultBaseUrl: string },
+  requestedBaseUrl?: string,
+): string | null {
+  // Custom local model endpoints are allowed only in development. Never let a
+  // production server make requests to arbitrary client-supplied destinations.
+  if (provider === 'custom') {
+    if (process.env.NODE_ENV === 'production') return null;
+    try {
+      const url = new URL(requestedBaseUrl?.trim() || preset.defaultBaseUrl);
+      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+      if (url.protocol !== 'http:' || !localHosts.has(url.hostname) || url.username || url.password || url.search || url.hash) return null;
+      return trimTrailingSlashes(url.toString());
+    } catch { return null; }
+  }
+
+  // Preset providers are pinned to their official API origin/path. Ignore no
+  // user-supplied alternate host: reject it instead to prevent SSRF.
+  try {
+    const expected = new URL(preset.defaultBaseUrl);
+    if (requestedBaseUrl?.trim()) {
+      const requested = new URL(requestedBaseUrl.trim());
+      const expectedPath = trimTrailingSlashes(expected.pathname);
+      const requestedPath = trimTrailingSlashes(requested.pathname);
+      if (requested.origin !== expected.origin || requestedPath !== expectedPath || requested.username || requested.password || requested.search || requested.hash) return null;
+    }
+    return preset.defaultBaseUrl;
+  } catch { return null; }
+}
 
 // Preset definitions for OpenAI-compatible providers
 const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defaultModel: string; label: string }> = {
@@ -50,8 +234,8 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defa
 };
 
 // Universal Server-Side AI Gateway supporting ANY provider
-app.post('/api/ai/advisor', async (req, res) => {
-  const isBYOK = Boolean(req.body.byokKey || (req.body.byokProvider && req.body.byokProvider !== 'google'));
+app.post('/api/ai/advisor', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
+  const isBYOK = req.body.mode === 'byok' || (!req.body.mode && Boolean(req.body.byokKey || (req.body.byokProvider && req.body.byokProvider !== 'google')));
 
   try {
     const {
@@ -63,6 +247,16 @@ app.post('/api/ai/advisor', async (req, res) => {
       byokModel,
       byokBaseUrl,
     } = req.body;
+
+    // Reserve/debit before invoking any paid provider. If the balance is too low,
+    // the request stops here and no provider call is made.
+    const reservation = await recordMeteredAIUsage(req, res, 0, 0);
+    if (!reservation.ok) {
+      return res.status(reservation.status || 503).json({
+        success: false,
+        error: reservation.error || 'Impossible de vérifier le portefeuille IA.',
+      });
+    }
 
     const systemPrompt = `Tu es le Conseiller Financier Personnel de Kenz Finance en Algérie.
 Règles strictes :
@@ -76,7 +270,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       userPrompt || 'Analyse mon budget et donne-moi les 2 meilleures recommandations d’épargne.';
 
     // 1. OPENAI OR OPENAI-COMPATIBLE (DeepSeek, Groq, Mistral, OpenRouter, Perplexity, Custom, etc.)
-    if (byokProvider in OPENAI_COMPATIBLE_PROVIDERS) {
+    if (Object.hasOwn(OPENAI_COMPATIBLE_PROVIDERS, byokProvider)) {
       const preset = OPENAI_COMPATIBLE_PROVIDERS[byokProvider];
       const apiKey = byokKey || process.env[`${byokProvider.toUpperCase()}_API_KEY`] || process.env.OPENAI_API_KEY;
 
@@ -87,10 +281,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
             error: `Clé API manquante pour ${preset.label}. Veuillez configurer votre clé dans le mode BYOK.`,
           });
         }
-        return res.status(200).json({
+        return await sendMeteredAIResponse(req, res, {
           success: true,
           source: 'deterministic_fallback',
           text: generateFallbackAdvice(purpose, financialContext),
+          tokensInput: 0,
+          tokensOutput: 0,
         });
       }
 
@@ -112,6 +308,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers,
         body: JSON.stringify({
           model,
@@ -138,7 +335,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || 'Analyse terminée.';
 
-      return res.json({
+      return await sendMeteredAIResponse(req, res, {
         success: true,
         source: `${preset.label} (${model})`,
         text: content,
@@ -157,10 +354,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
             error: 'Clé API Anthropic manquante. Veuillez configurer votre clé dans le mode BYOK.',
           });
         }
-        return res.status(200).json({
+        return await sendMeteredAIResponse(req, res, {
           success: true,
           source: 'deterministic_fallback',
           text: generateFallbackAdvice(purpose, financialContext),
+          tokensInput: 0,
+          tokensOutput: 0,
         });
       }
 
@@ -168,6 +367,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
@@ -196,7 +396,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       const data = await response.json();
       const content = data.content?.[0]?.text || 'Analyse terminée.';
 
-      return res.json({
+      return await sendMeteredAIResponse(req, res, {
         success: true,
         source: `Anthropic (${model})`,
         text: content,
@@ -215,10 +415,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
           error: 'Clé API Google Gemini manquante.',
         });
       }
-      return res.status(200).json({
+      return await sendMeteredAIResponse(req, res, {
         success: true,
         source: 'deterministic_fallback',
         text: generateFallbackAdvice(purpose, financialContext),
+        tokensInput: 0,
+        tokensOutput: 0,
       });
     }
 
@@ -242,7 +444,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       },
     });
 
-    return res.json({
+    return await sendMeteredAIResponse(req, res, {
       success: true,
       source: `Google Gemini (${model})`,
       text: response.text || 'Analyse terminée avec succès.',
@@ -260,16 +462,74 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       });
     }
 
-    return res.json({
+    return await sendMeteredAIResponse(req, res, {
       success: true,
       source: 'deterministic_fallback',
       text: generateFallbackAdvice(req.body?.purpose, req.body?.financialContext),
+      tokensInput: 0,
+      tokensOutput: 0,
     });
   }
 });
 
+// Extract receipt details. Kenz does not persist the uploaded image.
+app.post('/api/ai/receipt-scan', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
+  const { data, mimeType, currency = 'DZD' } = req.body || {};
+  if (typeof data !== 'string' || data.length > 7_000_000 || !/^[A-Za-z0-9+/]+=*$/.test(data)) {
+    return res.status(400).json({ success: false, error: 'Image invalide ou trop volumineuse. Choisissez une image plus petite.' });
+  }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    return res.status(400).json({ success: false, error: 'Format non pris en charge. Utilisez JPG, PNG ou WebP.' });
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'Le service de lecture des reçus n’est pas configuré.' });
+
+  try {
+    const reservation = await recordMeteredAIUsage(req, res, 0, 0);
+    if (!reservation.ok) {
+      return res.status(reservation.status || 503).json({ success: false, error: reservation.error || 'Impossible de vérifier les crédits IA.' });
+    }
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+    const prompt = [
+      'Read this purchase receipt and return ONLY valid JSON with this exact schema:',
+      '{"merchant":"store name or empty string","amount":0,"currency":"XXX","date":"YYYY-MM-DD or empty string","description":"short purchase description","categoryHint":"short category label","confidence":"high|medium|low","notes":[]}',
+      'Amount is the final total actually paid, not subtotal or tax. Use a number in major currency units with dot decimals. Identify printed currency if clear, otherwise use provided currency. Never guess a missing amount or date; use amount 0 and empty date when unreadable. Ignore card numbers, phone numbers, loyalty IDs and personal addresses. Do not return sensitive personal information. Date must be ISO format. Keep notes short and mention ambiguity only.',
+      'Provided currency context: ' + String(currency).slice(0, 8),
+    ].join(' ');
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ inlineData: { mimeType, data } }, { text: prompt }],
+      config: { temperature: 0.1, responseMimeType: 'application/json' },
+    });
+    const rawText = result.text || '';
+    const jsonText = rawText.slice(rawText.indexOf('{'), rawText.lastIndexOf('}') + 1);
+    const parsed = JSON.parse(jsonText);
+    const amount = Number(parsed.amount);
+    const receipt = {
+      merchant: typeof parsed.merchant === 'string' ? parsed.merchant.slice(0, 120) : '',
+      amount: Number.isFinite(amount) && amount > 0 && amount <= 1_000_000_000_000 ? amount : 0,
+      currency: typeof parsed.currency === 'string' && /^[A-Z]{3}$/.test(parsed.currency) ? parsed.currency : String(currency).slice(0, 8),
+      date: typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : '',
+      description: typeof parsed.description === 'string' ? parsed.description.slice(0, 180) : '',
+      categoryHint: typeof parsed.categoryHint === 'string' ? parsed.categoryHint.slice(0, 80) : '',
+      confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low',
+      notes: Array.isArray(parsed.notes) ? parsed.notes.filter((note: unknown) => typeof note === 'string').slice(0, 5).map((note: string) => note.slice(0, 140)) : [],
+    };
+    const finalized = await recordMeteredAIUsage(req, res, 1200, 250);
+    if (!finalized.ok && typeof res.locals.balanceCredits !== 'number') {
+      return res.status(finalized.status || 503).json({ success: false, error: finalized.error || 'Impossible de finaliser les crédits IA.' });
+    }
+    return res.json({ success: true, receipt, balanceCredits: finalized.balanceCredits ?? Number(res.locals.balanceCredits) });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Receipt scan failed';
+    console.error('Kenz receipt scan failed:', message);
+    return res.status(502).json({ success: false, error: 'Impossible de lire ce reçu. Essayez une photo plus nette ou réessayez.' });
+  }
+});
+
 // Dedicated Instant Endpoint to test any BYOK API key across providers
-app.post('/api/ai/test-key', async (req, res) => {
+app.post('/api/ai/test-key', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
   const startTime = Date.now();
   const { byokProvider = 'google', byokKey, byokModel, byokBaseUrl } = req.body;
 
@@ -282,7 +542,7 @@ app.post('/api/ai/test-key', async (req, res) => {
     }
 
     // Test OpenAI-compatible (DeepSeek, Groq, Mistral, OpenRouter, Perplexity, OpenAI, Custom)
-    if (byokProvider in OPENAI_COMPATIBLE_PROVIDERS) {
+    if (Object.hasOwn(OPENAI_COMPATIBLE_PROVIDERS, byokProvider)) {
       const preset = OPENAI_COMPATIBLE_PROVIDERS[byokProvider];
       let base = (byokBaseUrl && byokBaseUrl.trim()) || preset.defaultBaseUrl;
       base = base.replace(/\/+$/, '');

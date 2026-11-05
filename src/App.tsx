@@ -2,7 +2,8 @@
  * Kenz Finance & Neighborhood Services — Mobile-First PWA
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { translateKenzDOM } from './domain/i18n';
 import {
   LayoutDashboard,
   Receipt,
@@ -13,14 +14,20 @@ import {
   Sparkles,
   BookOpen,
   Moon,
+  BarChart3,
 } from 'lucide-react';
 import {
   loadBudgetState,
+  loadBudgetStateFromSupabase,
+  saveBudgetState,
+  flushPendingBudgetSync,
   addTransaction,
   deleteTransaction,
   addAccount,
   addRecurringItem,
   deleteRecurringItem,
+  updateRecurringItem,
+  recordRecurringPayment,
   addSavingsGoal,
   updateSavingsGoal,
   updateBudget,
@@ -37,24 +44,40 @@ import {
   resolveReport,
   DirectoryState,
 } from './services/directoryStore';
-import { loadAICreditWallet } from './services/aiCreditStore';
+import { loadAICreditWallet, loadAICreditStateFromSupabase } from './services/aiCreditStore';
 import {
   loadDebtState,
+  loadDebtStateFromSupabase,
+  saveDebtState,
+  flushPendingDebtSync,
   addDebtEntry,
   recordDebtPayment,
+  resolveUnappliedDebtPayment,
+  resolveKredyPaymentIssue,
   deleteDebtEntry,
 } from './services/debtStore';
 import {
   loadZakatState,
   saveZakatState,
+  loadZakatStateFromSupabase,
   loadFestiveState,
   saveFestiveState,
+  loadFestiveStateFromSupabase,
+  flushPendingZakatFestiveSync,
   ZakatState,
   FestiveBudget,
 } from './services/zakatFestiveStore';
-import { AICreditWallet, DebtEntry, Business } from './domain/types';
+import { AICreditWallet, DebtEntry, Business, SavingsChallengeContribution } from './domain/types';
+import {
+  loadSavingsChallengeContributions,
+  loadSavingsChallengeContributionsFromSupabase,
+  addSavingsChallengeContribution,
+  flushPendingSavingsChallengeContributions,
+  retrySavingsChallengeSync,
+} from './services/savingsChallengeStore';
 import { calculateSafeToSpend } from './domain/financialCalculations';
 import { HomeView } from './components/HomeView';
+import { AdvancedReportsView } from './components/AdvancedReportsView';
 import { TransactionsView } from './components/TransactionsView';
 import { PlanView } from './components/PlanView';
 import { DirectoryView } from './components/DirectoryView';
@@ -62,6 +85,7 @@ import { SettingsView } from './components/SettingsView';
 import { DebtLedgerView } from './components/DebtLedgerView';
 import { FestiveZakatView } from './components/FestiveZakatView';
 import { AddTransactionModal } from './components/AddTransactionModal';
+import { ReceiptScannerModal } from './components/ReceiptScannerModal';
 import { AddDebtModal } from './components/AddDebtModal';
 import { AIAssistantModal } from './components/AIAssistantModal';
 import { AuthModal } from './components/AuthModal';
@@ -69,34 +93,241 @@ import { ProfileView } from './components/ProfileView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { loadCurrentUser, logoutUser, UserProfile } from './services/authStore';
+import { getSupabaseClient } from './services/supabase';
+import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
+import { kenzText } from './domain/i18n';
 
-type NavTab = 'home' | 'transactions' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
   const [directoryState, setDirectoryState] = useState<DirectoryState>(() => loadDirectoryState());
   const [debts, setDebts] = useState<DebtEntry[]>(() => loadDebtState());
-  const [zakatState, setZakatState] = useState<ZakatState>(() => loadZakatState());
-  const [festiveBudgets, setFestiveBudgets] = useState<FestiveBudget[]>(() => loadFestiveState());
+  const [zakatState, setZakatState] = useState<ZakatState>(() => loadZakatState(loadCurrentUser().id));
+  const [festiveBudgets, setFestiveBudgets] = useState<FestiveBudget[]>(() => loadFestiveState(loadCurrentUser().id));
   const [aiWallet, setAiWallet] = useState<AICreditWallet>(() => loadAICreditWallet());
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => loadCurrentUser());
+  const [challengeContributions, setChallengeContributions] = useState<SavingsChallengeContribution[]>(() => loadSavingsChallengeContributions(loadCurrentUser().id));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReceiptScannerOpen, setIsReceiptScannerOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAddDebtModalOpen, setIsAddDebtModalOpen] = useState(false);
   const [kredyPreselectedBiz, setKredyPreselectedBiz] = useState<Business | null>(null);
 
+  // Restore an existing Supabase session and hydrate only that user's cloud data.
+  useEffect(() => {
+    let active = true;
+    const supabase = getSupabaseClient();
+    if (!supabase) return () => { active = false; };
+
+    void supabase.auth.getUser().then(async ({ data, error }) => {
+      if (!active || error || !data.user) return;
+      const authUser = data.user;
+      const authProfile: UserProfile = {
+        id: authUser.id,
+        email: authUser.email || '',
+        fullName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Kenz',
+        country: authUser.user_metadata?.country || 'Algérie (DZ)',
+        wilaya: authUser.user_metadata?.wilaya || '16 - Alger',
+        membershipTier: authUser.user_metadata?.tier || 'Citoyen Free',
+        createdAt: authUser.created_at,
+      };
+      setCurrentUser(authProfile);
+      setDebts([]);
+      setAiWallet({ userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+      const financialProfile = {
+        id: authUser.id,
+        email: authUser.email || '',
+        displayName: authProfile.fullName,
+        preferredCurrency: budgetState.profile.preferredCurrency,
+        locale: budgetState.profile.locale,
+        paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
+        planningPeriodDays: budgetState.profile.planningPeriodDays,
+      };
+      // Restore this account's own local cache before cloud access.
+      setBudgetState(loadBudgetState(financialProfile));
+      // Replay this user's durable local outbox before cloud hydration so offline edits aren't overwritten.
+      await flushPendingBudgetSync(authUser.id);
+      await flushPendingDebtSync(authUser.id);
+      await flushPendingZakatFestiveSync(authUser.id);
+      const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
+        loadBudgetStateFromSupabase(financialProfile),
+        loadDebtStateFromSupabase(authUser.id),
+        loadAICreditStateFromSupabase(authUser.id),
+        loadZakatStateFromSupabase(authUser.id),
+        loadFestiveStateFromSupabase(authUser.id),
+      ]);
+      if (!active) return;
+      if (cloudState) setBudgetState(cloudState);
+      setDebts(cloudDebts ?? loadDebtState(authUser.id));
+      setAiWallet(cloudCredits?.wallet ?? { userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+      setZakatState(cloudZakat ?? loadZakatState(authUser.id));
+      setFestiveBudgets(cloudFestive ?? loadFestiveState(authUser.id));
+    }).catch((error) => console.error('Unable to restore Kenz cloud session:', error));
+
+    return () => { active = false; };
+  }, []);
+
+  // Load and replay the append-only savings challenge ledger for this account.
+  useEffect(() => {
+    let active = true;
+    const userId = currentUser.id;
+    setChallengeContributions(loadSavingsChallengeContributions(userId));
+    void flushPendingSavingsChallengeContributions(userId)
+      .then(() => loadSavingsChallengeContributionsFromSupabase(userId))
+      .then((rows) => { if (active && rows) setChallengeContributions(rows); })
+      .catch((error) => console.error('Unable to restore savings challenge contributions:', error));
+    return () => { active = false; };
+  }, [currentUser.id]);
+
+  // Deliver due bill notifications while the app is active or returns to the foreground.
+  useEffect(() => {
+    const notify = () => dispatchBillReminders(currentUser.id, budgetState.recurringItems);
+    notify();
+    const onVisibility = () => { if (document.visibilityState === 'visible') notify(); };
+    window.addEventListener('focus', notify);
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = window.setInterval(notify, 15 * 60 * 1000);
+    return () => {
+      window.removeEventListener('focus', notify);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(interval);
+    };
+  }, [currentUser.id, budgetState.recurringItems]);
+
+  // Keep Kredy views fresh on other devices. Pending local outboxes are never replayed
+  // from realtime callbacks, preventing sync-event loops and stale local overwrites.
+  useEffect(() => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`kredy-live-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'debts',
+        filter: `user_id=eq.${currentUser.id}`,
+      }, async () => {
+        const latestDebts = await loadDebtStateFromSupabase(currentUser.id, false);
+        if (latestDebts) setDebts(latestDebts);
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'debt_sync_tombstones',
+        filter: `user_id=eq.${currentUser.id}`,
+      }, async () => {
+        await flushPendingDebtSync(currentUser.id);
+        const latestDebts = await loadDebtStateFromSupabase(currentUser.id);
+        if (latestDebts) setDebts(latestDebts);
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'debt_payments',
+      }, async () => {
+        await flushPendingDebtSync(currentUser.id);
+        const latestDebts = await loadDebtStateFromSupabase(currentUser.id);
+        if (latestDebts) setDebts(latestDebts);
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser.id]);
+
+  // Refresh all cloud-backed financial domains when another device commits a change.
+  useEffect(() => {
+    const userId = currentUser.id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    let active = true;
+    let refreshQueue: Promise<void> = Promise.resolve();
+    const refresh = () => {
+      refreshQueue = refreshQueue.then(async () => {
+        const [budget, zakat, festive, credits, contributions] = await Promise.all([
+          loadBudgetStateFromSupabase({ ...budgetState.profile, id: userId }),
+          loadZakatStateFromSupabase(userId),
+          loadFestiveStateFromSupabase(userId),
+          loadAICreditStateFromSupabase(userId),
+          loadSavingsChallengeContributionsFromSupabase(userId),
+        ]);
+        if (!active) return;
+        if (budget) setBudgetState(budget);
+        if (zakat) setZakatState(zakat);
+        if (festive) setFestiveBudgets(festive);
+        if (credits?.wallet) setAiWallet(credits.wallet);
+        if (contributions) setChallengeContributions(contributions);
+      }).catch((error) => console.error('Kenz cross-device refresh failed:', error));
+    };
+    const channel = supabase.channel(`kenz-financial-live-${userId}`);
+    const tables = [
+      ['profiles', `id=eq.${userId}`],
+      ['accounts', `user_id=eq.${userId}`],
+      ['transactions', `user_id=eq.${userId}`],
+      ['budgets', `user_id=eq.${userId}`],
+      ['recurring_items', `user_id=eq.${userId}`],
+      ['savings_goals', `user_id=eq.${userId}`],
+      ['savings_challenge_contributions', `user_id=eq.${userId}`],
+      ['zakat_settings', `user_id=eq.${userId}`],
+      ['festive_budgets', `user_id=eq.${userId}`],
+      ['ai_credit_wallets', `user_id=eq.${userId}`],
+    ] as const;
+    for (const [table, filter] of tables) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, refresh);
+    }
+    channel.subscribe();
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser.id]);
+
+  const handleMarkRecurringPaid = (itemId: string) => {
+    setBudgetState((current) => recordRecurringPayment(current, itemId));
+  };
+
+  const handleAddChallengeContribution = (goalId: string, amountMinor: number, date: string) => {
+    setChallengeContributions(addSavingsChallengeContribution(currentUser.id, goalId, amountMinor, date));
+    void flushPendingSavingsChallengeContributions(currentUser.id).then(async () => {
+      const [contributions, latestBudget] = await Promise.all([
+        loadSavingsChallengeContributionsFromSupabase(currentUser.id),
+        loadBudgetStateFromSupabase({ ...budgetState.profile, id: currentUser.id }),
+      ]);
+      if (contributions) setChallengeContributions(contributions);
+      if (latestBudget) setBudgetState(latestBudget);
+    });
+  };
+
   const handleUpdateZakat = (state: ZakatState) => {
     setZakatState(state);
-    saveZakatState(state);
+    saveZakatState(state, currentUser.id);
   };
 
   const handleUpdateFestiveBudgets = (budgets: FestiveBudget[]) => {
     setFestiveBudgets(budgets);
-    saveFestiveState(budgets);
+    saveFestiveState(budgets, currentUser.id);
   };
+
+  // Replay durable per-user outboxes when connectivity returns while the app remains open.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
+    const retryCloudWrites = () => {
+      void flushPendingBudgetSync(currentUser.id);
+      saveBudgetState(budgetState);
+      saveDebtState(debts, currentUser.id);
+      saveZakatState(zakatState, currentUser.id);
+      saveFestiveState(festiveBudgets, currentUser.id);
+      retrySavingsChallengeSync(currentUser.id);
+    };
+    window.addEventListener('online', retryCloudWrites);
+    return () => window.removeEventListener('online', retryCloudWrites);
+  }, [currentUser.id, budgetState, debts, zakatState, festiveBudgets]);
 
   // Recalculate Safe-To-Spend deterministically
   const safeToSpend = useMemo(() => {
@@ -172,10 +403,33 @@ export default function App() {
         description: isPayable
           ? `Règlement Kredy · ${targetDebt.counterpartyName}`
           : `Recouvrement Kredy · ${targetDebt.counterpartyName}`,
-        categoryId: isPayable ? 'cat-groceries' : 'cat-salary',
+        categoryId: isPayable ? '00000000-0000-4000-8000-000000000001' : '00000000-0000-4000-8000-000000000007',
       });
       setBudgetState(updatedBudget);
     }
+  };
+
+  const handleReconcileUnappliedPayment = async (params: { debtId: string; paymentId: string }) => {
+    const latestDebts = await resolveUnappliedDebtPayment(
+      debts,
+      params.debtId,
+      params.paymentId,
+      currentUser.id
+    );
+    setDebts(latestDebts);
+  };
+
+  const handleResolveKredyPaymentIssue = async (params: { debtId: string; paymentId: string; action: 'duplicate' | 'refund'; refundAmountMinor?: number; duplicateOfPaymentId?: string }) => {
+    const latestDebts = await resolveKredyPaymentIssue(
+      debts,
+      params.debtId,
+      params.paymentId,
+      currentUser.id,
+      params.action,
+      params.refundAmountMinor,
+      params.duplicateOfPaymentId
+    );
+    setDebts(latestDebts);
   };
 
   const handleDeleteDebt = (id: string) => {
@@ -183,6 +437,14 @@ export default function App() {
   };
 
   const isRTL = budgetState.profile.locale === 'ar';
+  useEffect(() => { document.documentElement.lang = budgetState.profile.locale; document.documentElement.dir = isRTL ? 'rtl' : 'ltr'; }, [budgetState.profile.locale, isRTL]);
+  useEffect(() => {
+    const applyTranslations = () => translateKenzDOM(document.body, budgetState.profile.locale);
+    applyTranslations();
+    const observer = new MutationObserver(() => applyTranslations());
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+    return () => observer.disconnect();
+  }, [budgetState.profile.locale]);
 
   return (
     <div
@@ -214,7 +476,7 @@ export default function App() {
               activeTab === 'home' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Tableau de bord
+            {kenzText(budgetState.profile.locale, 'dashboard', 'Tableau de bord')}
           </button>
           <button
             onClick={() => setActiveTab('transactions')}
@@ -222,7 +484,15 @@ export default function App() {
               activeTab === 'transactions' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Opérations
+            {kenzText(budgetState.profile.locale, 'transactions', 'Opérations')}
+          </button>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
+              activeTab === 'reports' ? 'text-violet-300 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            {budgetState.profile.locale === 'ar' ? 'التقارير' : 'Rapports'}
           </button>
           <button
             onClick={() => setActiveTab('plan')}
@@ -230,7 +500,7 @@ export default function App() {
               activeTab === 'plan' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Planification & Objectifs
+            {kenzText(budgetState.profile.locale, 'planning', 'Planification & Objectifs')}
           </button>
           <button
             onClick={() => setActiveTab('nearby')}
@@ -238,7 +508,7 @@ export default function App() {
               activeTab === 'nearby' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Quartier & Services
+            {kenzText(budgetState.profile.locale, 'neighborhood', 'Quartier & Services')}
           </button>
           <button
             onClick={() => setActiveTab('debts')}
@@ -246,7 +516,7 @@ export default function App() {
               activeTab === 'debts' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Carnet Kredy
+            {kenzText(budgetState.profile.locale, 'debts', 'Carnet Kredy')}
           </button>
           <button
             onClick={() => setActiveTab('zakat')}
@@ -254,7 +524,7 @@ export default function App() {
               activeTab === 'zakat' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Zakat & Fêtes
+            {kenzText(budgetState.profile.locale, 'zakat', 'Zakat & Fêtes')}
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -262,7 +532,7 @@ export default function App() {
               activeTab === 'settings' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Paramètres
+            {kenzText(budgetState.profile.locale, 'settings', 'Paramètres')}
           </button>
         </nav>
 
@@ -274,7 +544,7 @@ export default function App() {
             title="Assistant IA et solde de crédits"
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">Coach IA</span>
+            <span className="hidden sm:inline">{kenzText(budgetState.profile.locale, 'aiCoach', 'Coach IA')}</span>
             <span className="font-mono-numbers text-[11px] bg-slate-950 px-1.5 py-0.5 rounded text-amber-300 border border-slate-800">
               {aiWallet.balanceCredits} cr.
             </span>
@@ -303,7 +573,7 @@ export default function App() {
             className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-emerald-950/40 cursor-pointer min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
-            <span>Opération</span>
+            <span>{kenzText(budgetState.profile.locale, 'addTransaction', 'Opération')}</span>
           </button>
         </div>
       </header>
@@ -316,6 +586,7 @@ export default function App() {
             accounts={budgetState.accounts}
             transactions={budgetState.transactions}
             recurringItems={budgetState.recurringItems}
+            accounts={budgetState.accounts}
             savingsGoals={budgetState.savingsGoals}
             safeToSpend={safeToSpend}
             onOpenAddModal={() => setIsAddModalOpen(true)}
@@ -331,7 +602,17 @@ export default function App() {
             categories={budgetState.categories}
             profile={budgetState.profile}
             onOpenAddModal={() => setIsAddModalOpen(true)}
+            onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
             onDeleteTransaction={(id) => setBudgetState(deleteTransaction(budgetState, id))}
+            onExportCSV={handleExportCSV}
+          />
+        )}
+
+        {activeTab === 'reports' && (
+          <AdvancedReportsView
+            transactions={budgetState.transactions}
+            categories={budgetState.categories}
+            profile={budgetState.profile}
             onExportCSV={handleExportCSV}
           />
         )}
@@ -341,6 +622,7 @@ export default function App() {
             categories={budgetState.categories}
             budgets={budgetState.budgets}
             recurringItems={budgetState.recurringItems}
+            accounts={budgetState.accounts}
             savingsGoals={budgetState.savingsGoals}
             transactions={budgetState.transactions}
             profile={budgetState.profile}
@@ -357,10 +639,15 @@ export default function App() {
             }
             onAddRecurring={(data) => setBudgetState(addRecurringItem(budgetState, data))}
             onDeleteRecurring={(id) => setBudgetState(deleteRecurringItem(budgetState, id))}
+            onMarkRecurringPaid={handleMarkRecurringPaid}
+            onToggleRecurring={(id, isActive) => setBudgetState((current) => updateRecurringItem(current, id, { isActive }))}
+            onUpdateRecurring={(id, updates) => setBudgetState((current) => updateRecurringItem(current, id, updates))}
             onAddSavingsGoal={(data) => setBudgetState(addSavingsGoal(budgetState, data))}
             onUpdateSavingsGoal={(id, updates) =>
               setBudgetState(updateSavingsGoal(budgetState, id, updates))
             }
+            challengeContributions={challengeContributions}
+            onAddChallengeContribution={handleAddChallengeContribution}
           />
         )}
 
@@ -390,6 +677,8 @@ export default function App() {
             onAddDebt={handleAddDebt}
             onSettleDebt={handleSettleDebt}
             onDeleteDebt={handleDeleteDebt}
+            onReconcilePayment={handleReconcileUnappliedPayment}
+            onResolvePaymentIssue={handleResolveKredyPaymentIssue}
             onOpenAIModal={() => setIsAIModalOpen(true)}
           />
         )}
@@ -442,7 +731,7 @@ export default function App() {
         aria-label="Navigation principale"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 px-1 py-1"
       >
-        <div className="grid grid-cols-7 items-center h-16 max-w-xl mx-auto">
+        <div className="grid grid-cols-8 items-center h-16 max-w-xl mx-auto">
           {/* 1. Home Tab */}
           <button
             onClick={() => setActiveTab('home')}
@@ -451,7 +740,7 @@ export default function App() {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Accueil</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الرئيسية' : budgetState.profile.locale === 'en' ? 'Home' : 'Accueil'}</span>
           </button>
 
           {/* 2. Transactions Tab */}
@@ -462,7 +751,18 @@ export default function App() {
             }`}
           >
             <Receipt className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Opérations</span>
+            <span className="text-[9px] mt-1 tracking-tight">{kenzText(budgetState.profile.locale, 'transactions', 'Opérations')}</span>
+          </button>
+
+          {/* 3. Advanced reports */}
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
+              activeTab === 'reports' ? 'text-violet-300 font-bold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span className="text-[9px] mt-1 tracking-tight">{kenzText(budgetState.profile.locale, 'reports', 'Rapports')}</span>
           </button>
 
           {/* 3. Nearby / Directory Tab */}
@@ -473,7 +773,7 @@ export default function App() {
             }`}
           >
             <Store className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Quartier</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الحي' : budgetState.profile.locale === 'en' ? 'Nearby' : 'Quartier'}</span>
           </button>
 
           {/* 4. Carnet Kredy Tab */}
@@ -484,7 +784,7 @@ export default function App() {
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Kredy</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الديون' : 'Kredy'}</span>
           </button>
 
           {/* 5. Zakat & Fêtes Tab */}
@@ -495,7 +795,7 @@ export default function App() {
             }`}
           >
             <Moon className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Zakat</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الزكاة' : 'Zakat'}</span>
           </button>
 
           {/* 6. Plan Tab */}
@@ -506,7 +806,7 @@ export default function App() {
             }`}
           >
             <CalendarDays className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Plan</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الخطة' : budgetState.profile.locale === 'en' ? 'Plan' : 'Plan'}</span>
           </button>
 
           {/* 7. Settings Tab */}
@@ -517,7 +817,7 @@ export default function App() {
             }`}
           >
             <SettingsIcon className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Options</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الإعدادات' : budgetState.profile.locale === 'en' ? 'Settings' : 'Options'}</span>
           </button>
         </div>
       </nav>
@@ -528,10 +828,22 @@ export default function App() {
         onClose={() => setIsAddModalOpen(false)}
         accounts={budgetState.accounts}
         categories={budgetState.categories}
+        recurringItems={budgetState.recurringItems}
         preferredCurrency={budgetState.profile.preferredCurrency}
         onSave={(txData) => {
           setBudgetState(addTransaction(budgetState, { ...txData, userId: budgetState.profile.id }));
         }}
+      />
+
+      <ReceiptScannerModal
+        isOpen={isReceiptScannerOpen}
+        onClose={() => setIsReceiptScannerOpen(false)}
+        accounts={budgetState.accounts}
+        categories={budgetState.categories}
+        profile={budgetState.profile}
+        availableCredits={aiWallet.balanceCredits}
+        onCreditsUpdated={(balance) => setAiWallet((current) => ({ ...current, balanceCredits: balance, updatedAt: new Date().toISOString() }))}
+        onSave={(txData) => setBudgetState(addTransaction(budgetState, { ...txData, userId: budgetState.profile.id }))}
       />
 
       {/* AI Assistant, Metering & Credits Modal */}
@@ -553,6 +865,36 @@ export default function App() {
         onLoginSuccess={(u) => {
           setCurrentUser(u);
           setActiveTab('profile');
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
+            setDebts([]);
+            setAiWallet({ userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+          }
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
+            const financialProfile = {
+              id: u.id, email: u.email, displayName: u.fullName,
+              preferredCurrency: budgetState.profile.preferredCurrency,
+              locale: budgetState.profile.locale,
+              paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
+              planningPeriodDays: budgetState.profile.planningPeriodDays,
+            };
+            setBudgetState(loadBudgetState(financialProfile));
+            void flushPendingBudgetSync(u.id).then(async () => {
+              await flushPendingDebtSync(u.id);
+              return Promise.all([
+              loadBudgetStateFromSupabase(financialProfile),
+              loadDebtStateFromSupabase(u.id),
+              loadAICreditStateFromSupabase(u.id),
+              loadZakatStateFromSupabase(u.id),
+              loadFestiveStateFromSupabase(u.id),
+              ]);
+            }).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
+              if (cloudState) setBudgetState(cloudState);
+              setDebts(cloudDebts ?? loadDebtState(u.id));
+              setAiWallet(cloudCredits?.wallet ?? { userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+              setZakatState(cloudZakat ?? loadZakatState(u.id));
+              setFestiveBudgets(cloudFestive ?? loadFestiveState(u.id));
+            });
+          }
         }}
       />
     </div>

@@ -36,11 +36,14 @@ import {
   getBYOKConfig,
   setBYOKConfig,
   loadCreditLedger,
+  loadAICreditStateFromSupabase,
+  saveAICreditWallet,
   BYOK_PROVIDER_PRESETS,
   detectProviderFromKey,
   testBYOKCredentials,
 } from '../services/aiCreditStore';
 import { formatMoney } from '../domain/financialCalculations';
+import { getSupabaseAccessToken, getSupabaseClient } from '../services/supabase';
 import { calculateDebtSummary } from '../services/debtStore';
 
 interface AIAssistantModalProps {
@@ -183,12 +186,17 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           ? 'Analyse mon carnet de dettes et ardoises de commerçants (Kredy) et conseille-moi une stratégie de remboursement prioritaire.'
           : 'Comment optimiser mon épargne d’ici la prochaine paye ?');
 
-      // 2. Call Server-Side Universal AI Gateway
+      // 2. Forward the Supabase access token; the server verifies and meters it.
+      const accessToken = await getSupabaseAccessToken();
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           purpose,
+          mode,
           userPrompt: queryPrompt,
           financialContext: {
             safeToSpendFormatted: formatMoney(
@@ -228,21 +236,43 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       const data = await res.json();
 
       if (data.success) {
+        // Authenticated requests are metered by the server before it returns a response.
+        // Local demo mode retains its local-only ledger.
+        if (typeof data.balanceCredits === 'number') {
+          const supabase = getSupabaseClient();
+          const { data: authData, error: authError } = supabase
+            ? await supabase.auth.getUser()
+            : { data: { user: null }, error: new Error('Supabase client unavailable') };
+          if (authData.user && !authError) {
+            const cloudState = await loadAICreditStateFromSupabase(authData.user.id);
+            if (!cloudState) {
+              saveAICreditWallet({
+                userId: authData.user.id,
+                balanceCredits: Number(data.balanceCredits),
+                lifetimeCreditsUsed: wallet.lifetimeCreditsUsed + (mode === 'managed' ? COST_PER_QUERY_CREDITS : 0),
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } else {
+          const debit = await deductAICredits({
+            userId: profile.id,
+            creditsToDebit: COST_PER_QUERY_CREDITS,
+            purpose,
+            tokensInput: data.tokensInput || 150,
+            tokensOutput: data.tokensOutput || 120,
+            mode,
+            provider: mode === 'byok' ? byokConfig.provider : 'google',
+            model: mode === 'byok' ? byokConfig.model : 'gemini-2.5-flash',
+          });
+          if (!debit.success) {
+            setError(debit.reason || 'Impossible d’enregistrer la consommation des crédits IA.');
+            onWalletUpdated();
+            return;
+          }
+        }
         setAiResponse(data.text);
         setResponseSource(data.source);
-
-        // 3. Deduct Credits Atomically (0 credits debited if BYOK)
-        deductAICredits({
-          userId: profile.id,
-          creditsToDebit: COST_PER_QUERY_CREDITS,
-          purpose,
-          tokensInput: data.tokensInput || 150,
-          tokensOutput: data.tokensOutput || 120,
-          mode,
-          provider: mode === 'byok' ? byokConfig.provider : 'google',
-          model: mode === 'byok' ? byokConfig.model : 'gemini-2.5-flash',
-        });
-
         onWalletUpdated();
         setLedgerEntries(loadCreditLedger());
       } else {
@@ -257,10 +287,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   };
 
   const handlePurchase = (pkg: typeof CREDIT_PACKAGES[0]) => {
-    purchaseCredits(profile.id, pkg);
-    onWalletUpdated();
-    setLedgerEntries(loadCreditLedger());
-    setActiveTab('advisor');
+    try {
+      purchaseCredits(profile.id, pkg);
+      onWalletUpdated();
+      setLedgerEntries(loadCreditLedger());
+      setActiveTab('advisor');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Les recharges ne sont pas disponibles actuellement.');
+    }
   };
 
   return (
@@ -467,7 +501,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <div>
               <h3 className="text-xs font-bold text-slate-200">Recharger vos crédits IA</h3>
               <p className="text-[11px] text-slate-400">
-                Chaque analyse approfondie consomme 20 crédits. Choisissez votre pack :
+                Chaque analyse approfondie consomme 20 crédits. Les recharges en ligne restent désactivées tant qu’un prestataire de paiement sécurisé n’est pas configuré.
               </p>
             </div>
 
@@ -486,10 +520,11 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                   </div>
 
                   <button
+                    disabled={/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profile.id)}
                     onClick={() => handlePurchase(pkg)}
-                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer min-h-[40px] shrink-0"
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold text-xs transition cursor-pointer min-h-[40px] shrink-0"
                   >
-                    {formatMoney(pkg.priceMinor, pkg.currency, profile.locale)}
+                    {/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profile.id) ? 'Non disponible' : formatMoney(pkg.priceMinor, pkg.currency, profile.locale)}
                   </button>
                 </div>
               ))}

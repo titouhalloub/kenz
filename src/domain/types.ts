@@ -17,6 +17,7 @@ export interface UserProfile {
   locale: 'ar' | 'fr' | 'en';
   paydayDayOfMonth?: number; // 1-31
   planningPeriodDays: number; // default 30
+  syncUpdatedAt?: string;
 }
 
 export interface Account {
@@ -27,6 +28,7 @@ export interface Account {
   currency: string;
   initialBalanceMinor: number;
   isArchived: boolean;
+  syncUpdatedAt?: string;
 }
 
 export interface Category {
@@ -49,11 +51,13 @@ export interface Transaction {
   categoryId?: string;
   destinationAccountId?: string; // For transfers
   linkedTransferId?: string; // Links paired transfer records
+  recurringItemId?: string; // Explicit link to the recurring commitment paid by this transaction
   transactionDate: string; // YYYY-MM-DD
   description?: string;
   idempotencyKey?: string;
   syncStatus?: 'synced' | 'pending';
   createdAt: string;
+  syncUpdatedAt?: string;
 }
 
 export interface MonthlyBudget {
@@ -63,6 +67,7 @@ export interface MonthlyBudget {
   monthYear: string; // YYYY-MM-01
   budgetMinor: number;
   currency: string;
+  syncUpdatedAt?: string;
 }
 
 export interface RecurringItem {
@@ -76,7 +81,14 @@ export interface RecurringItem {
   categoryId?: string;
   nextDueDate: string; // YYYY-MM-DD
   isActive: boolean;
+  accountId?: string;
+  billingDayOfMonth?: number;
+  reminderEnabled?: boolean;
+  reminderDaysBefore?: number;
+  syncUpdatedAt?: string;
 }
+
+export type SavingsChallengeFrequency = 'daily' | 'weekly' | 'monthly';
 
 export interface SavingsGoal {
   id: string;
@@ -88,6 +100,23 @@ export interface SavingsGoal {
   targetDate?: string; // YYYY-MM-DD
   plannedMonthlyContributionMinor: number;
   status: GoalStatus;
+  challengeFrequency?: SavingsChallengeFrequency;
+  challengePeriodAmountMinor?: number;
+  challengeStartDate?: string;
+  challengeEndDate?: string;
+  challengeStartingAmountMinor?: number;
+  syncUpdatedAt?: string;
+}
+
+export interface SavingsChallengeContribution {
+  id: string;
+  userId: string;
+  savingsGoalId: string;
+  amountMinor: number;
+  contributionDate: string;
+  note?: string;
+  createdAt: string;
+  syncStatus?: 'pending' | 'synced';
 }
 
 export interface SafeToSpendBreakdown {
@@ -217,7 +246,7 @@ export interface AIUsageEvent {
   tokensInput: number;
   tokensOutput: number;
   creditsDebited: number;
-  purpose: 'explain_budget' | 'spending_leak_detector' | 'categorize' | 'savings_optimizer' | 'general_query';
+  purpose: 'explain_budget' | 'spending_leak_detector' | 'categorize' | 'savings_optimizer' | 'general_query' | 'debt_kredy_optimizer';
   idempotencyKey?: string;
   createdAt: string;
 }
@@ -252,6 +281,16 @@ export interface DebtPayment {
   id: string;
   debtId: string;
   amountMinor: number;
+  /** Portion allocated to the debt after deterministic cross-device reconciliation. */
+  appliedAmountMinor?: number;
+  /** Portion retained for manual reconciliation instead of reducing the debt twice. */
+  unappliedAmountMinor?: number;
+  reconciliationStatus?: 'applied' | 'partial' | 'pending';
+  /** Total amount returned to the payer; original payment amount remains immutable. */
+  refundedAmountMinor?: number;
+  /** Points to the original payment when this event is confirmed as a duplicate. */
+  duplicateOfPaymentId?: string;
+  resolutionStatus?: 'normal' | 'partially_refunded' | 'refunded' | 'duplicate';
   paymentDate: string;
   sourceAccountId?: string;
   notes?: string;

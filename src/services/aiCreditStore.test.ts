@@ -31,8 +31,8 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
     expect(wallet.balanceCredits).toBe(500);
   });
 
-  it('atomically deducts credits and records immutable ledger entry in managed mode', () => {
-    const result = deductAICredits({
+  it('atomically deducts credits and records immutable ledger entry in managed mode', async () => {
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: COST_PER_QUERY_CREDITS, // 20
       purpose: 'explain_budget',
@@ -53,7 +53,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
     expect(ledger[0].entryType).toBe('usage_debit');
   });
 
-  it('prevents overdraft: fails safely when balance is insufficient', () => {
+  it('prevents overdraft: fails safely when balance is insufficient', async () => {
     // Set wallet to low balance
     saveAICreditWallet({
       userId: 'test_user',
@@ -62,7 +62,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
       updatedAt: new Date().toISOString(),
     });
 
-    const result = deductAICredits({
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: 20,
       purpose: 'spending_leak_detector',
@@ -78,8 +78,8 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
     expect(wallet.balanceCredits).toBe(10);
   });
 
-  it('does not debit platform credits in BYOK mode', () => {
-    const result = deductAICredits({
+  it('does not debit platform credits in BYOK mode', async () => {
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: 20,
       purpose: 'general_query',
@@ -103,7 +103,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
     expect(detectProviderFromKey('')).toBeNull();
   });
 
-  it('records the active custom provider and model in BYOK usage audit events without gemini lock', () => {
+  it('records the active custom provider and model in BYOK usage audit events without gemini lock', async () => {
     setBYOKConfig({
       provider: 'deepseek',
       apiKey: 'sk-deepseek-test-key',
@@ -111,7 +111,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
       baseUrl: 'https://api.deepseek.com',
     });
 
-    const result = deductAICredits({
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: 20,
       purpose: 'spending_leak_detector',

@@ -26,6 +26,7 @@ import {
 } from '../domain/types';
 import { parseToMinorUnits, formatMoney } from '../domain/financialCalculations';
 import { AdminDashboardModal } from './AdminDashboardModal';
+import { SharedWalletsView } from './SharedWalletsView';
 import {
   getAIMode,
   setAIMode,
@@ -164,13 +165,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="text-lg font-bold text-slate-100">Paramètres de l'application</h1>
+        <h1 className="text-lg font-bold text-slate-100">{profile.locale === 'ar' ? 'إعدادات التطبيق' : profile.locale === 'en' ? 'Application settings' : 'Paramètres de l’application'}</h1>
         <p className="text-xs text-slate-400">
-          Gérez votre profil, vos comptes de trésorerie et la confidentialité de vos données.
+          {profile.locale === 'ar' ? 'إدارة ملفك الشخصي وحساباتك وخصوصية بياناتك.' : profile.locale === 'en' ? 'Manage your profile, cash accounts and data privacy.' : 'Gérez votre profil, vos comptes de trésorerie et la confidentialité de vos données.'}
         </p>
       </div>
+
+      <SharedWalletsView
+        userId={profile.id}
+        email={profile.email}
+        preferredCurrency={profile.preferredCurrency}
+        locale={profile.locale}
+      />
 
       {/* 1. User Profile & Planning Cadence */}
       <section className="rounded-2xl bg-slate-900 border border-slate-800 p-5 space-y-4 shadow-sm">
@@ -233,7 +241,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">Langue & Format</label>
+            <label className="block text-xs font-medium text-slate-300 mb-1">{profile.locale === 'ar' ? 'اللغة والتنسيق' : profile.locale === 'en' ? 'Language & format' : 'Langue & Format'}</label>
             <select
               value={profile.locale}
               onChange={(e) => onUpdateProfile({ locale: e.target.value as 'ar' | 'fr' | 'en' })}

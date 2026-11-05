@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ArrowDownRight, ArrowUpRight, ArrowLeftRight } from 'lucide-react';
-import { Account, Category, TransactionType } from '../domain/types';
+import { Account, Category, RecurringItem, TransactionType } from '../domain/types';
 import { parseToMinorUnits } from '../domain/financialCalculations';
 
 interface AddTransactionModalProps {
@@ -8,6 +8,7 @@ interface AddTransactionModalProps {
   onClose: () => void;
   accounts: Account[];
   categories: Category[];
+  recurringItems: RecurringItem[];
   preferredCurrency: string;
   onSave: (data: {
     accountId: string;
@@ -15,6 +16,7 @@ interface AddTransactionModalProps {
     amountMinor: number;
     currency: string;
     categoryId?: string;
+    recurringItemId?: string;
     destinationAccountId?: string;
     transactionDate: string;
     description?: string;
@@ -26,6 +28,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   onClose,
   accounts,
   categories,
+  recurringItems,
   preferredCurrency,
   onSave,
 }) => {
@@ -40,6 +43,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
   const [description, setDescription] = useState('');
+  const [recurringItemId, setRecurringItemId] = useState('');
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
@@ -76,6 +80,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       amountMinor: minor,
       currency: preferredCurrency,
       categoryId: type !== 'transfer' ? categoryId : undefined,
+      recurringItemId: type !== 'transfer' && recurringItemId ? recurringItemId : undefined,
       destinationAccountId: type === 'transfer' ? destinationAccountId : undefined,
       transactionDate,
       description: description.trim() || undefined,
@@ -84,11 +89,15 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     // Reset and close
     setAmountStr('');
     setDescription('');
+    setRecurringItemId('');
     onClose();
   };
 
   const filteredCategories = categories.filter((c) =>
     type === 'income' ? c.isIncome : !c.isIncome
+  );
+  const eligibleRecurringItems = recurringItems.filter((item) =>
+    item.isActive && item.type === type && item.currency === preferredCurrency
   );
 
   return (
@@ -228,6 +237,26 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               </div>
             )}
           </div>
+
+          {type !== 'transfer' && eligibleRecurringItems.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                Engagement récurrent (optionnel)
+              </label>
+              <select
+                value={recurringItemId}
+                onChange={(e) => setRecurringItemId(e.target.value)}
+                className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">Aucun engagement lié</option>
+                {eligibleRecurringItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} — {(item.amountMinor / 100).toFixed(2)} {item.currency}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Date & Note */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
