@@ -32,7 +32,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
   });
 
   it('atomically deducts credits and records immutable ledger entry in managed mode', () => {
-    const result = deductAICredits({
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: COST_PER_QUERY_CREDITS, // 20
       purpose: 'explain_budget',
