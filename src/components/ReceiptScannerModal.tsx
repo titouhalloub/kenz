@@ -91,6 +91,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   if (!isOpen) return null;
 
   const clearImage = () => {
+    if (preview) URL.revokeObjectURL(preview);
     setPreview('');
     setScan(null);
     setScanned(false);
@@ -103,6 +104,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
     setError('');
     setScan(null);
     setScanned(false);
+    if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
     setBusy(true);
     try {
@@ -126,6 +128,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
       setMerchant(result.merchant || '');
       setDescription(result.description || result.merchant || 'Achat');
       setCurrency(result.currency || profile.preferredCurrency);
+      setAccountId(accounts.find((item) => !item.isArchived && item.currency === (result.currency || profile.preferredCurrency))?.id || '');
       const matchingCategory = categories.find((category) =>
         !category.isIncome && result.categoryHint &&
         (category.name.toLocaleLowerCase().includes(result.categoryHint.toLocaleLowerCase()) ||
@@ -171,7 +174,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-100 flex items-center gap-2"><ScanLine className="w-5 h-5 text-emerald-400" /> Scanner un reçu</h2>
-            <p className="text-[11px] text-slate-400 mt-1">Analyse IA · 20 crédits par reçu · image non conservée</p>
+            <p className="text-[11px] text-slate-400 mt-1">Analyse IA · 20 crédits par reçu · aucune image enregistrée par Kenz</p>
           </div>
           <button onClick={() => { clearImage(); onClose(); }} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-white" aria-label="Fermer"><X className="w-5 h-5" /></button>
         </div>
@@ -199,7 +202,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
               <>
                 <div className="rounded-xl border border-emerald-800/60 bg-emerald-950/30 p-3 text-xs text-emerald-200 flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Extraction terminée ({scan.confidence} confidence). Vérifiez chaque champ : l’IA peut se tromper.</span>
+                  <span>Extraction terminée ({scan.confidence}). Vérifiez chaque champ : l’IA peut se tromper.</span>
                 </div>
                 {scan.notes?.length > 0 && <p className="text-[11px] text-amber-300">{scan.notes.join(' · ')}</p>}
                 <div className="grid grid-cols-2 gap-3">
@@ -216,7 +219,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
             {!busy && !scanned && !error && <p className="text-xs text-slate-400 text-center py-3">Préparation de l’image…</p>}
           </div>
         )}
-        <p className="mt-4 text-[10px] leading-relaxed text-slate-500">Les images sont traitées pour extraire les données puis supprimées de la mémoire de l’écran à sa fermeture. Aucune transaction n’est créée avant votre confirmation.</p>
+        <p className="mt-4 text-[10px] leading-relaxed text-slate-500">L’image est envoyée à Google Gemini pour analyse, puis n’est pas enregistrée par Kenz. Fermer cet écran efface l’aperçu local. Aucune transaction n’est créée avant votre confirmation.</p>
       </div>
     </div>
   );
