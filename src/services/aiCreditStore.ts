@@ -3,8 +3,8 @@
  * Enforces atomic credit reservations, usage event auditing, and BYOK/Managed mode toggles.
  */
 
-import {
 import { getSupabaseAccessToken } from './supabase';
+import {
   AICreditWallet,
   AIUsageEvent,
   CreditLedgerEntry,
