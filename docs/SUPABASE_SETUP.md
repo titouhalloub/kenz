@@ -19,6 +19,6 @@ The AI gateway also reads the non-prefixed server aliases `SUPABASE_URL` and `SU
 
 ## Current cloud sync scope
 
-After a valid Supabase sign-in, the app hydrates and syncs the profile, accounts, system/custom categories, transactions, monthly budgets, recurring items, and savings goals. The browser keeps a local cache for offline use. Other areas (Kredy payments, neighborhood document storage, Zakat/festive budgets, and AI credit debits) still need dedicated authenticated cloud-sync workflows before they should be treated as fully cloud-backed.
+After a valid Supabase sign-in, the app hydrates and syncs the profile, accounts, system/custom categories, transactions, monthly budgets, recurring items, and savings goals. The browser keeps a local cache, but automatic retry/reconciliation of edits made while offline is not complete yet; do not treat this as full offline sync. Other areas (Kredy payments, neighborhood document storage, Zakat/festive budgets, and AI credit debits) still need dedicated authenticated cloud-sync workflows before they should be treated as fully cloud-backed.
 
 The project database migrations are stored in `supabase/migrations`. The signup trigger lives in the non-exposed `private` schema; client roles cannot call it directly.
