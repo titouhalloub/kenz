@@ -49,6 +49,7 @@ export interface Transaction {
   categoryId?: string;
   destinationAccountId?: string; // For transfers
   linkedTransferId?: string; // Links paired transfer records
+  recurringItemId?: string; // Explicit link to the recurring commitment paid by this transaction
   transactionDate: string; // YYYY-MM-DD
   description?: string;
   idempotencyKey?: string;
