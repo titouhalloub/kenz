@@ -126,6 +126,8 @@ export default function App() {
         paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
         planningPeriodDays: budgetState.profile.planningPeriodDays,
       };
+      // Restore this account's own local cache before cloud access.
+      setBudgetState(loadBudgetState(financialProfile));
       // Replay this user's durable local outbox before cloud hydration so offline edits aren't overwritten.
       await flushPendingBudgetSync(authUser.id);
       const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
