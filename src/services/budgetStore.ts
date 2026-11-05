@@ -253,6 +253,7 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile, persistL
     accounts: (accountsResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, name: r.name, type: r.type, currency: r.currency,
       initialBalanceMinor: Number(r.initial_balance_minor), isArchived: r.is_archived,
+      syncUpdatedAt: r.updated_at || r.created_at,
     })),
     categories: (categoriesResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id || undefined, name: r.name, icon: r.icon || undefined,
@@ -264,21 +265,22 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile, persistL
       destinationAccountId: r.destination_account_id || undefined, linkedTransferId: r.linked_transfer_id || undefined,
       recurringItemId: r.recurring_item_id || undefined, transactionDate: r.transaction_date,
       description: r.description || undefined, idempotencyKey: r.idempotency_key || undefined,
-      syncStatus: 'synced' as const, createdAt: r.created_at,
+      syncStatus: 'synced' as const, createdAt: r.created_at, syncUpdatedAt: r.updated_at || r.created_at,
     })),
     budgets: (budgetsResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, categoryId: r.category_id, monthYear: r.month_year,
-      budgetMinor: Number(r.budget_minor), currency: r.currency,
+      budgetMinor: Number(r.budget_minor), currency: r.currency, syncUpdatedAt: r.updated_at || r.created_at,
     })),
     recurringItems: (recurringResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, name: r.name, type: r.type, amountMinor: Number(r.amount_minor),
       currency: r.currency, frequency: r.frequency, categoryId: r.category_id || undefined,
-      nextDueDate: r.next_due_date, isActive: r.is_active,
+      nextDueDate: r.next_due_date, isActive: r.is_active, syncUpdatedAt: r.updated_at || r.created_at,
     })),
     savingsGoals: (goalsResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, name: r.name, targetAmountMinor: Number(r.target_amount_minor),
       currentAmountMinor: Number(r.current_amount_minor), currency: r.currency, targetDate: r.target_date || undefined,
       plannedMonthlyContributionMinor: Number(r.planned_monthly_contribution_minor), status: r.status,
+      syncUpdatedAt: r.updated_at || r.created_at,
     })),
     lastSyncedAt: new Date().toISOString(),
   };
