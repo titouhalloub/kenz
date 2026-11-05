@@ -82,6 +82,7 @@ import { SettingsView } from './components/SettingsView';
 import { DebtLedgerView } from './components/DebtLedgerView';
 import { FestiveZakatView } from './components/FestiveZakatView';
 import { AddTransactionModal } from './components/AddTransactionModal';
+import { ReceiptScannerModal } from './components/ReceiptScannerModal';
 import { AddDebtModal } from './components/AddDebtModal';
 import { AIAssistantModal } from './components/AIAssistantModal';
 import { AuthModal } from './components/AuthModal';
@@ -106,6 +107,7 @@ export default function App() {
   const [challengeContributions, setChallengeContributions] = useState<SavingsChallengeContribution[]>(() => loadSavingsChallengeContributions(loadCurrentUser().id));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReceiptScannerOpen, setIsReceiptScannerOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAddDebtModalOpen, setIsAddDebtModalOpen] = useState(false);
@@ -580,6 +582,7 @@ export default function App() {
             categories={budgetState.categories}
             profile={budgetState.profile}
             onOpenAddModal={() => setIsAddModalOpen(true)}
+            onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
             onDeleteTransaction={(id) => setBudgetState(deleteTransaction(budgetState, id))}
             onExportCSV={handleExportCSV}
           />
@@ -790,6 +793,17 @@ export default function App() {
         onSave={(txData) => {
           setBudgetState(addTransaction(budgetState, { ...txData, userId: budgetState.profile.id }));
         }}
+      />
+
+      <ReceiptScannerModal
+        isOpen={isReceiptScannerOpen}
+        onClose={() => setIsReceiptScannerOpen(false)}
+        accounts={budgetState.accounts}
+        categories={budgetState.categories}
+        profile={budgetState.profile}
+        availableCredits={aiWallet.balanceCredits}
+        onCreditsUpdated={(balance) => setAiWallet((current) => ({ ...current, balanceCredits: balance, updatedAt: new Date().toISOString() }))}
+        onSave={(txData) => setBudgetState(addTransaction(budgetState, { ...txData, userId: budgetState.profile.id }))}
       />
 
       {/* AI Assistant, Metering & Credits Modal */}
