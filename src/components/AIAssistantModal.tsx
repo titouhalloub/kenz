@@ -36,12 +36,14 @@ import {
   getBYOKConfig,
   setBYOKConfig,
   loadCreditLedger,
+  loadAICreditStateFromSupabase,
+  saveAICreditWallet,
   BYOK_PROVIDER_PRESETS,
   detectProviderFromKey,
   testBYOKCredentials,
 } from '../services/aiCreditStore';
 import { formatMoney } from '../domain/financialCalculations';
-import { getSupabaseAccessToken } from '../services/supabase';
+import { getSupabaseAccessToken, getSupabaseClient } from '../services/supabase';
 import { calculateDebtSummary } from '../services/debtStore';
 
 interface AIAssistantModalProps {
@@ -184,8 +186,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           ? 'Analyse mon carnet de dettes et ardoises de commerçants (Kredy) et conseille-moi une stratégie de remboursement prioritaire.'
           : 'Comment optimiser mon épargne d’ici la prochaine paye ?');
 
-      // 2. Forward the Supabase access token; the server verifies it with Auth.
+      // 2. Forward the Supabase access token; the server verifies and meters it.
       const accessToken = await getSupabaseAccessToken();
+      const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (ch) => {
+            const r = Math.random() * 16 | 0;
+            return (ch === 'x' ? r : (r & 3 | 8)).toString(16);
+          });
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
         headers: {
@@ -194,6 +202,8 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         },
         body: JSON.stringify({
           purpose,
+          mode,
+          idempotencyKey,
           userPrompt: queryPrompt,
           financialContext: {
             safeToSpendFormatted: formatMoney(
@@ -233,21 +243,40 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       const data = await res.json();
 
       if (data.success) {
-        // The database is the source of truth for authenticated credit balances.
-        const debit = await deductAICredits({
-          userId: profile.id,
-          creditsToDebit: COST_PER_QUERY_CREDITS,
-          purpose,
-          tokensInput: data.tokensInput || 150,
-          tokensOutput: data.tokensOutput || 120,
-          mode,
-          provider: mode === 'byok' ? byokConfig.provider : 'google',
-          model: mode === 'byok' ? byokConfig.model : 'gemini-2.5-flash',
-        });
-        if (!debit.success) {
-          setError(debit.reason || 'Impossible d’enregistrer la consommation des crédits IA.');
-          onWalletUpdated();
-          return;
+        // Authenticated requests are metered by the server before it returns a response.
+        // Local demo mode retains its local-only ledger.
+        if (typeof data.balanceCredits === 'number') {
+          const supabase = getSupabaseClient();
+          const { data: authData, error: authError } = supabase
+            ? await supabase.auth.getUser()
+            : { data: { user: null }, error: new Error('Supabase client unavailable') };
+          if (authData.user && !authError) {
+            const cloudState = await loadAICreditStateFromSupabase(authData.user.id);
+            if (!cloudState) {
+              saveAICreditWallet({
+                userId: authData.user.id,
+                balanceCredits: Number(data.balanceCredits),
+                lifetimeCreditsUsed: wallet.lifetimeCreditsUsed + (mode === 'managed' ? COST_PER_QUERY_CREDITS : 0),
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } else {
+          const debit = await deductAICredits({
+            userId: profile.id,
+            creditsToDebit: COST_PER_QUERY_CREDITS,
+            purpose,
+            tokensInput: data.tokensInput || 150,
+            tokensOutput: data.tokensOutput || 120,
+            mode,
+            provider: mode === 'byok' ? byokConfig.provider : 'google',
+            model: mode === 'byok' ? byokConfig.model : 'gemini-2.5-flash',
+          });
+          if (!debit.success) {
+            setError(debit.reason || 'Impossible d’enregistrer la consommation des crédits IA.');
+            onWalletUpdated();
+            return;
+          }
         }
         setAiResponse(data.text);
         setResponseSource(data.source);
