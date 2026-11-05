@@ -257,8 +257,8 @@ export function saveZakatState(state: ZakatState, userId?: string): void {
   }
   try {
     const cacheKey = scopedKey(ZAKAT_STORAGE_KEY, userId);
-    const previous = typeof localStorage === 'undefined' ? EMPTY_ZAKAT_STATE :
-      JSON.parse(localStorage.getItem(cacheKey) || JSON.stringify(state)) as ZakatState;
+    const previousRaw = typeof localStorage === 'undefined' ? null : localStorage.getItem(cacheKey);
+    const previous = previousRaw ? JSON.parse(previousRaw) as ZakatState : { ...EMPTY_ZAKAT_STATE };
     const outboxKey = PENDING_ZAKAT_PREFIX + userId;
     const pending = typeof localStorage === 'undefined' ? null : localStorage.getItem(outboxKey);
     const prior = pending ? JSON.parse(pending) : null;
