@@ -25,6 +25,6 @@ The AI wallet, credit ledger, and usage history are loaded from Supabase. Authen
 
 Zakat settings and festive budgets now use authenticated, per-user local caches and RLS-protected Supabase tables. Authenticated users start with an empty Zakat asset record and no seeded demo festive budgets, preventing demo financial fixtures from being copied into a real account. A missing cloud record is represented locally as empty/default state until the user saves it.
 
-Neighborhood document storage is still not fully integrated: the schema has metadata tables, but a private Storage bucket, upload/download workflow, and ownership tests remain. Offline retry/reconciliation and a real authenticated signup/data round-trip test are still required before production readiness.
+Neighborhood document storage is still not fully integrated: the schema has metadata tables, but a private Storage bucket, upload/download workflow, and ownership tests remain. When connectivity returns while the app remains open, it retries the current in-memory financial state for budgeting, Kredy, Zakat, and festive budgets. This is best-effort only: it is not a durable outbox, does not guarantee recovery after app termination, and has no conflict-resolution strategy. A real authenticated signup/data round-trip test is still required before production readiness.
 
 The project database migrations are stored in `supabase/migrations`. The signup trigger and privileged AI metering implementation live in the non-exposed `private` schema; client roles cannot call the signup trigger directly.
