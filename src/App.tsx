@@ -154,8 +154,8 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
-  // Keep Kredy views on other signed-in devices fresh. Each refresh first replays
-  // this device's pending outbox, then hydrates the conflict-merged cloud snapshot.
+  // Keep Kredy views fresh on other devices. Pending local outboxes are never replayed
+  // from realtime callbacks, preventing sync-event loops and stale local overwrites.
   useEffect(() => {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
     const supabase = getSupabaseClient();
@@ -168,8 +168,7 @@ export default function App() {
         table: 'debts',
         filter: `user_id=eq.${currentUser.id}`,
       }, async () => {
-        await flushPendingDebtSync(currentUser.id);
-        const latestDebts = await loadDebtStateFromSupabase(currentUser.id);
+        const latestDebts = await loadDebtStateFromSupabase(currentUser.id, false);
         if (latestDebts) setDebts(latestDebts);
       })
       .on('postgres_changes', {
