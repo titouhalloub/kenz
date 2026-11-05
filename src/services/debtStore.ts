@@ -407,15 +407,22 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
     if (!pending) return;
     const merged = mergeDebtSnapshots(pending.debts, remoteDebts, deletedIds, pending.baseDebts);
     const owned = merged.filter((debt) => debt.userId === userId && isUuid(debt.id));
-    if (owned.length) {
-      const { error } = await supabase.from('debts').upsert(owned.map((d) => ({
-        id: d.id, user_id: userId, business_id: d.businessId && isUuid(d.businessId) ? d.businessId : null,
-        counterparty_name: d.counterpartyName, counterparty_phone: d.counterpartyPhone || null,
-        type: d.type, total_amount_minor: d.totalAmountMinor,
-        remaining_amount_minor: d.remainingAmountMinor, currency: d.currency,
-        due_date: d.dueDate || null, notes: d.notes || null, status: d.status,
-        created_at: d.createdAt, updated_at: d.updatedAt,
-      })), { onConflict: 'id' });
+    for (const debt of owned) {
+      const toRow = (entry: DebtEntry) => ({
+        id: entry.id, user_id: userId,
+        business_id: entry.businessId && isUuid(entry.businessId) ? entry.businessId : null,
+        counterparty_name: entry.counterpartyName, counterparty_phone: entry.counterpartyPhone || null,
+        type: entry.type, total_amount_minor: entry.totalAmountMinor,
+        remaining_amount_minor: entry.remainingAmountMinor, currency: entry.currency,
+        due_date: entry.dueDate || null, notes: entry.notes || null, status: entry.status,
+        created_at: entry.createdAt, updated_at: entry.updatedAt,
+      });
+      const base = pending.baseDebts.find((entry) => entry.id === debt.id);
+      const { error } = await supabase.rpc('sync_kenz_debt_metadata', {
+        p_local: toRow(debt),
+        p_base: base ? toRow(base) : null,
+        p_updated_at: debt.updatedAt,
+      });
       if (error) throw error;
     }
     const mergedPayments = owned.flatMap((d) => d.payments.filter((p) => isUuid(p.id)).map((p) => ({
