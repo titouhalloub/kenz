@@ -299,3 +299,63 @@ $$;
 
 REVOKE ALL ON FUNCTION public.sync_kenz_financial_snapshot(jsonb, jsonb, jsonb, timestamptz) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.sync_kenz_financial_snapshot(jsonb, jsonb, jsonb, timestamptz) TO authenticated;
+
+-- Zakat settings share the same per-user lock so concurrent offline edits merge atomically.
+CREATE OR REPLACE FUNCTION public.sync_kenz_zakat_snapshot(
+  p_local jsonb, p_base jsonb, p_updated_at timestamptz
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_remote jsonb;
+  v_merged jsonb;
+BEGIN
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+  PERFORM 1 FROM public.profiles WHERE id = v_user_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROFILE_NOT_FOUND'; END IF;
+
+  SELECT to_jsonb(z) INTO v_remote
+  FROM public.zakat_settings z WHERE z.user_id = v_user_id FOR UPDATE;
+
+  v_merged := public.kenz_merge_jsonb(
+    p_base, p_local, COALESCE(v_remote, '{}'::jsonb),
+    p_updated_at, NULLIF(v_remote ->> 'updated_at', '')::timestamptz
+  );
+
+  INSERT INTO public.zakat_settings (
+    user_id, nisab_threshold_minor, gold_price_per_gram_minor,
+    custom_cash_minor, custom_savings_minor, custom_business_goods_minor,
+    custom_liabilities_minor, is_paid, paid_date, paid_amount_minor, updated_at
+  ) VALUES (
+    v_user_id,
+    COALESCE((v_merged ->> 'nisab_threshold_minor')::bigint, 95000000),
+    COALESCE((v_merged ->> 'gold_price_per_gram_minor')::bigint, 1150000),
+    COALESCE((v_merged ->> 'custom_cash_minor')::bigint, 0),
+    COALESCE((v_merged ->> 'custom_savings_minor')::bigint, 0),
+    COALESCE((v_merged ->> 'custom_business_goods_minor')::bigint, 0),
+    COALESCE((v_merged ->> 'custom_liabilities_minor')::bigint, 0),
+    COALESCE((v_merged ->> 'is_paid')::boolean, false),
+    NULLIF(v_merged ->> 'paid_date', '')::date,
+    NULLIF(v_merged ->> 'paid_amount_minor', '')::bigint,
+    now()
+  )
+  ON CONFLICT (user_id) DO UPDATE SET
+    nisab_threshold_minor = EXCLUDED.nisab_threshold_minor,
+    gold_price_per_gram_minor = EXCLUDED.gold_price_per_gram_minor,
+    custom_cash_minor = EXCLUDED.custom_cash_minor,
+    custom_savings_minor = EXCLUDED.custom_savings_minor,
+    custom_business_goods_minor = EXCLUDED.custom_business_goods_minor,
+    custom_liabilities_minor = EXCLUDED.custom_liabilities_minor,
+    is_paid = EXCLUDED.is_paid,
+    paid_date = EXCLUDED.paid_date,
+    paid_amount_minor = EXCLUDED.paid_amount_minor,
+    updated_at = now();
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_kenz_zakat_snapshot(jsonb, jsonb, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sync_kenz_zakat_snapshot(jsonb, jsonb, timestamptz) TO authenticated;
