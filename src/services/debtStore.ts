@@ -615,7 +615,8 @@ export async function resolveKredyPaymentIssue(
   } else {
     const original = debt.payments.find((item) => item.id === duplicateOfPaymentId);
     if (!duplicateOfPaymentId || duplicateOfPaymentId === paymentId || !isUuid(duplicateOfPaymentId) ||
-      !original || (original.resolutionStatus || 'normal') === 'duplicate') {
+      !original || (original.resolutionStatus || 'normal') === 'duplicate' ||
+      debt.payments.some((item) => item.duplicateOfPaymentId === original.id)) {
       throw new Error('Select a valid original payment from this debt');
     }
   }
