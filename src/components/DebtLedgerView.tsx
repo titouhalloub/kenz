@@ -602,7 +602,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                                   Examiner le reliquat
                                 </button>
                               )}
-                              {(pmt.resolutionStatus || 'normal') === 'normal' && (
+                              {['normal', 'partially_refunded'].includes(pmt.resolutionStatus || 'normal') && (
                                 <button
                                   type="button"
                                   onClick={() => {
