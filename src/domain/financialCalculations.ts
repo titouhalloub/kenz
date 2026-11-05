@@ -24,9 +24,8 @@ function normalizeDescription(value?: string): string {
 }
 
 /**
- * Legacy transactions do not store a recurring-item ID. Until they do, only
- * treat a bill as paid when description, amount, currency and a narrow date
- * window all match. This intentionally avoids category-only false positives.
+ * Prefer an explicit recurring-item link. Keep a conservative description /
+ * amount match only for legacy transactions created before links existed.
  */
 function isRecurringExpensePaid(
   item: RecurringItem,
@@ -42,14 +41,25 @@ function isRecurringExpensePaid(
   const endStr = [toLocalDateString(windowEnd), todayStr].sort()[0];
   const recurringName = normalizeDescription(item.name);
 
+  const isInDueWindow = (tx: Transaction) =>
+    tx.transactionDate >= startStr && tx.transactionDate <= endStr;
+
+  const explicitlyLinkedPayment = transactions.some((tx) =>
+    tx.recurringItemId === item.id &&
+    tx.userId === item.userId &&
+    tx.type === 'expense' &&
+    isInDueWindow(tx)
+  );
+  if (explicitlyLinkedPayment) return true;
+
   return transactions.some((tx) =>
+    !tx.recurringItemId &&
     tx.type === 'expense' &&
     tx.userId === item.userId &&
     tx.currency === item.currency &&
     tx.amountMinor === item.amountMinor &&
     normalizeDescription(tx.description) === recurringName &&
-    tx.transactionDate >= startStr &&
-    tx.transactionDate <= endStr
+    isInDueWindow(tx)
   );
 }
 
