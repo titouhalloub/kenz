@@ -17,6 +17,7 @@ import {
 import {
   loadBudgetState,
   loadBudgetStateFromSupabase,
+  saveBudgetState,
   addTransaction,
   deleteTransaction,
   addAccount,
@@ -42,6 +43,7 @@ import { loadAICreditWallet, loadAICreditStateFromSupabase } from './services/ai
 import {
   loadDebtState,
   loadDebtStateFromSupabase,
+  saveDebtState,
   addDebtEntry,
   recordDebtPayment,
   deleteDebtEntry,
@@ -150,6 +152,20 @@ export default function App() {
     setFestiveBudgets(budgets);
     saveFestiveState(budgets, currentUser.id);
   };
+
+  // Retry current in-memory financial writes when connectivity returns while
+  // the app remains open. This is a best-effort retry, not a durable offline outbox.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
+    const retryCloudWrites = () => {
+      saveBudgetState(budgetState);
+      saveDebtState(debts, currentUser.id);
+      saveZakatState(zakatState, currentUser.id);
+      saveFestiveState(festiveBudgets, currentUser.id);
+    };
+    window.addEventListener('online', retryCloudWrites);
+    return () => window.removeEventListener('online', retryCloudWrites);
+  }, [currentUser.id, budgetState, debts, zakatState, festiveBudgets]);
 
   // Recalculate Safe-To-Spend deterministically
   const safeToSpend = useMemo(() => {
