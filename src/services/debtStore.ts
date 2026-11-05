@@ -599,8 +599,13 @@ export async function resolveKredyPaymentIssue(
     throw new Error('Debt or payment not found or access denied');
   }
   const payment = debt.payments.find((item) => item.id === paymentId);
-  if (!payment || (payment.resolutionStatus || 'normal') !== 'normal') {
-    throw new Error('Payment not found or already resolved');
+  if (!payment) throw new Error('Payment not found');
+  const paymentResolution = payment.resolutionStatus || 'normal';
+  if (action === 'refund' && !['normal', 'partially_refunded'].includes(paymentResolution)) {
+    throw new Error('This payment cannot receive another refund');
+  }
+  if (action === 'duplicate' && paymentResolution !== 'normal') {
+    throw new Error('Only an unresolved payment can be marked as a duplicate');
   }
   if (action === 'refund') {
     const remainingRefundable = payment.amountMinor - (payment.refundedAmountMinor || 0);
