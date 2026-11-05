@@ -140,6 +140,8 @@ export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEnt
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(userId)) return null;
   await flushPendingDebtSync(userId);
+  // Never replace the local snapshot with stale cloud data while an outbox remains pending.
+  if (readDebtOutbox(userId)) return loadDebtState(userId);
   const { data: debtRows, error: debtError } = await supabase.from('debts').select('*')
     .eq('user_id', userId).order('created_at', { ascending: false });
   if (debtError) {
