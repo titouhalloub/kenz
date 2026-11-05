@@ -103,9 +103,10 @@ async function recordMeteredAIUsage(
   const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose : 'general_query';
   const provider = typeof req.body?.byokProvider === 'string' ? req.body.byokProvider : 'google_gemini';
   const model = typeof req.body?.byokModel === 'string' ? req.body.byokModel : 'gemini-2.5-flash';
-  const idempotencyKey = typeof req.body?.idempotencyKey === 'string' && req.body.idempotencyKey.length <= 128
-    ? req.body.idempotencyKey
-    : randomUUID();
+  const providedKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+  const idempotencyKey = (res.locals.idempotencyKey as string | undefined)
+    || (providedKey.length > 0 && providedKey.length <= 128 ? providedKey : randomUUID());
+  res.locals.idempotencyKey = idempotencyKey;
 
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
