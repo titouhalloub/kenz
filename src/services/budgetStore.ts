@@ -387,6 +387,55 @@ export function mergeBudgetSnapshots(
   };
 }
 
+function toFinancialSyncPayload(state: BudgetState): Record<string, unknown> {
+  return {
+    profile: {
+      id: state.profile.id, display_name: state.profile.displayName,
+      preferred_currency: state.profile.preferredCurrency, locale: state.profile.locale,
+      payday_day_of_month: state.profile.paydayDayOfMonth ?? null,
+      planning_period_days: state.profile.planningPeriodDays,
+      updated_at: state.profile.syncUpdatedAt || null,
+    },
+    accounts: state.accounts.map((r) => ({
+      id: r.id, user_id: r.userId, name: r.name, type: r.type, currency: r.currency,
+      initial_balance_minor: r.initialBalanceMinor, is_archived: r.isArchived,
+      updated_at: r.syncUpdatedAt || null,
+    })),
+    transactions: state.transactions.map((r) => ({
+      id: r.id, user_id: r.userId, account_id: r.accountId, type: r.type,
+      amount_minor: r.amountMinor, currency: r.currency, category_id: r.categoryId || null,
+      destination_account_id: r.destinationAccountId || null, linked_transfer_id: r.linkedTransferId || null,
+      recurring_item_id: r.recurringItemId || null, transaction_date: r.transactionDate,
+      description: r.description || null, idempotency_key: r.idempotencyKey || null,
+      updated_at: r.syncUpdatedAt || null,
+    })),
+    budgets: state.budgets.map((r) => ({
+      id: r.id, user_id: r.userId, category_id: r.categoryId, month_year: r.monthYear,
+      budget_minor: r.budgetMinor, currency: r.currency, updated_at: r.syncUpdatedAt || null,
+    })),
+    recurring_items: state.recurringItems.map((r) => ({
+      id: r.id, user_id: r.userId, name: r.name, type: r.type, amount_minor: r.amountMinor,
+      currency: r.currency, frequency: r.frequency, category_id: r.categoryId || null,
+      next_due_date: r.nextDueDate, is_active: r.isActive, updated_at: r.syncUpdatedAt || null,
+    })),
+    savings_goals: state.savingsGoals.map((r) => ({
+      id: r.id, user_id: r.userId, name: r.name, target_amount_minor: r.targetAmountMinor,
+      current_amount_minor: r.currentAmountMinor, currency: r.currency, target_date: r.targetDate || null,
+      planned_monthly_contribution_minor: r.plannedMonthlyContributionMinor,
+      status: r.status, updated_at: r.syncUpdatedAt || null,
+    })),
+    festive_budgets: [],
+  };
+}
+
+function toDeletedSyncPayload(deleted: PendingBudgetOutbox['deleted']): Record<string, string[]> {
+  return {
+    accounts: deleted.accounts, transactions: deleted.transactions,
+    budgets: deleted.budgets, recurring_items: deleted.recurringItems,
+    savings_goals: deleted.savingsGoals, festive_budgets: [],
+  };
+}
+
 async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBudgetOutbox['deleted'], baseState: BudgetState, localStamp: string, expectedRaw: string): Promise<boolean> {
   cloudSyncQueue = cloudSyncQueue.then(async () => {
     const supabase = getSupabaseClient();
