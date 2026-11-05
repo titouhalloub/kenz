@@ -26,8 +26,8 @@ This roadmap tracks the eight approved product enhancements. Implement in small,
 
 ## Phase 2 — Convenience and access
 
-4. **Offline Mode and Sync** — local transaction queue, conflict handling, retry states, and clear sync status.
-5. **Receipt Scanner** — opt-in image capture/import, OCR extraction preview, user confirmation before creating a transaction, and safe image retention/deletion.
+4. **Offline Mode and Sync** — durable per-user budget snapshot outbox is implemented; next add durable delete tombstones, durable queues for Kredy/Zakat/festive writes, retry/backoff, conflict detection/resolution, and clear sync status.
+5. **Receipt Scanner** — deferred; any future receipt image handling must be explicit opt-in, preview-only before user confirmation, and have strict retention/deletion controls. This is separate from merchant identity verification.
 6. **Arabic/French Experience** — complete translations, RTL layout, locale-aware dates/numbers, and Algerian DZD formatting.
 
 ## Phase 3 — Connected experiences
@@ -43,3 +43,9 @@ This roadmap tracks the eight approved product enhancements. Implement in small,
 - Tests added for core business logic and access boundaries.
 - Existing features manually regression-tested.
 - No feature is described as production-ready until the required tests and deployment configuration are verified.
+
+
+## Privacy and commercial constraints
+
+- Do not build a merchant identity-document upload or storage workflow. Evaluate TrustedIn Portable Verified Identity only after reviewing its official API, consent and verification model; retain no document copies and minimize any stored verification reference/result.
+- Keep AI credit top-ups disabled until legal/business readiness, payment-provider selection, and verified payment webhooks are established.
