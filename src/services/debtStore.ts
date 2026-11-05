@@ -17,7 +17,7 @@ import {
 import { getSupabaseClient } from './supabase';
 
 const STORAGE_KEY = 'kenz_debts_v1';
-const OUTBOX_VERSION = 1;
+const OUTBOX_VERSION = 2;
 
 interface DebtOutbox {
   version: number;
