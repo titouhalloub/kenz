@@ -97,29 +97,70 @@ export function loadZakatState(userId?: string): ZakatState {
   }
 }
 
+const PENDING_ZAKAT_PREFIX = 'kenz_zakat_outbox_v1_';
+const PENDING_FESTIVE_PREFIX = 'kenz_festive_outbox_v1_';
+
+function writePendingSnapshot(key: string, value: unknown): void {
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(value)); }
+  catch (error) { console.error('Unable to persist Zakat/Festive offline outbox:', error); }
+}
+
+async function flushSnapshot(key: string, userId: string, table: 'zakat_settings' | 'festive_budgets'): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
+  const supabase = getSupabaseClient();
+  if (!supabase || !isUuid(userId) || typeof localStorage === 'undefined') return false;
+  const raw = localStorage.getItem(key);
+  if (!raw) return true;
+  let payload: any;
+  try { payload = JSON.parse(raw); } catch { return false; }
+  if (table === 'zakat_settings') {
+    const result = await supabase.from(table).upsert({
+      user_id: userId,
+      nisab_threshold_minor: payload.nisabThresholdMinor,
+      gold_price_per_gram_minor: payload.goldPricePerGramMinor,
+      custom_cash_minor: payload.customCashMinor,
+      custom_savings_minor: payload.customSavingsMinor,
+      custom_business_goods_minor: payload.customBusinessGoodsMinor,
+      custom_liabilities_minor: payload.customLiabilitiesMinor,
+      is_paid: payload.isPaid,
+      paid_date: payload.paidDate || null,
+      paid_amount_minor: payload.paidAmountMinor ?? null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+    if (result.error) { console.error('Failed to sync Zakat outbox:', result.error.message); return false; }
+  } else {
+    const owned = (payload as FestiveBudget[]).filter((item) => item.userId === userId && isUuid(item.id));
+    if (owned.length) {
+      const result = await supabase.from(table).upsert(owned.map((item) => ({
+        id: item.id, user_id: userId, festival_type: item.festivalType, year: item.year,
+        target_budget_minor: item.targetBudgetMinor, actual_spent_minor: item.actualSpentMinor,
+        currency: item.currency, notes: item.notes || null, is_completed: item.isCompleted,
+        updated_at: new Date().toISOString(),
+      })), { onConflict: 'id' });
+      if (result.error) { console.error('Failed to sync festive outbox:', result.error.message); return false; }
+    }
+  }
+  if (localStorage.getItem(key) === raw) localStorage.removeItem(key);
+  return true;
+}
+
+/** Replay durable Zakat and festive snapshots after app restart or reconnect. */
+export async function flushPendingZakatFestiveSync(userId: string): Promise<boolean> {
+  if (!isUuid(userId)) return false;
+  const zakatOk = await flushSnapshot(PENDING_ZAKAT_PREFIX + userId, userId, 'zakat_settings');
+  const festiveOk = await flushSnapshot(PENDING_FESTIVE_PREFIX + userId, userId, 'festive_budgets');
+  return zakatOk && festiveOk;
+}
+
 export function saveZakatState(state: ZakatState, userId?: string): void {
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem(scopedKey(ZAKAT_STORAGE_KEY, userId), JSON.stringify(state));
   } catch (e) {
     console.error('Failed to save zakat state', e);
   }
-  const supabase = getSupabaseClient();
-  if (!supabase || !isUuid(userId)) return;
-  void supabase.from('zakat_settings').upsert({
-    user_id: userId,
-    nisab_threshold_minor: state.nisabThresholdMinor,
-    gold_price_per_gram_minor: state.goldPricePerGramMinor,
-    custom_cash_minor: state.customCashMinor,
-    custom_savings_minor: state.customSavingsMinor,
-    custom_business_goods_minor: state.customBusinessGoodsMinor,
-    custom_liabilities_minor: state.customLiabilitiesMinor,
-    is_paid: state.isPaid,
-    paid_date: state.paidDate || null,
-    paid_amount_minor: state.paidAmountMinor ?? null,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id' }).then(({ error }) => {
-    if (error) console.error('Failed to sync Zakat settings:', error.message);
-  });
+  if (!isUuid(userId)) return;
+  writePendingSnapshot(PENDING_ZAKAT_PREFIX + userId, state);
+  void flushPendingZakatFestiveSync(userId);
 }
 
 export async function loadZakatStateFromSupabase(userId: string): Promise<ZakatState | null> {
@@ -166,18 +207,9 @@ export function saveFestiveState(budgets: FestiveBudget[], userId?: string): voi
   } catch (e) {
     console.error('Failed to save festive budgets', e);
   }
-  const supabase = getSupabaseClient();
-  if (!supabase || !isUuid(userId)) return;
-  const owned = budgets.filter((item) => item.userId === userId && isUuid(item.id));
-  if (!owned.length) return;
-  void supabase.from('festive_budgets').upsert(owned.map((item) => ({
-    id: item.id, user_id: userId, festival_type: item.festivalType, year: item.year,
-    target_budget_minor: item.targetBudgetMinor, actual_spent_minor: item.actualSpentMinor,
-    currency: item.currency, notes: item.notes || null, is_completed: item.isCompleted,
-    updated_at: new Date().toISOString(),
-  })), { onConflict: 'id' }).then(({ error }) => {
-    if (error) console.error('Failed to sync festive budgets:', error.message);
-  });
+  if (!isUuid(userId)) return;
+  writePendingSnapshot(PENDING_FESTIVE_PREFIX + userId, budgets);
+  void flushPendingZakatFestiveSync(userId);
 }
 
 export async function loadFestiveStateFromSupabase(userId: string): Promise<FestiveBudget[] | null> {
