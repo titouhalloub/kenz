@@ -34,7 +34,6 @@ create unique index if not exists shared_wallet_one_pending_invite
   on public.shared_wallet_invites(wallet_id, invitee_email) where status = 'pending';
 create index if not exists shared_wallet_members_user_idx on public.shared_wallet_members(user_id);
 create index if not exists shared_wallet_invites_email_idx on public.shared_wallet_invites(invitee_email, status);
-create index if not exists shared_wallet_entries_wallet_date_idx on public.shared_wallet_entries(wallet_id, transaction_date desc);
 
 create table if not exists public.shared_wallet_entries (
   id uuid primary key default gen_random_uuid(),
@@ -48,6 +47,8 @@ create table if not exists public.shared_wallet_entries (
   created_at timestamptz not null default now()
 );
 
+
+create index if not exists shared_wallet_entries_wallet_date_idx on public.shared_wallet_entries(wallet_id, transaction_date desc);
 alter table public.shared_wallets enable row level security;
 alter table public.shared_wallet_members enable row level security;
 alter table public.shared_wallet_invites enable row level security;
