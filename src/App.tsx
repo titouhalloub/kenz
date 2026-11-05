@@ -609,6 +609,7 @@ export default function App() {
             onDeleteRecurring={(id) => setBudgetState(deleteRecurringItem(budgetState, id))}
             onMarkRecurringPaid={handleMarkRecurringPaid}
             onToggleRecurring={(id, isActive) => setBudgetState((current) => updateRecurringItem(current, id, { isActive }))}
+            onUpdateRecurring={(id, updates) => setBudgetState((current) => updateRecurringItem(current, id, updates))}
             onAddSavingsGoal={(data) => setBudgetState(addSavingsGoal(budgetState, data))}
             onUpdateSavingsGoal={(id, updates) =>
               setBudgetState(updateSavingsGoal(budgetState, id, updates))
