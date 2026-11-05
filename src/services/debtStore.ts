@@ -236,6 +236,37 @@ export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEnt
       updatedAt: localIsNewer ? local.updatedAt : remote.updatedAt,
     });
   }
+  // Normalize every entry, including debts that exist on only one device.
+  // The ordering matches the database allocator: payment date, creation time, ID.
+  for (const [id, debt] of merged) {
+    let availableToApply = debt.totalAmountMinor;
+    const payments = [...(debt.payments || [])]
+      .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) ||
+        a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .map((payment) => {
+        const appliedAmountMinor = Math.min(payment.amountMinor, Math.max(0, availableToApply));
+        availableToApply -= appliedAmountMinor;
+        const unappliedAmountMinor = payment.amountMinor - appliedAmountMinor;
+        return {
+          ...payment,
+          appliedAmountMinor,
+          unappliedAmountMinor,
+          reconciliationStatus: unappliedAmountMinor === 0
+            ? 'applied' as const
+            : appliedAmountMinor > 0 ? 'partial' as const : 'pending' as const,
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const appliedTotal = payments.reduce((sum, payment) => sum + (payment.appliedAmountMinor || 0), 0);
+    const remainingAmountMinor = Math.max(0, debt.totalAmountMinor - appliedTotal);
+    merged.set(id, {
+      ...debt,
+      payments,
+      remainingAmountMinor,
+      status: remainingAmountMinor === 0 ? 'settled' : appliedTotal > 0 ? 'partially_paid' : 'active',
+    });
+  }
+
   return [...merged.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
