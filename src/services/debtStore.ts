@@ -21,6 +21,8 @@ const OUTBOX_VERSION = 1;
 
 interface DebtOutbox {
   version: number;
+  /** Last cloud snapshot before this device began its pending edits. */
+  baseDebts: DebtEntry[];
   debts: DebtEntry[];
   deletedDebtIds: string[];
   updatedAt: string;
@@ -34,9 +36,18 @@ function readDebtOutbox(userId: string): DebtOutbox | null {
   try {
     const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(debtOutboxKey(userId));
     if (!raw) return null;
-    const value = JSON.parse(raw) as DebtOutbox;
-    return value && value.version === OUTBOX_VERSION && Array.isArray(value.debts) &&
-      Array.isArray(value.deletedDebtIds) ? value : null;
+    const value = JSON.parse(raw) as Partial<DebtOutbox>;
+    if (!value || ![1, OUTBOX_VERSION].includes(value.version || 0) ||
+      !Array.isArray(value.debts) || !Array.isArray(value.deletedDebtIds)) return null;
+    // Version 1 outboxes predate three-way merging. An empty base safely falls
+    // back to timestamp ordering for those already-pending snapshots.
+    return {
+      version: OUTBOX_VERSION,
+      baseDebts: Array.isArray(value.baseDebts) ? value.baseDebts : [],
+      debts: value.debts,
+      deletedDebtIds: value.deletedDebtIds,
+      updatedAt: value.updatedAt || new Date(0).toISOString(),
+    };
   } catch {
     return null;
   }
@@ -194,7 +205,56 @@ export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEnt
 
 let debtCloudSyncQueue: Promise<void> = Promise.resolve();
 
-export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEntry[], deletedIds: string[] = []): DebtEntry[] {
+const DEBT_SYNC_FIELDS = [
+  'businessId', 'counterpartyName', 'counterpartyPhone', 'type',
+  'totalAmountMinor', 'currency', 'dueDate', 'notes',
+] as const;
+
+/**
+ * Three-way merge editable debt metadata against the last common cloud snapshot.
+ * Independent edits on different devices are retained. If both devices changed
+ * the same field, the newer edit wins with a stable tie-break so merge order does
+ * not affect the result. Payment events are merged separately by immutable ID.
+ */
+function mergeDebtMetadata(
+  local: DebtEntry,
+  remote: DebtEntry,
+  base?: DebtEntry,
+): DebtEntry {
+  const preferred = Date.parse(local.updatedAt || local.createdAt) >
+    Date.parse(remote.updatedAt || remote.createdAt) ? local : remote;
+  if (!base) return { ...remote, ...preferred };
+
+  const fields = {} as Record<string, unknown>;
+  const localTime = Date.parse(local.updatedAt || local.createdAt);
+  const remoteTime = Date.parse(remote.updatedAt || remote.createdAt);
+  for (const field of DEBT_SYNC_FIELDS) {
+    const localValue = local[field];
+    const remoteValue = remote[field];
+    const baseValue = base[field];
+    const localChanged = localValue !== baseValue;
+    const remoteChanged = remoteValue !== baseValue;
+    let chosen: unknown = remoteValue;
+    if (localChanged && !remoteChanged) chosen = localValue;
+    else if (localChanged && remoteChanged) {
+      if (localValue === remoteValue) chosen = localValue;
+      else if (localTime > remoteTime) chosen = localValue;
+      else if (localTime === remoteTime &&
+        JSON.stringify(localValue ?? null) > JSON.stringify(remoteValue ?? null)) chosen = localValue;
+    }
+    fields[field] = chosen;
+  }
+  const updatedAt = localTime > remoteTime ? local.updatedAt : remote.updatedAt;
+  return { ...remote, ...fields, updatedAt } as DebtEntry;
+}
+
+export function mergeDebtSnapshots(
+  localDebts: DebtEntry[],
+  remoteDebts: DebtEntry[],
+  deletedIds: string[] = [],
+  baseDebts: DebtEntry[] = [],
+): DebtEntry[] {
+  const baseById = new Map(baseDebts.map((debt) => [debt.id, debt]));
   const deleted = new Set(deletedIds);
   const merged = new Map<string, DebtEntry>();
   for (const debt of remoteDebts) if (!deleted.has(debt.id)) merged.set(debt.id, debt);
@@ -202,8 +262,9 @@ export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEnt
     if (deleted.has(local.id)) continue;
     const remote = merged.get(local.id);
     if (!remote) { merged.set(local.id, local); continue; }
-    const localIsNewer = Date.parse(local.updatedAt || local.createdAt) > Date.parse(remote.updatedAt || remote.createdAt);
-    const preferred = localIsNewer ? local : remote;
+    const base = baseById.get(local.id);
+    const preferred = mergeDebtMetadata(local, remote, base);
+    const localIsNewer = preferred.updatedAt === local.updatedAt;
     const payments = new Map<string, DebtPayment>();
     for (const payment of [...(remote.payments || []), ...(local.payments || [])]) {
       if (!payments.has(payment.id)) payments.set(payment.id, payment);
@@ -341,7 +402,7 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
     // Even without a local outbox, enforce cloud tombstones to clean up a stale
     // row that raced with another device's delete operation.
     if (!pending) return;
-    const merged = mergeDebtSnapshots(pending.debts, remoteDebts, deletedIds);
+    const merged = mergeDebtSnapshots(pending.debts, remoteDebts, deletedIds, pending.baseDebts);
     const owned = merged.filter((debt) => debt.userId === userId && isUuid(debt.id));
     if (owned.length) {
       const { error } = await supabase.from('debts').upsert(owned.map((d) => ({
@@ -442,15 +503,28 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
 /** Persist locally first, then durably queue every authenticated user's change. */
 export function saveDebtState(debts: DebtEntry[], ownerId?: string, deletedDebtIds: string[] = []): void {
   const userId = ownerId || debts[0]?.userId;
+  let cachedBeforeEdit: DebtEntry[] = [];
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(localDebtKey(userId));
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) cachedBeforeEdit = parsed as DebtEntry[];
+    }
+  } catch {
+    // A missing/corrupt cache is treated as an empty common ancestor.
+  }
+  const previous = userId && isUuid(userId) ? readDebtOutbox(userId) : null;
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem(localDebtKey(userId), JSON.stringify(debts));
   } catch (err) {
     console.error('Failed to save debts to localStorage:', err);
   }
   if (!userId || !isUuid(userId)) return;
-  const previous = readDebtOutbox(userId);
   const outbox: DebtOutbox = {
     version: OUTBOX_VERSION,
+    // Keep the original common ancestor across multiple offline edits so the
+    // eventual sync can distinguish independent changes from true collisions.
+    baseDebts: previous?.baseDebts?.length ? previous.baseDebts : cachedBeforeEdit,
     debts: debts.filter((debt) => debt.userId === userId),
     deletedDebtIds: [...new Set([...(previous?.deletedDebtIds || []), ...deletedDebtIds])],
     updatedAt: new Date().toISOString(),
