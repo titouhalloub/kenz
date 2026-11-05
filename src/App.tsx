@@ -528,6 +528,7 @@ export default function App() {
         onClose={() => setIsAddModalOpen(false)}
         accounts={budgetState.accounts}
         categories={budgetState.categories}
+        recurringItems={budgetState.recurringItems}
         preferredCurrency={budgetState.profile.preferredCurrency}
         onSave={(txData) => {
           setBudgetState(addTransaction(budgetState, { ...txData, userId: budgetState.profile.id }));
