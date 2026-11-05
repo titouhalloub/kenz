@@ -590,6 +590,7 @@ export default function App() {
             categories={budgetState.categories}
             budgets={budgetState.budgets}
             recurringItems={budgetState.recurringItems}
+            accounts={budgetState.accounts}
             savingsGoals={budgetState.savingsGoals}
             transactions={budgetState.transactions}
             profile={budgetState.profile}
