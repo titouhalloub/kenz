@@ -18,6 +18,7 @@ import {
   loadBudgetState,
   loadBudgetStateFromSupabase,
   saveBudgetState,
+  flushPendingBudgetSync,
   addTransaction,
   deleteTransaction,
   addAccount,
@@ -125,6 +126,8 @@ export default function App() {
         paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
         planningPeriodDays: budgetState.profile.planningPeriodDays,
       };
+      // Replay this user's durable local outbox before cloud hydration so offline edits aren't overwritten.
+      await flushPendingBudgetSync(authUser.id);
       const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
         loadBudgetStateFromSupabase(financialProfile),
         loadDebtStateFromSupabase(authUser.id),
@@ -158,6 +161,7 @@ export default function App() {
   useEffect(() => {
     if (typeof window === 'undefined' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
     const retryCloudWrites = () => {
+      void flushPendingBudgetSync(currentUser.id);
       saveBudgetState(budgetState);
       saveDebtState(debts, currentUser.id);
       saveZakatState(zakatState, currentUser.id);
