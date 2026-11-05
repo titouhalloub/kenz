@@ -25,7 +25,7 @@ DECLARE
 BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'profiles', 'accounts', 'transactions', 'budgets',
-    'recurring_items', 'savings_goals', 'zakat_settings', 'festive_budgets'
+    'recurring_items', 'savings_goals', 'zakat_settings', 'festive_budgets', 'ai_credit_wallets'
   ]
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS touch_sync_updated_at ON public.%I', table_name);
