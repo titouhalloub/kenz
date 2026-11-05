@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Users, Plus, RefreshCw, Trash2, LogOut, Mail, Wallet, X, AlertCircle } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Users, Plus, RefreshCw, Trash2, Mail, Wallet, X, AlertCircle } from 'lucide-react';
 import { getSupabaseClient } from '../services/supabase';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 
