@@ -327,6 +327,63 @@ function readPendingBudgetOutbox(userId: string): PendingBudgetOutbox | null {
   } catch { return null; }
 }
 
+function sameSyncValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function mergeSyncRecord<T extends { id: string }>(local: T, remote: T, base: T | undefined, localStamp: string): T {
+  if (!base) return JSON.stringify(local) > JSON.stringify(remote) ? { ...remote, ...local } : { ...local, ...remote };
+  const merged: Record<string, unknown> = { ...remote };
+  const keys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]);
+  for (const key of keys) {
+    if (key === 'syncUpdatedAt' || key === 'syncStatus') continue;
+    const before = (base as any)[key], left = (local as any)[key], right = (remote as any)[key];
+    const leftChanged = !sameSyncValue(left, before), rightChanged = !sameSyncValue(right, before);
+    if (leftChanged && !rightChanged) merged[key] = left;
+    else if (leftChanged && rightChanged && sameSyncValue(left, right)) merged[key] = left;
+    else if (leftChanged && rightChanged) {
+      const leftTime = Date.parse(localStamp) || 0;
+      const rightTime = Date.parse((remote as any).syncUpdatedAt || '') || 0;
+      if (leftTime > rightTime || (leftTime === rightTime && JSON.stringify(left) > JSON.stringify(right))) merged[key] = left;
+    }
+  }
+  if ('syncStatus' in local || 'syncStatus' in remote) merged.syncStatus = 'synced';
+  return merged as T;
+}
+
+export function mergeBudgetSnapshots(
+  local: BudgetState, remote: BudgetState, base: BudgetState,
+  deleted: Record<BudgetCollection, string[]>, localStamp: string,
+): BudgetState {
+  const mergeRows = <T extends { id: string }>(key: BudgetCollection): T[] => {
+    const left = local[key] as T[], right = remote[key] as T[], ancestor = base[key] as T[];
+    const lm = new Map(left.map((row) => [row.id, row]));
+    const rm = new Map(right.map((row) => [row.id, row]));
+    const bm = new Map(ancestor.map((row) => [row.id, row]));
+    const removed = new Set(deleted[key]);
+    const result: T[] = [];
+    for (const id of new Set([...lm.keys(), ...rm.keys()])) {
+      if (removed.has(id)) continue;
+      const l = lm.get(id), r = rm.get(id), b = bm.get(id);
+      if (l && r) result.push(mergeSyncRecord(l, r, b, localStamp));
+      else if (l && (!b || !sameSyncValue(l, b))) result.push(l);
+      else if (r && l === undefined) result.push(r);
+    }
+    return result;
+  };
+  return {
+    ...remote,
+    profile: mergeSyncRecord(local.profile as any, remote.profile as any, base.profile as any, localStamp),
+    accounts: mergeRows('accounts'),
+    transactions: mergeRows('transactions'),
+    budgets: mergeRows('budgets'),
+    recurringItems: mergeRows('recurringItems'),
+    savingsGoals: mergeRows('savingsGoals'),
+    categories: remote.categories,
+    lastSyncedAt: new Date().toISOString(),
+  };
+}
+
 async function syncBudgetStateToSupabase(state: BudgetState, deleted = emptyDeletedIds()): Promise<boolean> {
   cloudSyncQueue = cloudSyncQueue.then(async () => {
     const supabase = getSupabaseClient();
