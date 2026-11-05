@@ -4,6 +4,7 @@
  */
 
 import {
+import { getSupabaseAccessToken } from './supabase';
   AICreditWallet,
   AIUsageEvent,
   CreditLedgerEntry,
@@ -346,9 +347,13 @@ export async function testBYOKCredentials(config: BYOKConfig): Promise<{
   latencyMs?: number;
 }> {
   try {
+    const accessToken = await getSupabaseAccessToken();
     const res = await fetch('/api/ai/test-key', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({
         byokProvider: config.provider,
         byokKey: config.apiKey,
