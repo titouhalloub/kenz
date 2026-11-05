@@ -63,7 +63,14 @@ import {
   ZakatState,
   FestiveBudget,
 } from './services/zakatFestiveStore';
-import { AICreditWallet, DebtEntry, Business } from './domain/types';
+import { AICreditWallet, DebtEntry, Business, SavingsChallengeContribution } from './domain/types';
+import {
+  loadSavingsChallengeContributions,
+  loadSavingsChallengeContributionsFromSupabase,
+  addSavingsChallengeContribution,
+  flushPendingSavingsChallengeContributions,
+  retrySavingsChallengeSync,
+} from './services/savingsChallengeStore';
 import { calculateSafeToSpend } from './domain/financialCalculations';
 import { HomeView } from './components/HomeView';
 import { TransactionsView } from './components/TransactionsView';
@@ -93,6 +100,7 @@ export default function App() {
   const [festiveBudgets, setFestiveBudgets] = useState<FestiveBudget[]>(() => loadFestiveState(loadCurrentUser().id));
   const [aiWallet, setAiWallet] = useState<AICreditWallet>(() => loadAICreditWallet());
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => loadCurrentUser());
+  const [challengeContributions, setChallengeContributions] = useState<SavingsChallengeContribution[]>(() => loadSavingsChallengeContributions(loadCurrentUser().id));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -154,6 +162,18 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
+  // Load and replay the append-only savings challenge ledger for this account.
+  useEffect(() => {
+    let active = true;
+    const userId = currentUser.id;
+    setChallengeContributions(loadSavingsChallengeContributions(userId));
+    void flushPendingSavingsChallengeContributions(userId)
+      .then(() => loadSavingsChallengeContributionsFromSupabase(userId))
+      .then((rows) => { if (active && rows) setChallengeContributions(rows); })
+      .catch((error) => console.error('Unable to restore savings challenge contributions:', error));
+    return () => { active = false; };
+  }, [currentUser.id]);
+
   // Keep Kredy views fresh on other devices. Pending local outboxes are never replayed
   // from realtime callbacks, preventing sync-event loops and stale local overwrites.
   useEffect(() => {
@@ -206,17 +226,19 @@ export default function App() {
     let refreshQueue: Promise<void> = Promise.resolve();
     const refresh = () => {
       refreshQueue = refreshQueue.then(async () => {
-        const [budget, zakat, festive, credits] = await Promise.all([
+        const [budget, zakat, festive, credits, contributions] = await Promise.all([
           loadBudgetStateFromSupabase({ ...budgetState.profile, id: userId }),
           loadZakatStateFromSupabase(userId),
           loadFestiveStateFromSupabase(userId),
           loadAICreditStateFromSupabase(userId),
+          loadSavingsChallengeContributionsFromSupabase(userId),
         ]);
         if (!active) return;
         if (budget) setBudgetState(budget);
         if (zakat) setZakatState(zakat);
         if (festive) setFestiveBudgets(festive);
         if (credits?.wallet) setAiWallet(credits.wallet);
+        if (contributions) setChallengeContributions(contributions);
       }).catch((error) => console.error('Kenz cross-device refresh failed:', error));
     };
     const channel = supabase.channel(`kenz-financial-live-${userId}`);
@@ -227,6 +249,7 @@ export default function App() {
       ['budgets', `user_id=eq.${userId}`],
       ['recurring_items', `user_id=eq.${userId}`],
       ['savings_goals', `user_id=eq.${userId}`],
+      ['savings_challenge_contributions', `user_id=eq.${userId}`],
       ['zakat_settings', `user_id=eq.${userId}`],
       ['festive_budgets', `user_id=eq.${userId}`],
       ['ai_credit_wallets', `user_id=eq.${userId}`],
@@ -240,6 +263,10 @@ export default function App() {
       void supabase.removeChannel(channel);
     };
   }, [currentUser.id]);
+
+  const handleAddChallengeContribution = (goalId: string, amountMinor: number, date: string) => {
+    setChallengeContributions(addSavingsChallengeContribution(currentUser.id, goalId, amountMinor, date));
+  };
 
   const handleUpdateZakat = (state: ZakatState) => {
     setZakatState(state);
@@ -260,6 +287,7 @@ export default function App() {
       saveDebtState(debts, currentUser.id);
       saveZakatState(zakatState, currentUser.id);
       saveFestiveState(festiveBudgets, currentUser.id);
+      retrySavingsChallengeSync(currentUser.id);
     };
     window.addEventListener('online', retryCloudWrites);
     return () => window.removeEventListener('online', retryCloudWrites);
@@ -551,6 +579,8 @@ export default function App() {
             onUpdateSavingsGoal={(id, updates) =>
               setBudgetState(updateSavingsGoal(budgetState, id, updates))
             }
+            challengeContributions={challengeContributions}
+            onAddChallengeContribution={handleAddChallengeContribution}
           />
         )}
 
