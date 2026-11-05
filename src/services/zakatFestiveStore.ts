@@ -244,9 +244,28 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
 /** Replay durable Zakat and festive snapshots after app restart or reconnect. */
 export async function flushPendingZakatFestiveSync(userId: string): Promise<boolean> {
   if (!isUuid(userId)) return false;
-  const zakatOk = await flushSnapshot(PENDING_ZAKAT_PREFIX + userId, userId, 'zakat_settings');
-  const festiveOk = await flushSnapshot(PENDING_FESTIVE_PREFIX + userId, userId, 'festive_budgets');
-  return zakatOk && festiveOk;
+  if (typeof localStorage === 'undefined') return false;
+
+  const zakatKey = PENDING_ZAKAT_PREFIX + userId;
+  const festiveKey = PENDING_FESTIVE_PREFIX + userId;
+  const legacyZakatKey = `kenz_zakat_outbox_v1_${userId}`;
+  const legacyFestiveKey = `kenz_festive_outbox_v1_${userId}`;
+
+  // A second edit may be queued while the previous snapshot is being written.
+  // Drain bounded revisions so reconnect/realtime sync does not strand it.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const zakatOk = await flushSnapshot(zakatKey, userId, 'zakat_settings');
+    if (!zakatOk) return false;
+    const festiveOk = await flushSnapshot(festiveKey, userId, 'festive_budgets');
+    if (!festiveOk) return false;
+
+    const hasPending = Boolean(
+      localStorage.getItem(zakatKey) || localStorage.getItem(legacyZakatKey) ||
+      localStorage.getItem(festiveKey) || localStorage.getItem(legacyFestiveKey)
+    );
+    if (!hasPending) return true;
+  }
+  return false;
 }
 
 export function saveZakatState(state: ZakatState, userId?: string): void {
