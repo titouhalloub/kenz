@@ -165,6 +165,9 @@ export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEnt
       id: row.id, debtId: row.debt_id, amountMinor: Number(row.amount_minor),
       paymentDate: row.payment_date, sourceAccountId: row.source_account_id || undefined,
       notes: row.notes || undefined, createdAt: row.created_at,
+      appliedAmountMinor: Number(row.applied_amount_minor ?? row.amount_minor),
+      unappliedAmountMinor: Number(row.unapplied_amount_minor ?? 0),
+      reconciliationStatus: row.reconciliation_status || 'applied',
     };
     const items = paymentsByDebt.get(payment.debtId) || [];
     items.push(payment);
@@ -202,8 +205,28 @@ export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEnt
     for (const payment of [...(remote.payments || []), ...(local.payments || [])]) {
       if (!payments.has(payment.id)) payments.set(payment.id, payment);
     }
-    const allPayments = [...payments.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    const paidMinor = allPayments.reduce((sum, payment) => sum + payment.amountMinor, 0);
+    // Allocate payment events in a stable chronological order. Any amount above
+    // the debt total stays visible as unapplied instead of silently reducing the
+    // balance or disappearing when two offline devices reconnect.
+    let availableToApply = preferred.totalAmountMinor;
+    const allPayments = [...payments.values()]
+      .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) ||
+        a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .map((payment) => {
+        const appliedAmountMinor = Math.min(payment.amountMinor, Math.max(0, availableToApply));
+        availableToApply -= appliedAmountMinor;
+        const unappliedAmountMinor = payment.amountMinor - appliedAmountMinor;
+        return {
+          ...payment,
+          appliedAmountMinor,
+          unappliedAmountMinor,
+          reconciliationStatus: unappliedAmountMinor === 0
+            ? 'applied' as const
+            : appliedAmountMinor > 0 ? 'partial' as const : 'pending' as const,
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const paidMinor = allPayments.reduce((sum, payment) => sum + (payment.appliedAmountMinor || 0), 0);
     const remainingAmountMinor = Math.max(0, preferred.totalAmountMinor - paidMinor);
     merged.set(local.id, {
       ...preferred,
@@ -286,16 +309,72 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
       if (error) throw error;
     }
     const mergedPayments = owned.flatMap((d) => d.payments.filter((p) => isUuid(p.id)).map((p) => ({
-      id: p.id, debt_id: d.id, amount_minor: p.amountMinor, payment_date: p.paymentDate,
-      source_account_id: p.sourceAccountId && isUuid(p.sourceAccountId) ? p.sourceAccountId : null,
-      notes: p.notes || null, created_at: p.createdAt,
-    })));
-    if (mergedPayments.length) {
-      const { error } = await supabase.from('debt_payments').upsert(mergedPayments, { onConflict: 'id' });
+      debtId: d.id,
+      id: p.id,
+      amountMinor: p.amountMinor,
+      paymentDate: p.paymentDate,
+      sourceAccountId: p.sourceAccountId && isUuid(p.sourceAccountId) ? p.sourceAccountId : null,
+      notes: p.notes || null,
+      createdAt: p.createdAt,
+    }))).sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) ||
+      a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+
+    // The database locks the debt row and reallocates every event in chronological
+    // order. This makes simultaneous offline payments deterministic and idempotent.
+    for (const payment of mergedPayments) {
+      const { error } = await supabase.rpc('record_kredy_payment', {
+        p_payment_id: payment.id,
+        p_debt_id: payment.debtId,
+        p_amount_minor: payment.amountMinor,
+        p_payment_date: payment.paymentDate,
+        p_created_at: payment.createdAt,
+        p_source_account_id: payment.sourceAccountId,
+        p_notes: payment.notes,
+      });
       if (error) throw error;
     }
 
-    if (typeof localStorage !== 'undefined') localStorage.setItem(localDebtKey(userId), JSON.stringify(merged));
+    const syncedDebtIds = owned.map((debt) => debt.id);
+    let finalDebtRows: Record<string, any>[] = [];
+    let finalPaymentRows: Record<string, any>[] = [];
+    if (syncedDebtIds.length) {
+      const [{ data: debtData, error: finalDebtError }, { data: paymentData, error: finalPaymentError }] =
+        await Promise.all([
+          supabase.from('debts').select('*').eq('user_id', userId).in('id', syncedDebtIds),
+          supabase.from('debt_payments').select('*').in('debt_id', syncedDebtIds),
+        ]);
+      if (finalDebtError) throw finalDebtError;
+      if (finalPaymentError) throw finalPaymentError;
+      finalDebtRows = (debtData || []) as Record<string, any>[];
+      finalPaymentRows = (paymentData || []) as Record<string, any>[];
+    }
+    const finalDebtById = new Map(finalDebtRows.map((row) => [row.id as string, row]));
+    const finalPaymentsByDebt = new Map<string, DebtPayment[]>();
+    for (const row of finalPaymentRows) {
+      const payment: DebtPayment = {
+        id: row.id, debtId: row.debt_id, amountMinor: Number(row.amount_minor),
+        appliedAmountMinor: Number(row.applied_amount_minor),
+        unappliedAmountMinor: Number(row.unapplied_amount_minor),
+        reconciliationStatus: row.reconciliation_status,
+        paymentDate: row.payment_date, sourceAccountId: row.source_account_id || undefined,
+        notes: row.notes || undefined, createdAt: row.created_at,
+      };
+      finalPaymentsByDebt.set(payment.debtId, [...(finalPaymentsByDebt.get(payment.debtId) || []), payment]);
+    }
+    const syncedDebts = owned.map((debt) => {
+      const row = finalDebtById.get(debt.id);
+      return {
+        ...debt,
+        remainingAmountMinor: row ? Number(row.remaining_amount_minor) : debt.remainingAmountMinor,
+        status: row?.status || debt.status,
+        updatedAt: row?.updated_at || debt.updatedAt,
+        payments: finalPaymentsByDebt.get(debt.id) || debt.payments,
+      };
+    });
+    const syncedById = new Map(syncedDebts.map((debt) => [debt.id, debt]));
+    const finalSnapshot = merged.map((debt) => syncedById.get(debt.id) || debt);
+
+    if (typeof localStorage !== 'undefined') localStorage.setItem(localDebtKey(userId), JSON.stringify(finalSnapshot));
     const latest = readDebtOutbox(userId);
     if (latest && JSON.stringify(latest) === JSON.stringify(pending)) {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(debtOutboxKey(userId));
