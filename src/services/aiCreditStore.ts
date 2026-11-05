@@ -3,7 +3,7 @@
  * Enforces atomic credit reservations, usage event auditing, and BYOK/Managed mode toggles.
  */
 
-import { getSupabaseAccessToken } from './supabase';
+import { getSupabaseAccessToken, getSupabaseClient } from './supabase';
 import {
   AICreditWallet,
   AIUsageEvent,
@@ -101,6 +101,53 @@ export function saveAICreditWallet(wallet: AICreditWallet): void {
   } catch (e) {
     console.error('Failed to save AI credit wallet', e);
   }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+/** Read the signed-in user's wallet and audit history under Supabase RLS. */
+export async function loadAICreditStateFromSupabase(userId: string): Promise<{
+  wallet: AICreditWallet;
+  ledger: CreditLedgerEntry[];
+  usageEvents: AIUsageEvent[];
+} | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase || !isUuid(userId)) return null;
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || sessionData.session?.user.id !== userId) return null;
+
+  const [walletResult, ledgerResult, usageResult] = await Promise.all([
+    supabase.from('ai_credit_wallets').select('*').eq('user_id', userId).maybeSingle(),
+    supabase.from('credit_ledger_entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('ai_usage_events').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+  ]);
+  if (walletResult.error || ledgerResult.error || usageResult.error || !walletResult.data) {
+    console.error('Failed to load cloud AI credit state:', walletResult.error || ledgerResult.error || usageResult.error);
+    return null;
+  }
+
+  const wallet: AICreditWallet = {
+    userId, balanceCredits: Number(walletResult.data.balance_credits),
+    lifetimeCreditsUsed: Number(walletResult.data.lifetime_credits_used),
+    updatedAt: walletResult.data.updated_at,
+  };
+  const ledger: CreditLedgerEntry[] = (ledgerResult.data || []).map((row) => ({
+    id: row.id, userId: row.user_id, entryType: row.entry_type,
+    creditsDelta: Number(row.credits_delta), balanceAfter: Number(row.balance_after),
+    referenceId: row.reference_id || undefined, description: row.description, createdAt: row.created_at,
+  }));
+  const usageEvents: AIUsageEvent[] = (usageResult.data || []).map((row) => ({
+    id: row.id, userId: row.user_id, mode: row.mode, provider: row.provider, model: row.model,
+    tokensInput: Number(row.tokens_input), tokensOutput: Number(row.tokens_output),
+    creditsDebited: Number(row.credits_debited), purpose: row.purpose,
+    idempotencyKey: row.idempotency_key || undefined, createdAt: row.created_at,
+  }));
+  saveAICreditWallet(wallet);
+  saveCreditLedger(ledger);
+  saveAIUsageEvents(usageEvents);
+  return { wallet, ledger, usageEvents };
 }
 export function loadCreditLedger(): CreditLedgerEntry[] {
   try {
@@ -377,7 +424,7 @@ export async function testBYOKCredentials(config: BYOKConfig): Promise<{
 /**
  * Atomic credit deduction with immutable ledger entry and audit event.
  */
-export function deductAICredits(params: {
+export async function deductAICredits(params: {
   userId: string;
   creditsToDebit: number;
   purpose: AIUsageEvent['purpose'];
@@ -386,92 +433,100 @@ export function deductAICredits(params: {
   mode: AIMode;
   provider?: string;
   model?: string;
-}): { success: boolean; newBalance: number; reason?: string } {
+}): Promise<{ success: boolean; newBalance: number; reason?: string }> {
   const {
-    userId,
-    creditsToDebit,
-    purpose,
-    tokensInput = 0,
-    tokensOutput = 0,
-    mode,
-    provider,
-    model,
+    userId, creditsToDebit, purpose, tokensInput = 0, tokensOutput = 0,
+    mode, provider, model,
   } = params;
 
+  if (!Number.isInteger(creditsToDebit) || creditsToDebit < 0 ||
+      (mode === 'managed' && creditsToDebit === 0)) {
+    return { success: false, newBalance: loadAICreditWallet().balanceCredits, reason: 'Montant de crédits invalide.' };
+  }
+
+  // Real accounts are metered in Postgres, not in browser storage. The RPC
+  // derives the owner from auth.uid(), locks the wallet, and enforces idempotency.
+  if (isUuid(userId)) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { success: false, newBalance: 0, reason: 'Connexion sécurisée indisponible.' };
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || sessionData.session?.user.id !== userId) {
+      return { success: false, newBalance: loadAICreditWallet().balanceCredits, reason: 'Session utilisateur invalide.' };
+    }
+    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (ch) => {
+          const r = Math.random() * 16 | 0;
+          return (ch === 'x' ? r : (r & 3 | 8)).toString(16);
+        });
+    const currentConfig = getBYOKConfig();
+    const resolvedProvider = provider || (mode === 'byok' ? currentConfig.provider : 'google_gemini');
+    const resolvedModel = model || (mode === 'byok' ? currentConfig.model : 'gemini-2.5-flash');
+    const { data, error } = await supabase.rpc('record_ai_usage', {
+      p_credits_to_debit: mode === 'byok' ? 0 : creditsToDebit,
+      p_mode: mode,
+      p_provider: resolvedProvider,
+      p_model: resolvedModel,
+      p_tokens_input: tokensInput,
+      p_tokens_output: tokensOutput,
+      p_purpose: purpose,
+      p_idempotency_key: idempotencyKey,
+    });
+    if (error) {
+      const message = error.message || 'Impossible d’enregistrer la consommation IA.';
+      const { data: walletRow } = await supabase.from('ai_credit_wallets')
+        .select('balance_credits').eq('user_id', userId).maybeSingle();
+      const balance = Number(walletRow?.balance_credits ?? loadAICreditWallet().balanceCredits);
+      return {
+        success: false, newBalance: balance,
+        reason: message.includes('INSUFFICIENT_CREDITS')
+          ? `Crédits insuffisants. Requis : ${creditsToDebit}, Disponible : ${balance}`
+          : message,
+      };
+    }
+    const newBalance = Number(data);
+    await loadAICreditStateFromSupabase(userId);
+    return { success: true, newBalance };
+  }
+
+  // Local demo mode only. It is never used for UUID-backed authenticated accounts.
   if (mode === 'byok') {
     const currentConfig = getBYOKConfig();
-    const resolvedProvider = provider || currentConfig.provider;
-    const resolvedModel = model || currentConfig.model;
-
-    // BYOK mode: user pays model provider directly, 0 platform credits debited
     const usageEvent: AIUsageEvent = {
       id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      userId,
-      mode: 'byok',
-      provider: resolvedProvider,
-      model: resolvedModel,
-      tokensInput,
-      tokensOutput,
-      creditsDebited: 0,
-      purpose,
-      createdAt: new Date().toISOString(),
+      userId, mode: 'byok', provider: provider || currentConfig.provider,
+      model: model || currentConfig.model, tokensInput, tokensOutput,
+      creditsDebited: 0, purpose, createdAt: new Date().toISOString(),
     };
-    const events = loadAIUsageEvents();
-    saveAIUsageEvents([usageEvent, ...events]);
-
-    const wallet = loadAICreditWallet();
-    return { success: true, newBalance: wallet.balanceCredits };
+    saveAIUsageEvents([usageEvent, ...loadAIUsageEvents()]);
+    return { success: true, newBalance: loadAICreditWallet().balanceCredits };
   }
 
-  // Managed mode: Atomic balance verification
   const wallet = loadAICreditWallet();
   if (wallet.balanceCredits < creditsToDebit) {
-    return {
-      success: false,
-      newBalance: wallet.balanceCredits,
-      reason: `Crédits insuffisants. Requis : ${creditsToDebit}, Disponible : ${wallet.balanceCredits}`,
-    };
+    return { success: false, newBalance: wallet.balanceCredits,
+      reason: `Crédits insuffisants. Requis : ${creditsToDebit}, Disponible : ${wallet.balanceCredits}` };
   }
-
   const newBalance = wallet.balanceCredits - creditsToDebit;
-  const updatedWallet: AICreditWallet = {
-    ...wallet,
-    balanceCredits: newBalance,
+  saveAICreditWallet({
+    ...wallet, balanceCredits: newBalance,
     lifetimeCreditsUsed: wallet.lifetimeCreditsUsed + creditsToDebit,
     updatedAt: new Date().toISOString(),
-  };
-  saveAICreditWallet(updatedWallet);
-
-  // Add ledger entry
-  const ledger = loadCreditLedger();
+  });
   const ledgerEntry: CreditLedgerEntry = {
     id: `ledg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    userId,
-    entryType: 'usage_debit',
-    creditsDelta: -creditsToDebit,
-    balanceAfter: newBalance,
-    referenceId: purpose,
-    description: `Débit IA (${purpose})`,
-    createdAt: new Date().toISOString(),
+    userId, entryType: 'usage_debit', creditsDelta: -creditsToDebit,
+    balanceAfter: newBalance, referenceId: purpose,
+    description: `Débit IA (${purpose})`, createdAt: new Date().toISOString(),
   };
-  saveCreditLedger([ledgerEntry, ...ledger]);
-
-  // Record usage event
-  const usageEvents = loadAIUsageEvents();
+  saveCreditLedger([ledgerEntry, ...loadCreditLedger()]);
   const usageEvent: AIUsageEvent = {
     id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    userId,
-    mode: 'managed',
-    provider: 'google_gemini',
-    model: 'gemini-3.8-flash',
-    tokensInput,
-    tokensOutput,
-    creditsDebited: creditsToDebit,
-    purpose,
-    createdAt: new Date().toISOString(),
+    userId, mode: 'managed', provider: provider || 'google_gemini',
+    model: model || 'gemini-2.5-flash', tokensInput, tokensOutput,
+    creditsDebited: creditsToDebit, purpose, createdAt: new Date().toISOString(),
   };
-  saveAIUsageEvents([usageEvent, ...usageEvents]);
-
+  saveAIUsageEvents([usageEvent, ...loadAIUsageEvents()]);
   return { success: true, newBalance };
 }
 
@@ -479,6 +534,9 @@ export function deductAICredits(params: {
  * Top-up / purchase credits with ledger accounting
  */
 export function purchaseCredits(userId: string, packageItem: CreditPackage): { newBalance: number } {
+  if (isUuid(userId)) {
+    throw new Error('Les recharges de crédits ne sont pas activées : aucun prestataire de paiement sécurisé n’est configuré.');
+  }
   const wallet = loadAICreditWallet();
   const newBalance = wallet.balanceCredits + packageItem.credits;
 
