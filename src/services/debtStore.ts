@@ -493,6 +493,7 @@ export function recordDebtPayment(
 
   const current = debts[index];
   const paymentAmount = Math.min(params.amountMinor, current.remainingAmountMinor);
+  if (paymentAmount <= 0) return { nextDebts: debts, payment: null };
   const remaining = Math.max(0, current.remainingAmountMinor - paymentAmount);
 
   const payment: DebtPayment = {
