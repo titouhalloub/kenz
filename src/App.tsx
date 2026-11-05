@@ -586,7 +586,6 @@ export default function App() {
             accounts={budgetState.accounts}
             transactions={budgetState.transactions}
             recurringItems={budgetState.recurringItems}
-            accounts={budgetState.accounts}
             savingsGoals={budgetState.savingsGoals}
             safeToSpend={safeToSpend}
             onOpenAddModal={() => setIsAddModalOpen(true)}
