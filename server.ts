@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -29,6 +30,50 @@ function rateLimitAi(req: express.Request, res: express.Response, next: express.
     for (const [ip, entry] of aiRequestBuckets) if (entry.resetAt <= now) aiRequestBuckets.delete(ip);
   }
   next();
+}
+
+/**
+ * Verify every AI API request against Supabase Auth. Only development
+ * environments without server-side Supabase configuration may use the
+ * local demo fallback; production fails closed when auth is not configured.
+ */
+async function requireAuthenticatedUser(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (process.env.NODE_ENV !== 'production') return next();
+    return res.status(503).json({
+      success: false,
+      error: 'Le service d’authentification IA n’est pas configuré.',
+    });
+  }
+
+  const authorization = req.header('authorization') || '';
+  const tokenMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+  const accessToken = tokenMatch?.[1]?.trim();
+  if (!accessToken) {
+    return res.status(401).json({ success: false, error: 'Authentification requise.' });
+  }
+
+  try {
+    // Create a request-scoped client and validate the token with Supabase Auth.
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data, error } = await authClient.auth.getUser(accessToken);
+    if (error || !data.user) {
+      return res.status(401).json({ success: false, error: 'Session invalide ou expirée.' });
+    }
+    res.locals.authUserId = data.user.id;
+    return next();
+  } catch {
+    return res.status(401).json({ success: false, error: 'Impossible de vérifier la session.' });
+  }
 }
 
 function trimTrailingSlashes(value: string): string {
@@ -108,7 +153,7 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defa
 };
 
 // Universal Server-Side AI Gateway supporting ANY provider
-app.post('/api/ai/advisor', rateLimitAi, async (req, res) => {
+app.post('/api/ai/advisor', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
   const isBYOK = Boolean(req.body.byokKey || (req.body.byokProvider && req.body.byokProvider !== 'google'));
 
   try {
@@ -329,7 +374,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
 });
 
 // Dedicated Instant Endpoint to test any BYOK API key across providers
-app.post('/api/ai/test-key', rateLimitAi, async (req, res) => {
+app.post('/api/ai/test-key', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
   const startTime = Date.now();
   const { byokProvider = 'google', byokKey, byokModel, byokBaseUrl } = req.body;
 
