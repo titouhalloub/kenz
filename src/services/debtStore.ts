@@ -34,20 +34,29 @@ function debtOutboxKey(userId: string): string {
 
 function readDebtOutbox(userId: string): DebtOutbox | null {
   try {
-    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(debtOutboxKey(userId));
+    if (typeof localStorage === 'undefined') return null;
+    const currentKey = debtOutboxKey(userId);
+    const legacyKey = `kenz_debt_outbox_v1_${userId}`;
+    const currentRaw = localStorage.getItem(currentKey);
+    const raw = currentRaw || localStorage.getItem(legacyKey);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<DebtOutbox>;
     if (!value || ![1, OUTBOX_VERSION].includes(value.version || 0) ||
       !Array.isArray(value.debts) || !Array.isArray(value.deletedDebtIds)) return null;
-    // Version 1 outboxes predate three-way merging. An empty base safely falls
-    // back to timestamp ordering for those already-pending snapshots.
-    return {
+    // Version 1 outboxes predate common-ancestor snapshots. Keep their queued
+    // changes and tombstones, then migrate them to v2 with legacy merge fallback.
+    const normalized: DebtOutbox = {
       version: OUTBOX_VERSION,
       baseDebts: Array.isArray(value.baseDebts) ? value.baseDebts : [],
       debts: value.debts,
       deletedDebtIds: value.deletedDebtIds,
       updatedAt: value.updatedAt || new Date(0).toISOString(),
     };
+    if (!currentRaw) {
+      localStorage.setItem(currentKey, JSON.stringify(normalized));
+      localStorage.removeItem(legacyKey);
+    }
+    return normalized;
   } catch {
     return null;
   }
