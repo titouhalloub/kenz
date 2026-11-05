@@ -538,9 +538,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 setNotificationPermission(permission);
                 if (permission === 'granted') dispatchBillReminders(profile.id, recurringItems);
               }}
-                disabled={notificationPermission === 'unsupported' || notificationPermission === 'granted'}
+                disabled={notificationPermission === 'unsupported' || notificationPermission === 'granted' || notificationPermission === 'denied'}
                 className="min-h-[40px] px-3 rounded-xl bg-slate-800 text-xs font-semibold text-emerald-300 disabled:opacity-50">
-                <BellRing className="w-3.5 h-3.5 inline mr-1" /> Activer
+                <BellRing className="w-3.5 h-3.5 inline mr-1" /> {notificationPermission === 'denied' ? 'Autoriser dans le navigateur' : notificationPermission === 'granted' ? 'Activées' : 'Activer'}
               </button>
             </div>
             <p className="text-[10px] leading-relaxed text-slate-500">Kenz vérifie les échéances lorsque l'application est ouverte ou revient au premier plan. Les notifications programmées lorsque l'application est complètement fermée nécessitent un service push en arrière-plan.</p>
