@@ -942,7 +942,12 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
               </div>
             )}
 
-            <p className="text-[11px] leading-relaxed text-amber-200/90">Vérifiez vos relevés avant confirmation. Cette action est enregistrée et synchronisée sur vos appareils.</p>
+            <p className="text-[11px] leading-relaxed text-amber-200/90">
+              Vérifiez vos relevés avant confirmation. Cette action est enregistrée et synchronisée sur vos appareils.
+              {paymentIssueAction === 'refund'
+                ? " Elle corrige le solde Kredy, mais ne crée pas de mouvement de compte : enregistrez aussi le retour d'argent dans Transactions."
+                : " Elle exclut le doublon du solde Kredy, mais ne supprime pas une éventuelle transaction de compte en double : vérifiez aussi Transactions."}
+            </p>
             {paymentIssueError && <p role="alert" className="p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-xs text-rose-200">{paymentIssueError}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={() => setPaymentIssueTarget(null)} disabled={isResolvingPaymentIssue} className="flex-1 h-11 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold disabled:opacity-50">Annuler</button>
