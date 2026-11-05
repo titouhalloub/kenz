@@ -249,6 +249,7 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile, persistL
       locale: p?.locale === 'ar' || p?.locale === 'en' ? p.locale : p?.locale === 'fr' ? 'fr' : profile.locale,
       paydayDayOfMonth: p?.payday_day_of_month ?? profile.paydayDayOfMonth,
       planningPeriodDays: p?.planning_period_days ?? profile.planningPeriodDays,
+      syncUpdatedAt: p?.updated_at || p?.created_at,
     },
     accounts: (accountsResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, name: r.name, type: r.type, currency: r.currency,
