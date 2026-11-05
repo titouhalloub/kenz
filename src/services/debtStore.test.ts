@@ -7,6 +7,7 @@ import {
   deleteDebtEntry,
   calculateDebtSummary,
   calculateFinancialHealthScore,
+  mergeDebtSnapshots,
 } from './debtStore';
 import { DebtEntry, SafeToSpendBreakdown, Account, SavingsGoal } from '../domain/types';
 
@@ -157,6 +158,52 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
     expect(health.score).toBeGreaterThanOrEqual(70);
     expect(['A+', 'A', 'B']).toContain(health.grade);
     expect(health.factors.length).toBeGreaterThan(0);
+  });
+
+
+  it('merges concurrent device payments once and recalculates the remaining balance', () => {
+    const base = sampleDebts[0];
+    const deviceA: DebtEntry = {
+      ...base,
+      updatedAt: '2026-10-12T10:00:00Z',
+      payments: [{ id: 'payment_a', debtId: base.id, amountMinor: 120000, paymentDate: '2026-10-12', createdAt: '2026-10-12T10:00:00Z' }],
+    };
+    const deviceB: DebtEntry = {
+      ...base,
+      updatedAt: '2026-10-12T11:00:00Z',
+      payments: [{ id: 'payment_b', debtId: base.id, amountMinor: 80000, paymentDate: '2026-10-12', createdAt: '2026-10-12T11:00:00Z' }],
+    };
+
+    const merged = mergeDebtSnapshots([deviceA], [deviceB])[0];
+    expect(merged.payments).toHaveLength(2);
+    expect(merged.remainingAmountMinor).toBe(300000);
+    expect(merged.status).toBe('partially_paid');
+  });
+
+  it('uses the newest debt details while retaining payment events from both devices', () => {
+    const base = sampleDebts[0];
+    const local: DebtEntry = {
+      ...base,
+      counterpartyName: 'Local edit',
+      updatedAt: '2026-10-12T10:00:00Z',
+      payments: [{ id: 'payment_local', debtId: base.id, amountMinor: 50000, paymentDate: '2026-10-12', createdAt: '2026-10-12T10:00:00Z' }],
+    };
+    const remote: DebtEntry = {
+      ...base,
+      counterpartyName: 'Cloud edit',
+      updatedAt: '2026-10-12T12:00:00Z',
+      payments: [{ id: 'payment_remote', debtId: base.id, amountMinor: 75000, paymentDate: '2026-10-12', createdAt: '2026-10-12T12:00:00Z' }],
+    };
+
+    const merged = mergeDebtSnapshots([local], [remote])[0];
+    expect(merged.counterpartyName).toBe('Cloud edit');
+    expect(merged.payments.map((payment) => payment.id).sort()).toEqual(['payment_local', 'payment_remote']);
+    expect(merged.remainingAmountMinor).toBe(375000);
+  });
+
+  it('keeps locally deleted debt IDs out of the merged snapshot', () => {
+    const merged = mergeDebtSnapshots(sampleDebts, sampleDebts, ['debt_1']);
+    expect(merged.map((debt) => debt.id)).toEqual(['debt_2']);
   });
 
   it('deletes a debt entry correctly', () => {
