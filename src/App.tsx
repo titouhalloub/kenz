@@ -45,6 +45,7 @@ import {
   loadDebtState,
   loadDebtStateFromSupabase,
   saveDebtState,
+  flushPendingDebtSync,
   addDebtEntry,
   recordDebtPayment,
   deleteDebtEntry,
@@ -130,6 +131,7 @@ export default function App() {
       setBudgetState(loadBudgetState(financialProfile));
       // Replay this user's durable local outbox before cloud hydration so offline edits aren't overwritten.
       await flushPendingBudgetSync(authUser.id);
+      await flushPendingDebtSync(authUser.id);
       const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
         loadBudgetStateFromSupabase(financialProfile),
         loadDebtStateFromSupabase(authUser.id),
@@ -642,13 +644,16 @@ export default function App() {
               planningPeriodDays: budgetState.profile.planningPeriodDays,
             };
             setBudgetState(loadBudgetState(financialProfile));
-            void flushPendingBudgetSync(u.id).then(() => Promise.all([
+            void flushPendingBudgetSync(u.id).then(async () => {
+              await flushPendingDebtSync(u.id);
+              return Promise.all([
               loadBudgetStateFromSupabase(financialProfile),
               loadDebtStateFromSupabase(u.id),
               loadAICreditStateFromSupabase(u.id),
               loadZakatStateFromSupabase(u.id),
               loadFestiveStateFromSupabase(u.id),
-            ])).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
+              ]);
+            }).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
               if (cloudState) setBudgetState(cloudState);
               setDebts(cloudDebts ?? loadDebtState(u.id));
               setAiWallet(cloudCredits?.wallet ?? { userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
