@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import {
   DebtEntry,
+  DebtPayment,
   DebtType,
   Business,
   Account,
@@ -65,6 +66,7 @@ interface DebtLedgerViewProps {
     createLinkedTransaction: boolean;
   }) => void;
   onDeleteDebt: (id: string) => void;
+  onReconcilePayment: (params: { debtId: string; paymentId: string }) => Promise<void>;
   onOpenAIModal?: () => void;
 }
 
@@ -88,6 +90,9 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [settlingDebt, setSettlingDebt] = useState<DebtEntry | null>(null);
   const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
+  const [reconciliationTarget, setReconciliationTarget] = useState<{ debtId: string; paymentId: string } | null>(null);
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [reconciliationError, setReconciliationError] = useState<string | null>(null);
 
   const summary = useMemo(() => calculateDebtSummary(debts), [debts]);
 
@@ -122,6 +127,27 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   }, [debts, filterType, searchQuery]);
 
   const todayStr = new Date().toISOString().split('T')[0];
+  const reconciliationDebt = reconciliationTarget
+    ? debts.find((debt) => debt.id === reconciliationTarget.debtId)
+    : undefined;
+  const reconciliationPayment = reconciliationDebt?.payments.find(
+    (payment) => payment.id === reconciliationTarget?.paymentId
+  );
+  const reconciliationAmountMinor = reconciliationPayment?.unappliedAmountMinor || 0;
+
+  const confirmReconciliation = async () => {
+    if (!reconciliationTarget || reconciliationAmountMinor <= 0) return;
+    setIsReconciling(true);
+    setReconciliationError(null);
+    try {
+      await onReconcilePayment(reconciliationTarget);
+      setReconciliationTarget(null);
+    } catch (error) {
+      setReconciliationError(error instanceof Error ? error.message : 'Unable to reconcile this payment');
+    } finally {
+      setIsReconciling(false);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20">
@@ -506,9 +532,23 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                               )}
                               {pmt.notes && <p className="text-[11px] text-slate-300">{pmt.notes}</p>}
                             </div>
-                            <span className="font-mono-numbers font-bold text-emerald-300">
-                              +{formatMoney(pmt.amountMinor, debt.currency)}
-                            </span>
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className="font-mono-numbers font-bold text-emerald-300">
+                                +{formatMoney(pmt.amountMinor, debt.currency)}
+                              </span>
+                              {(pmt.unappliedAmountMinor || 0) > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReconciliationError(null);
+                                    setReconciliationTarget({ debtId: debt.id, paymentId: pmt.id });
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg border border-amber-700/70 bg-amber-950/40 text-amber-200 text-[10px] font-semibold hover:bg-amber-900/50 transition cursor-pointer min-h-[34px]"
+                                >
+                                  Examiner le reliquat
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -720,6 +760,83 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
         accounts={accounts}
         onSettle={onSettleDebt}
       />
+
+      {reconciliationTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="kredy-reconciliation-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-800/70 shadow-2xl p-5 space-y-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-300">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="kredy-reconciliation-title" className="text-base font-bold text-slate-100">
+                  Rapprocher le versement
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  {reconciliationDebt?.counterpartyName || 'Dette Kredy'}
+                </p>
+              </div>
+            </div>
+
+            {reconciliationDebt && reconciliationPayment && reconciliationAmountMinor > 0 ? (
+              <>
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <p className="text-[11px] text-slate-400">Montant non affecté de ce versement</p>
+                  <p className="text-xl font-bold font-mono-numbers text-amber-200">
+                    {formatMoney(reconciliationAmountMinor, reconciliationDebt.currency)}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Date du versement : {reconciliationPayment.paymentDate}
+                  </p>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-300">
+                  Confirmez uniquement si le montant initial de cette dette avait été saisi trop bas.
+                  Cette action augmente le montant initial de la dette du reliquat affiché, puis recalcule
+                  les versements côté serveur pour tous vos appareils. Le versement original reste intact.
+                </p>
+                <p className="text-[11px] leading-relaxed text-amber-200/90">
+                  Si le versement est un doublon, a été remboursé ou ne concerne pas cette dette, annulez
+                  et laissez-le en attente. Ne confirmez pas cet ajustement dans ces cas.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-slate-300">
+                Ce versement n’a plus de montant à rapprocher. Fermez cette fenêtre et actualisez le carnet Kredy.
+              </p>
+            )}
+
+            {reconciliationError && (
+              <p role="alert" className="p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-xs text-rose-200">
+                {reconciliationError}
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setReconciliationTarget(null)}
+                disabled={isReconciling}
+                className="flex-1 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold disabled:opacity-50 cursor-pointer min-h-[44px]"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmReconciliation()}
+                disabled={isReconciling || reconciliationAmountMinor <= 0}
+                className="flex-1 h-11 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold disabled:opacity-50 cursor-pointer min-h-[44px]"
+              >
+                {isReconciling ? 'Synchronisation…' : 'Confirmer l’ajustement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
