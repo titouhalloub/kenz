@@ -16,8 +16,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout repository
+      - name: Checkout exact source commit
         uses: actions/checkout@v4
+        with:
+          # PR builds package the branch head itself, not the synthetic PR merge ref.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Record source identity
+        run: |
+          echo "SOURCE_SHA=$(git rev-parse HEAD)" | tee source-build.txt
+          echo "EVENT=${{ github.event_name }}" | tee -a source-build.txt
+          echo "REF=${{ github.ref }}" | tee -a source-build.txt
 
       # Capacitor CLI requires Node >= 22
       - name: Set up Node.js
@@ -33,7 +42,11 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://aahhwretdibddgffhnwz.supabase.co' }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'sb_publishable__ctMsyLYvpUc3WtWXMjTBA_dv0OzClw' }}
-        run: npm run build
+        run: |
+          npm run build
+          test -s dist/index.html
+          find dist/assets -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum | tee dist-assets-sha256.txt
+          cat source-build.txt
 
       # android/app/capacitor.build.gradle uses JavaVersion.VERSION_21
       - name: Set up JDK 21
@@ -43,8 +56,6 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      # android-actions/setup-android@v3 crashes on Node 24 runners and is not
-      # needed: ubuntu-latest already ships the Android SDK + sdkmanager.
       - name: Accept Android SDK licenses
         run: |
           SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
@@ -55,17 +66,25 @@ jobs:
         run: echo "sdk.dir=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" > android/local.properties
 
       - name: Sync Capacitor Android
-        run: npx cap sync android
+        run: |
+          npx cap sync android
+          test -s android/app/src/main/assets/public/index.html
+          sha256sum android/app/src/main/assets/public/index.html
+          cmp dist/index.html android/app/src/main/assets/public/index.html
 
       - name: Build Debug APK with Gradle
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kenz-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: kenz-debug-apk-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            source-build.txt
+            dist-assets-sha256.txt
           if-no-files-found: error
