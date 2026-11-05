@@ -8,7 +8,59 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '32kb' }));
+
+// Small per-process limiter for public AI endpoints. Use a shared store in multi-instance deployments.
+const aiRequestBuckets = new Map<string, { count: number; resetAt: number }>();
+function rateLimitAi(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  let bucket = aiRequestBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + 60_000 };
+    aiRequestBuckets.set(key, bucket);
+  }
+  bucket.count += 1;
+  if (bucket.count > 20) {
+    res.setHeader('Retry-After', Math.ceil((bucket.resetAt - now) / 1000));
+    return res.status(429).json({ success: false, error: 'Trop de requêtes. Réessayez dans une minute.' });
+  }
+  if (aiRequestBuckets.size > 10_000) {
+    for (const [ip, entry] of aiRequestBuckets) if (entry.resetAt <= now) aiRequestBuckets.delete(ip);
+  }
+  next();
+}
+
+function resolveOpenAIBaseUrl(
+  provider: string,
+  preset: { defaultBaseUrl: string },
+  requestedBaseUrl?: string,
+): string | null {
+  // Custom local model endpoints are allowed only in development. Never let a
+  // production server make requests to arbitrary client-supplied destinations.
+  if (provider === 'custom') {
+    if (process.env.NODE_ENV === 'production') return null;
+    try {
+      const url = new URL(requestedBaseUrl?.trim() || preset.defaultBaseUrl);
+      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+      if (url.protocol !== 'http:' || !localHosts.has(url.hostname) || url.username || url.password || url.search || url.hash) return null;
+      return url.toString().replace(/\\/+$/, '');
+    } catch { return null; }
+  }
+
+  // Preset providers are pinned to their official API origin/path. Ignore no
+  // user-supplied alternate host: reject it instead to prevent SSRF.
+  try {
+    const expected = new URL(preset.defaultBaseUrl);
+    if (requestedBaseUrl?.trim()) {
+      const requested = new URL(requestedBaseUrl.trim());
+      const expectedPath = expected.pathname.replace(/\\/+$/, '');
+      const requestedPath = requested.pathname.replace(/\\/+$/, '');
+      if (requested.origin !== expected.origin || requestedPath !== expectedPath || requested.username || requested.password || requested.search || requested.hash) return null;
+    }
+    return preset.defaultBaseUrl;
+  } catch { return null; }
+}
 
 // Preset definitions for OpenAI-compatible providers
 const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defaultModel: string; label: string }> = {
@@ -50,7 +102,7 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defa
 };
 
 // Universal Server-Side AI Gateway supporting ANY provider
-app.post('/api/ai/advisor', async (req, res) => {
+app.post('/api/ai/advisor', rateLimitAi, async (req, res) => {
   const isBYOK = Boolean(req.body.byokKey || (req.body.byokProvider && req.body.byokProvider !== 'google'));
 
   try {
@@ -76,7 +128,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       userPrompt || 'Analyse mon budget et donne-moi les 2 meilleures recommandations d’épargne.';
 
     // 1. OPENAI OR OPENAI-COMPATIBLE (DeepSeek, Groq, Mistral, OpenRouter, Perplexity, Custom, etc.)
-    if (byokProvider in OPENAI_COMPATIBLE_PROVIDERS) {
+    if (Object.hasOwn(OPENAI_COMPATIBLE_PROVIDERS, byokProvider)) {
       const preset = OPENAI_COMPATIBLE_PROVIDERS[byokProvider];
       const apiKey = byokKey || process.env[`${byokProvider.toUpperCase()}_API_KEY`] || process.env.OPENAI_API_KEY;
 
@@ -112,6 +164,8 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(15_000),
         headers,
         body: JSON.stringify({
           model,
@@ -168,6 +222,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
@@ -269,7 +324,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
 });
 
 // Dedicated Instant Endpoint to test any BYOK API key across providers
-app.post('/api/ai/test-key', async (req, res) => {
+app.post('/api/ai/test-key', rateLimitAi, async (req, res) => {
   const startTime = Date.now();
   const { byokProvider = 'google', byokKey, byokModel, byokBaseUrl } = req.body;
 
@@ -282,7 +337,7 @@ app.post('/api/ai/test-key', async (req, res) => {
     }
 
     // Test OpenAI-compatible (DeepSeek, Groq, Mistral, OpenRouter, Perplexity, OpenAI, Custom)
-    if (byokProvider in OPENAI_COMPATIBLE_PROVIDERS) {
+    if (Object.hasOwn(OPENAI_COMPATIBLE_PROVIDERS, byokProvider)) {
       const preset = OPENAI_COMPATIBLE_PROVIDERS[byokProvider];
       let base = (byokBaseUrl && byokBaseUrl.trim()) || preset.defaultBaseUrl;
       base = base.replace(/\/+$/, '');
