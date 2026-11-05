@@ -89,7 +89,7 @@ describe('budget offline persistence', () => {
     const state = createEmptyBudgetState(profile(userA));
     saveBudgetState(state);
 
-    const outboxKey = `kenz_budget_outbox_v1_${userA}`;
+    const outboxKey = `kenz_budget_outbox_v2_${userA}`;
     expect(storage.has(outboxKey)).toBe(true);
     await expect(flushPendingBudgetSync(userA)).resolves.toBe(false);
     expect(storage.has(outboxKey)).toBe(true);
