@@ -6,6 +6,9 @@ import {
   loadZakatState,
   saveFestiveState,
   saveZakatState,
+  mergeFestiveRows,
+  mergeZakatFields,
+  FestiveBudget,
   ZakatState,
 } from './zakatFestiveStore';
 
@@ -22,6 +25,38 @@ describe('Zakat and festive budget persistence', () => {
       removeItem: (key: string) => { storage.delete(key); },
       clear: () => storage.clear(),
     });
+  });
+
+  it('preserves independent Zakat edits made on separate devices', () => {
+    const base = { ...EMPTY_ZAKAT_STATE };
+    const local = { ...base, customCashMinor: 250000 };
+    const remote = { ...base, customSavingsMinor: 500000 };
+    const merged = mergeZakatFields(local, remote, base, '2026-11-05T10:00:00Z', '2026-11-05T11:00:00Z');
+    expect(merged.customCashMinor).toBe(250000);
+    expect(merged.customSavingsMinor).toBe(500000);
+  });
+
+  it('uses the newest timestamp for a same-field Zakat conflict', () => {
+    const base = { ...EMPTY_ZAKAT_STATE };
+    const local = { ...base, customCashMinor: 300000 };
+    const remote = { ...base, customCashMinor: 200000 };
+    const merged = mergeZakatFields(local, remote, base, '2026-11-05T12:00:00Z', '2026-11-05T11:00:00Z');
+    expect(merged.customCashMinor).toBe(300000);
+  });
+
+  it('merges independent festive edits and respects explicit deletion tombstones', () => {
+    const base: FestiveBudget = {
+      id: '55555555-5555-4555-8555-555555555555',
+      userId: userA, festivalType: 'ramadan', year: 2027,
+      targetBudgetMinor: 100000, actualSpentMinor: 10000,
+      currency: 'DZD', isCompleted: false,
+    };
+    const local = [{ ...base, notes: 'Phone note' }];
+    const remote = [{ ...base, actualSpentMinor: 25000, syncUpdatedAt: '2026-11-05T11:00:00Z' }];
+    const merged = mergeFestiveRows(local, remote, [base], [], '2026-11-05T10:00:00Z');
+    expect(merged[0].notes).toBe('Phone note');
+    expect(merged[0].actualSpentMinor).toBe(25000);
+    expect(mergeFestiveRows([], remote, [base], [base.id], '2026-11-05T12:00:00Z')).toEqual([]);
   });
 
   it('does not seed authenticated users with demo Zakat assets', () => {
