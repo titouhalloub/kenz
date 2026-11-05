@@ -187,13 +187,159 @@ export function loadBudgetState(): BudgetState {
   }
 }
 
-export function saveBudgetState(state: BudgetState): void {
-  if (typeof localStorage === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Failed to save budget state to localStorage', e);
+function createId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
   }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+export function createEmptyBudgetState(profile: UserProfile): BudgetState {
+  return {
+    profile,
+    accounts: [],
+    categories: DEFAULT_CATEGORIES,
+    transactions: [],
+    budgets: [],
+    recurringItems: [],
+    savingsGoals: [],
+  };
+}
+
+export async function loadBudgetStateFromSupabase(profile: UserProfile): Promise<BudgetState | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase || !isUuid(profile.id)) return null;
+
+  const [profileResult, accountsResult, categoriesResult, transactionsResult, budgetsResult, recurringResult, goalsResult] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', profile.id).maybeSingle(),
+    supabase.from('accounts').select('*').eq('user_id', profile.id),
+    supabase.from('categories').select('*'),
+    supabase.from('transactions').select('*').eq('user_id', profile.id).order('transaction_date', { ascending: false }),
+    supabase.from('budgets').select('*').eq('user_id', profile.id),
+    supabase.from('recurring_items').select('*').eq('user_id', profile.id),
+    supabase.from('savings_goals').select('*').eq('user_id', profile.id),
+  ]);
+
+  const errors = [profileResult.error, accountsResult.error, categoriesResult.error, transactionsResult.error, budgetsResult.error, recurringResult.error, goalsResult.error].filter(Boolean);
+  if (errors.length) {
+    console.error('Failed to load Kenz cloud data:', errors);
+    return null;
+  }
+
+  const p = profileResult.data;
+  const state: BudgetState = {
+    profile: {
+      ...profile,
+      displayName: p?.display_name || profile.displayName,
+      preferredCurrency: p?.preferred_currency || profile.preferredCurrency,
+      locale: p?.locale === 'ar' || p?.locale === 'en' ? p.locale : p?.locale === 'fr' ? 'fr' : profile.locale,
+      paydayDayOfMonth: p?.payday_day_of_month ?? profile.paydayDayOfMonth,
+      planningPeriodDays: p?.planning_period_days ?? profile.planningPeriodDays,
+    },
+    accounts: (accountsResult.data || []).map((r) => ({
+      id: r.id, userId: r.user_id, name: r.name, type: r.type, currency: r.currency,
+      initialBalanceMinor: Number(r.initial_balance_minor), isArchived: r.is_archived,
+    })),
+    categories: (categoriesResult.data || []).map((r) => ({
+      id: r.id, userId: r.user_id || undefined, name: r.name, icon: r.icon || undefined,
+      color: r.color || undefined, isIncome: r.is_income, isSystem: r.is_system,
+    })),
+    transactions: (transactionsResult.data || []).map((r) => ({
+      id: r.id, userId: r.user_id, accountId: r.account_id, type: r.type,
+      amountMinor: Number(r.amount_minor), currency: r.currency, categoryId: r.category_id || undefined,
+      destinationAccountId: r.destination_account_id || undefined, linkedTransferId: r.linked_transfer_id || undefined,
+      recurringItemId: r.recurring_item_id || undefined, transactionDate: r.transaction_date,
+      description: r.description || undefined, idempotencyKey: r.idempotency_key || undefined,
+      syncStatus: 'synced' as const, createdAt: r.created_at,
+    })),
+    budgets: (budgetsResult.data || []).map((r) => ({
+      id: r.id, userId: r.user_id, categoryId: r.category_id, monthYear: r.month_year,
+      budgetMinor: Number(r.budget_minor), currency: r.currency,
+    })),
+    recurringItems: (recurringResult.data || []).map((r) => ({
+      id: r.id, userId: r.user_id, name: r.name, type: r.type, amountMinor: Number(r.amount_minor),
+      currency: r.currency, frequency: r.frequency, categoryId: r.category_id || undefined,
+      nextDueDate: r.next_due_date, isActive: r.is_active,
+    })),
+    savingsGoals: (goalsResult.data || []).map((r) => ({
+      id: r.id, userId: r.user_id, name: r.name, targetAmountMinor: Number(r.target_amount_minor),
+      currentAmountMinor: Number(r.current_amount_minor), currency: r.currency, targetDate: r.target_date || undefined,
+      plannedMonthlyContributionMinor: Number(r.planned_monthly_contribution_minor), status: r.status,
+    })),
+    lastSyncedAt: new Date().toISOString(),
+  };
+
+  saveBudgetStateLocally(state);
+  return state;
+}
+
+function saveBudgetStateLocally(state: BudgetState): void {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { console.error('Failed to save budget state to localStorage', e); }
+}
+
+async function syncBudgetStateToSupabase(state: BudgetState): Promise<void> {
+  const supabase = getSupabaseClient();
+  const userId = state.profile.id;
+  if (!supabase || !isUuid(userId)) return;
+
+  const operations: PromiseLike<{ error: { message: string } | null }>[] = [];
+  if (state.accounts.length) operations.push(supabase.from('accounts').upsert(state.accounts.map((r) => ({
+    id: r.id, user_id: userId, name: r.name, type: r.type, currency: r.currency,
+    initial_balance_minor: r.initialBalanceMinor, is_archived: r.isArchived,
+  }), { onConflict: 'id' }));
+  if (state.recurringItems.length) operations.push(supabase.from('recurring_items').upsert(state.recurringItems.map((r) => ({
+    id: r.id, user_id: userId, name: r.name, type: r.type, amount_minor: r.amountMinor,
+    currency: r.currency, frequency: r.frequency, category_id: r.categoryId || null,
+    next_due_date: r.nextDueDate, is_active: r.isActive,
+  }), { onConflict: 'id' }));
+  if (state.transactions.length) operations.push(supabase.from('transactions').upsert(state.transactions.map((r) => ({
+    id: r.id, user_id: userId, account_id: r.accountId, type: r.type, amount_minor: r.amountMinor,
+    currency: r.currency, category_id: r.categoryId || null, destination_account_id: r.destinationAccountId || null,
+    linked_transfer_id: r.linkedTransferId || null, recurring_item_id: r.recurringItemId || null,
+    transaction_date: r.transactionDate, description: r.description || null, idempotency_key: r.idempotencyKey || null,
+  }), { onConflict: 'id' }));
+  if (state.budgets.length) operations.push(supabase.from('budgets').upsert(state.budgets.map((r) => ({
+    id: r.id, user_id: userId, category_id: r.categoryId, month_year: r.monthYear,
+    budget_minor: r.budgetMinor, currency: r.currency,
+  }), { onConflict: 'id' }));
+  if (state.savingsGoals.length) operations.push(supabase.from('savings_goals').upsert(state.savingsGoals.map((r) => ({
+    id: r.id, user_id: userId, name: r.name, target_amount_minor: r.targetAmountMinor,
+    current_amount_minor: r.currentAmountMinor, currency: r.currency, target_date: r.targetDate || null,
+    planned_monthly_contribution_minor: r.plannedMonthlyContributionMinor, status: r.status,
+  }), { onConflict: 'id' }));
+
+  const results = await Promise.all(operations);
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    console.error('Kenz cloud sync failed:', failed.error.message);
+    return;
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const current = JSON.parse(raw) as BudgetState;
+        current.transactions = current.transactions.map((tx) => ({ ...tx, syncStatus: 'synced' }));
+        current.lastSyncedAt = new Date().toISOString();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+      }
+    } catch { /* local cache remains usable if sync metadata cannot be updated */ }
+  }
+}
+
+export function saveBudgetState(state: BudgetState): void {
+  saveBudgetStateLocally(state);
+  void syncBudgetStateToSupabase(state);
 }
 
 export function addTransaction(
@@ -202,7 +348,7 @@ export function addTransaction(
 ): BudgetState {
   const newTx: Transaction = {
     ...txData,
-    id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: createId(),
     createdAt: new Date().toISOString(),
     syncStatus: 'synced',
   };
@@ -231,7 +377,7 @@ export function addAccount(
 ): BudgetState {
   const newAccount: Account = {
     ...accountData,
-    id: `acc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: createId(),
   };
 
   const nextState: BudgetState = {
@@ -249,7 +395,7 @@ export function addRecurringItem(
 ): BudgetState {
   const newItem: RecurringItem = {
     ...itemData,
-    id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: createId(),
   };
 
   const nextState: BudgetState = {
@@ -276,7 +422,7 @@ export function addSavingsGoal(
 ): BudgetState {
   const newGoal: SavingsGoal = {
     ...goalData,
-    id: `goal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    id: createId(),
   };
 
   const nextState: BudgetState = {
@@ -320,7 +466,7 @@ export function updateBudget(
     };
   } else {
     updatedBudgets.push({
-      id: `bgt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: createId(),
       userId: currentState.profile.id,
       categoryId,
       monthYear,
