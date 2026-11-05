@@ -27,6 +27,7 @@ export interface FestiveBudget {
   currency: string;
   notes?: string;
   isCompleted: boolean;
+  syncUpdatedAt?: string;
 }
 
 const ZAKAT_STORAGE_KEY = 'kenz_zakat_state_v1';
@@ -97,8 +98,8 @@ export function loadZakatState(userId?: string): ZakatState {
   }
 }
 
-const PENDING_ZAKAT_PREFIX = 'kenz_zakat_outbox_v1_';
-const PENDING_FESTIVE_PREFIX = 'kenz_festive_outbox_v1_';
+const PENDING_ZAKAT_PREFIX = 'kenz_zakat_outbox_v2_';
+const PENDING_FESTIVE_PREFIX = 'kenz_festive_outbox_v2_';
 
 function writePendingSnapshot(key: string, value: unknown): void {
   try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(value)); }
