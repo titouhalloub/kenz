@@ -79,22 +79,24 @@ async function requireAuthenticatedUser(
 }
 
 /**
- * Meter every authenticated AI response on the server. The caller's JWT is
- * forwarded to Supabase so the RPC derives ownership from auth.uid().
+ * Record authenticated AI usage through the caller's RLS session. The first
+ * call reserves/debits credits before provider execution; a second call with
+ * the same idempotency key finalizes token metadata without another debit.
  */
-async function sendMeteredAIResponse(
+async function recordMeteredAIUsage(
   req: express.Request,
   res: express.Response,
-  payload: Record<string, unknown>,
-) {
+  tokensInput: number,
+  tokensOutput: number,
+): Promise<{ ok: boolean; balanceCredits?: number; status?: number; error?: string }> {
   const userId = res.locals.authUserId as string | undefined;
-  if (!userId) return res.json(payload); // local demo mode only
+  if (!userId) return { ok: true }; // local demo mode only
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const accessToken = res.locals.accessToken as string | undefined;
   if (!supabaseUrl || !supabaseAnonKey || !accessToken) {
-    return res.status(503).json({ success: false, error: 'La facturation IA sécurisée n’est pas configurée.' });
+    return { ok: false, status: 503, error: 'La facturation IA sécurisée n’est pas configurée.' };
   }
 
   const mode = req.body?.mode === 'byok' || Boolean(req.body?.byokKey) ? 'byok' : 'managed';
@@ -109,25 +111,49 @@ async function sendMeteredAIResponse(
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
-  const { data, error } = await userClient.rpc('record_ai_usage', {
-    p_credits_to_debit: mode === 'byok' ? 0 : 20,
-    p_mode: mode,
-    p_provider: provider,
-    p_model: model,
-    p_tokens_input: Number(payload.tokensInput || 0),
-    p_tokens_output: Number(payload.tokensOutput || 0),
-    p_purpose: purpose,
-    p_idempotency_key: idempotencyKey,
-  });
-
-  if (error) {
-    const insufficient = error.message?.includes('INSUFFICIENT_CREDITS');
-    return res.status(insufficient ? 402 : 503).json({
-      success: false,
-      error: insufficient ? 'Crédits IA insuffisants.' : 'Impossible d’enregistrer la consommation IA.',
+  try {
+    const { data, error } = await userClient.rpc('record_ai_usage', {
+      p_credits_to_debit: mode === 'byok' ? 0 : 20,
+      p_mode: mode,
+      p_provider: provider,
+      p_model: model,
+      p_tokens_input: Math.max(0, Math.trunc(tokensInput)),
+      p_tokens_output: Math.max(0, Math.trunc(tokensOutput)),
+      p_purpose: purpose,
+      p_idempotency_key: idempotencyKey,
     });
+    if (error) {
+      const insufficient = error.message?.includes('INSUFFICIENT_CREDITS');
+      return {
+        ok: false,
+        status: insufficient ? 402 : 503,
+        error: insufficient ? 'Crédits IA insuffisants.' : 'Impossible d’enregistrer la consommation IA.',
+      };
+    }
+    const balanceCredits = Number(data);
+    res.locals.balanceCredits = balanceCredits;
+    return { ok: true, balanceCredits };
+  } catch {
+    return { ok: false, status: 503, error: 'Impossible de joindre le service de crédits IA.' };
   }
-  return res.json({ ...payload, balanceCredits: Number(data) });
+}
+
+async function sendMeteredAIResponse(
+  req: express.Request,
+  res: express.Response,
+  payload: Record<string, unknown>,
+) {
+  if (!res.locals.authUserId) return res.json(payload);
+  const finalized = await recordMeteredAIUsage(
+    req, res, Number(payload.tokensInput || 0), Number(payload.tokensOutput || 0),
+  );
+  if (!finalized.ok && typeof res.locals.balanceCredits !== 'number') {
+    return res.status(finalized.status || 503).json({ success: false, error: finalized.error || 'Erreur de facturation IA.' });
+  }
+  return res.json({
+    ...payload,
+    balanceCredits: finalized.balanceCredits ?? Number(res.locals.balanceCredits),
+  });
 }
 
 function trimTrailingSlashes(value: string): string {
@@ -220,6 +246,16 @@ app.post('/api/ai/advisor', rateLimitAi, requireAuthenticatedUser, async (req, r
       byokModel,
       byokBaseUrl,
     } = req.body;
+
+    // Reserve/debit before invoking any paid provider. If the balance is too low,
+    // the request stops here and no provider call is made.
+    const reservation = await recordMeteredAIUsage(req, res, 0, 0);
+    if (!reservation.ok) {
+      return res.status(reservation.status || 503).json({
+        success: false,
+        error: reservation.error || 'Impossible de vérifier le portefeuille IA.',
+      });
+    }
 
     const systemPrompt = `Tu es le Conseiller Financier Personnel de Kenz Finance en Algérie.
 Règles strictes :
