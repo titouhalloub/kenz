@@ -266,6 +266,7 @@ export async function loadZakatStateFromSupabase(userId: string): Promise<ZakatS
   if (!supabase || !isUuid(userId)) return null;
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || sessionData.session?.user.id !== userId) return null;
+  if (typeof localStorage !== 'undefined' && (localStorage.getItem(PENDING_ZAKAT_PREFIX + userId) || localStorage.getItem(`kenz_zakat_outbox_v1_${userId}`))) return loadZakatState(userId);
   const { data, error } = await supabase.from('zakat_settings').select('*').eq('user_id', userId).maybeSingle();
   if (error) {
     console.error('Failed to load Zakat settings:', error.message);
@@ -332,6 +333,7 @@ export async function loadFestiveStateFromSupabase(userId: string): Promise<Fest
   if (!supabase || !isUuid(userId)) return null;
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || sessionData.session?.user.id !== userId) return null;
+  if (typeof localStorage !== 'undefined' && (localStorage.getItem(PENDING_FESTIVE_PREFIX + userId) || localStorage.getItem(`kenz_festive_outbox_v1_${userId}`))) return loadFestiveState(userId);
   const { data, error } = await supabase.from('festive_budgets').select('*').eq('user_id', userId).order('year', { ascending: false });
   if (error) {
     console.error('Failed to load festive budgets:', error.message);
@@ -341,7 +343,7 @@ export async function loadFestiveStateFromSupabase(userId: string): Promise<Fest
     id: row.id, userId: row.user_id, festivalType: row.festival_type,
     year: row.year, targetBudgetMinor: Number(row.target_budget_minor),
     actualSpentMinor: Number(row.actual_spent_minor), currency: row.currency,
-    notes: row.notes || undefined, isCompleted: Boolean(row.is_completed),
+    notes: row.notes || undefined, isCompleted: Boolean(row.is_completed), syncUpdatedAt: row.updated_at || row.created_at,
   }));
   if (typeof localStorage !== 'undefined') localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(budgets));
   return budgets;
