@@ -524,7 +524,7 @@ export function saveDebtState(debts: DebtEntry[], ownerId?: string, deletedDebtI
     version: OUTBOX_VERSION,
     // Keep the original common ancestor across multiple offline edits so the
     // eventual sync can distinguish independent changes from true collisions.
-    baseDebts: previous?.baseDebts?.length ? previous.baseDebts : cachedBeforeEdit,
+    baseDebts: previous ? previous.baseDebts : cachedBeforeEdit,
     debts: debts.filter((debt) => debt.userId === userId),
     deletedDebtIds: [...new Set([...(previous?.deletedDebtIds || []), ...deletedDebtIds])],
     updatedAt: new Date().toISOString(),
