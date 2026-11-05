@@ -524,6 +524,49 @@ export function recordDebtPayment(
 }
 
 /**
+ * Atomically reconcile an unapplied payment after explicit user confirmation.
+ * The server locks the debt row, checks the displayed amount is still current,
+ * increases the recorded debt total, and re-runs chronological allocation.
+ */
+export async function resolveUnappliedDebtPayment(
+  debts: DebtEntry[],
+  debtId: string,
+  paymentId: string,
+  userId: string,
+): Promise<DebtEntry[]> {
+  const debt = debts.find((item) => item.id === debtId);
+  if (!debt || debt.userId !== userId || !isUuid(userId) || !isUuid(debtId) || !isUuid(paymentId)) {
+    throw new Error('Debt or payment not found or access denied');
+  }
+
+  const payment = debt.payments.find((item) => item.id === paymentId);
+  const expectedUnappliedMinor = payment?.unappliedAmountMinor || 0;
+  if (!payment || expectedUnappliedMinor <= 0) {
+    throw new Error('This payment has no unapplied amount to reconcile');
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('A secure connection is required to reconcile this payment');
+
+  // Drain this device's durable edits first. Never apply a server-side adjustment
+  // while an older local snapshot could still overwrite the debt total.
+  await flushPendingDebtSync(userId);
+  if (readDebtOutbox(userId)) {
+    throw new Error('Kredy sync is still pending. Reconnect and try again.');
+  }
+
+  const { error } = await supabase.rpc('resolve_kredy_unapplied_payment', {
+    p_payment_id: paymentId,
+    p_expected_unapplied_minor: expectedUnappliedMinor,
+  });
+  if (error) throw new Error(error.message);
+
+  const refreshed = await loadDebtStateFromSupabase(userId);
+  if (!refreshed) throw new Error('The payment was reconciled, but the latest balance could not be refreshed');
+  return refreshed;
+}
+
+/**
  * Deletes a debt entry.
  */
 export function deleteDebtEntry(debts: DebtEntry[], debtId: string): DebtEntry[] {
