@@ -641,13 +641,14 @@ export default function App() {
               paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
               planningPeriodDays: budgetState.profile.planningPeriodDays,
             };
-            void Promise.all([
+            setBudgetState(loadBudgetState(financialProfile));
+            void flushPendingBudgetSync(u.id).then(() => Promise.all([
               loadBudgetStateFromSupabase(financialProfile),
               loadDebtStateFromSupabase(u.id),
               loadAICreditStateFromSupabase(u.id),
               loadZakatStateFromSupabase(u.id),
               loadFestiveStateFromSupabase(u.id),
-            ]).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
+            ])).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
               if (cloudState) setBudgetState(cloudState);
               setDebts(cloudDebts ?? loadDebtState(u.id));
               setAiWallet(cloudCredits?.wallet ?? { userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
