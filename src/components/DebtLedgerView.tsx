@@ -327,6 +327,10 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                   ((debt.totalAmountMinor - debt.remainingAmountMinor) / debt.totalAmountMinor) * 100
                 );
                 const isExpanded = expandedDebtId === debt.id;
+                const unappliedAmountMinor = debt.payments.reduce(
+                  (sum, payment) => sum + (payment.unappliedAmountMinor || 0),
+                  0
+                );
 
                 return (
                   <div
@@ -410,6 +414,19 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                       </div>
                     </div>
 
+                    {unappliedAmountMinor > 0 && (
+                      <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-950/40 border border-amber-800/70 text-amber-200">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold">Versements à rapprocher</p>
+                          <p className="text-[11px] leading-relaxed text-amber-100/90">
+                            {formatMoney(unappliedAmountMinor, debt.currency)} n'a pas été affecté à cette dette.
+                            Vérifiez les versements sur vos appareils avant de corriger le montant.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Action Bar */}
                     <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                       <div className="flex items-center gap-2">
@@ -479,6 +496,14 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                           >
                             <div className="space-y-0.5">
                               <span className="text-slate-400 text-[10px]">{pmt.paymentDate}</span>
+                              <p className="text-[11px] text-slate-300">
+                                Affecté : {formatMoney(pmt.appliedAmountMinor ?? pmt.amountMinor, debt.currency)}
+                              </p>
+                              {(pmt.unappliedAmountMinor || 0) > 0 && (
+                                <p className="text-[11px] font-semibold text-amber-300">
+                                  À rapprocher : {formatMoney(pmt.unappliedAmountMinor || 0, debt.currency)}
+                                </p>
+                              )}
                               {pmt.notes && <p className="text-[11px] text-slate-300">{pmt.notes}</p>}
                             </div>
                             <span className="font-mono-numbers font-bold text-emerald-300">
