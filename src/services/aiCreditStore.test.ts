@@ -79,7 +79,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
   });
 
   it('does not debit platform credits in BYOK mode', async () => {
-    const result = deductAICredits({
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: 20,
       purpose: 'general_query',
@@ -111,7 +111,7 @@ describe('Phase 4 AI Credits & Metering Ledger', () => {
       baseUrl: 'https://api.deepseek.com',
     });
 
-    const result = deductAICredits({
+    const result = await deductAICredits({
       userId: 'test_user',
       creditsToDebit: 20,
       purpose: 'spending_leak_detector',
