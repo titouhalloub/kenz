@@ -251,8 +251,7 @@ export default function App() {
     saveFestiveState(budgets, currentUser.id);
   };
 
-  // Retry current in-memory financial writes when connectivity returns while
-  // the app remains open. This is a best-effort retry, not a durable offline outbox.
+  // Replay durable per-user outboxes when connectivity returns while the app remains open.
   useEffect(() => {
     if (typeof window === 'undefined' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
     const retryCloudWrites = () => {
