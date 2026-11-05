@@ -29,14 +29,14 @@ export interface BudgetState {
 
 // Initial realistic baseline data for an Algerian user
 const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'cat-groceries', name: 'Alimentation & Marché', icon: 'ShoppingBag', color: '#10b981', isIncome: false, isSystem: true },
-  { id: 'cat-rent', name: 'Loyer & Logement', icon: 'Home', color: '#f59e0b', isIncome: false, isSystem: true },
-  { id: 'cat-bills', name: 'Factures (Sonelgaz, Eau, Net)', icon: 'Zap', color: '#ef4444', isIncome: false, isSystem: true },
-  { id: 'cat-transport', name: 'Transport & Carburant', icon: 'Car', color: '#3b82f6', isIncome: false, isSystem: true },
-  { id: 'cat-health', name: 'Santé & Pharmacie', icon: 'Heart', color: '#ec4899', isIncome: false, isSystem: true },
-  { id: 'cat-family', name: 'Famille & Enfants', icon: 'Users', color: '#8b5cf6', isIncome: false, isSystem: true },
-  { id: 'cat-salary', name: 'Salaire / Revenu Principal', icon: 'Briefcase', color: '#10b981', isIncome: true, isSystem: true },
-  { id: 'cat-freelance', name: 'Revenu Complémentaire', icon: 'TrendingUp', color: '#06b6d4', isIncome: true, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Alimentation & Marché', icon: 'ShoppingBag', color: '#10b981', isIncome: false, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Loyer & Logement', icon: 'Home', color: '#f59e0b', isIncome: false, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Factures (Sonelgaz, Eau, Net)', icon: 'Zap', color: '#ef4444', isIncome: false, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000004', name: 'Transport & Carburant', icon: 'Car', color: '#3b82f6', isIncome: false, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000005', name: 'Santé & Pharmacie', icon: 'Heart', color: '#ec4899', isIncome: false, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000006', name: 'Famille & Enfants', icon: 'Users', color: '#8b5cf6', isIncome: false, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000007', name: 'Salaire / Revenu Principal', icon: 'Briefcase', color: '#10b981', isIncome: true, isSystem: true },
+  { id: '00000000-0000-4000-8000-000000000008', name: 'Revenu Complémentaire', icon: 'TrendingUp', color: '#06b6d4', isIncome: true, isSystem: true },
 ];
 
 const INITIAL_STATE: BudgetState = {
@@ -78,7 +78,7 @@ const INITIAL_STATE: BudgetState = {
       type: 'expense',
       amountMinor: 380000, // 3,800.00 DZD
       currency: 'DZD',
-      categoryId: 'cat-groceries',
+      categoryId: '00000000-0000-4000-8000-000000000001',
       transactionDate: new Date().toISOString().split('T')[0],
       description: 'Courses hebdomadaires supérette',
       syncStatus: 'synced',
@@ -91,7 +91,7 @@ const INITIAL_STATE: BudgetState = {
       type: 'expense',
       amountMinor: 85000, // 850.00 DZD
       currency: 'DZD',
-      categoryId: 'cat-transport',
+      categoryId: '00000000-0000-4000-8000-000000000004',
       transactionDate: new Date().toISOString().split('T')[0],
       description: 'Plein essence',
       syncStatus: 'synced',
@@ -102,7 +102,7 @@ const INITIAL_STATE: BudgetState = {
     {
       id: 'bgt_1',
       userId: 'usr_local_1',
-      categoryId: 'cat-groceries',
+      categoryId: '00000000-0000-4000-8000-000000000001',
       monthYear: `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-01`,
       budgetMinor: 2500000, // 25,000.00 DZD monthly
       currency: 'DZD',
@@ -110,7 +110,7 @@ const INITIAL_STATE: BudgetState = {
     {
       id: 'bgt_2',
       userId: 'usr_local_1',
-      categoryId: 'cat-transport',
+      categoryId: '00000000-0000-4000-8000-000000000004',
       monthYear: `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-01`,
       budgetMinor: 800000, // 8,000.00 DZD monthly
       currency: 'DZD',
@@ -125,7 +125,7 @@ const INITIAL_STATE: BudgetState = {
       amountMinor: 7500000, // 75,000.00 DZD
       currency: 'DZD',
       frequency: 'monthly',
-      categoryId: 'cat-salary',
+      categoryId: '00000000-0000-4000-8000-000000000007',
       nextDueDate: `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-28`,
       isActive: true,
     },
@@ -137,7 +137,7 @@ const INITIAL_STATE: BudgetState = {
       amountMinor: 2800000, // 28,000.00 DZD
       currency: 'DZD',
       frequency: 'monthly',
-      categoryId: 'cat-rent',
+      categoryId: '00000000-0000-4000-8000-000000000002',
       nextDueDate: `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-25`,
       isActive: true,
     },
@@ -149,7 +149,7 @@ const INITIAL_STATE: BudgetState = {
       amountMinor: 260000, // 2,600.00 DZD
       currency: 'DZD',
       frequency: 'monthly',
-      categoryId: 'cat-bills',
+      categoryId: '00000000-0000-4000-8000-000000000003',
       nextDueDate: `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}-20`,
       isActive: true,
     },
@@ -291,31 +291,40 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<void> {
   const userId = state.profile.id;
   if (!supabase || !isUuid(userId)) return;
 
-  const operations: PromiseLike<{ error: { message: string } | null }>[] = [];
+  const operations: Array<PromiseLike<{ error: { message: string } | null }>> = [];
+  operations.push(supabase.from('profiles').update({
+    display_name: state.profile.displayName,
+    preferred_currency: state.profile.preferredCurrency,
+    locale: state.profile.locale,
+    payday_day_of_month: state.profile.paydayDayOfMonth ?? null,
+    planning_period_days: state.profile.planningPeriodDays,
+    updated_at: new Date().toISOString(),
+  }).eq('id', userId));
+
   if (state.accounts.length) operations.push(supabase.from('accounts').upsert(state.accounts.map((r) => ({
     id: r.id, user_id: userId, name: r.name, type: r.type, currency: r.currency,
     initial_balance_minor: r.initialBalanceMinor, is_archived: r.isArchived,
-  }), { onConflict: 'id' }));
+  })), { onConflict: 'id' }));
   if (state.recurringItems.length) operations.push(supabase.from('recurring_items').upsert(state.recurringItems.map((r) => ({
     id: r.id, user_id: userId, name: r.name, type: r.type, amount_minor: r.amountMinor,
     currency: r.currency, frequency: r.frequency, category_id: r.categoryId || null,
     next_due_date: r.nextDueDate, is_active: r.isActive,
-  }), { onConflict: 'id' }));
+  })), { onConflict: 'id' }));
   if (state.transactions.length) operations.push(supabase.from('transactions').upsert(state.transactions.map((r) => ({
     id: r.id, user_id: userId, account_id: r.accountId, type: r.type, amount_minor: r.amountMinor,
     currency: r.currency, category_id: r.categoryId || null, destination_account_id: r.destinationAccountId || null,
     linked_transfer_id: r.linkedTransferId || null, recurring_item_id: r.recurringItemId || null,
     transaction_date: r.transactionDate, description: r.description || null, idempotency_key: r.idempotencyKey || null,
-  }), { onConflict: 'id' }));
+  })), { onConflict: 'id' }));
   if (state.budgets.length) operations.push(supabase.from('budgets').upsert(state.budgets.map((r) => ({
     id: r.id, user_id: userId, category_id: r.categoryId, month_year: r.monthYear,
     budget_minor: r.budgetMinor, currency: r.currency,
-  }), { onConflict: 'id' }));
+  })), { onConflict: 'id' }));
   if (state.savingsGoals.length) operations.push(supabase.from('savings_goals').upsert(state.savingsGoals.map((r) => ({
     id: r.id, user_id: userId, name: r.name, target_amount_minor: r.targetAmountMinor,
     current_amount_minor: r.currentAmountMinor, currency: r.currency, target_date: r.targetDate || null,
     planned_monthly_contribution_minor: r.plannedMonthlyContributionMinor, status: r.status,
-  }), { onConflict: 'id' }));
+  })), { onConflict: 'id' }));
 
   const results = await Promise.all(operations);
   const failed = results.find((result) => result.error);
@@ -336,7 +345,6 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<void> {
     } catch { /* local cache remains usable if sync metadata cannot be updated */ }
   }
 }
-
 export function saveBudgetState(state: BudgetState): void {
   saveBudgetStateLocally(state);
   void syncBudgetStateToSupabase(state);
@@ -350,7 +358,7 @@ export function addTransaction(
     ...txData,
     id: createId(),
     createdAt: new Date().toISOString(),
-    syncStatus: 'synced',
+    syncStatus: 'pending',
   };
 
   const nextState: BudgetState = {
@@ -363,11 +371,19 @@ export function addTransaction(
 }
 
 export function deleteTransaction(currentState: BudgetState, txId: string): BudgetState {
+  const removedIds = currentState.transactions
+    .filter((tx) => tx.id === txId || tx.linkedTransferId === txId)
+    .map((tx) => tx.id);
   const nextState: BudgetState = {
     ...currentState,
-    transactions: currentState.transactions.filter((tx) => tx.id !== txId && tx.linkedTransferId !== txId),
+    transactions: currentState.transactions.filter((tx) => !removedIds.includes(tx.id)),
   };
   saveBudgetState(nextState);
+  const supabase = getSupabaseClient();
+  if (supabase && isUuid(currentState.profile.id) && removedIds.every(isUuid) && removedIds.length) {
+    void supabase.from('transactions').delete().in('id', removedIds).eq('user_id', currentState.profile.id)
+      .then(({ error }) => { if (error) console.error('Failed to delete cloud transaction:', error.message); });
+  }
   return nextState;
 }
 
@@ -413,6 +429,11 @@ export function deleteRecurringItem(currentState: BudgetState, itemId: string): 
     recurringItems: currentState.recurringItems.filter((i) => i.id !== itemId),
   };
   saveBudgetState(nextState);
+  const supabase = getSupabaseClient();
+  if (supabase && isUuid(currentState.profile.id) && isUuid(itemId)) {
+    void supabase.from('recurring_items').delete().eq('id', itemId).eq('user_id', currentState.profile.id)
+      .then(({ error }) => { if (error) console.error('Failed to delete cloud recurring item:', error.message); });
+  }
   return nextState;
 }
 
