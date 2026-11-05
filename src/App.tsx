@@ -49,8 +49,10 @@ import {
 import {
   loadZakatState,
   saveZakatState,
+  loadZakatStateFromSupabase,
   loadFestiveState,
   saveFestiveState,
+  loadFestiveStateFromSupabase,
   ZakatState,
   FestiveBudget,
 } from './services/zakatFestiveStore';
@@ -80,8 +82,8 @@ export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
   const [directoryState, setDirectoryState] = useState<DirectoryState>(() => loadDirectoryState());
   const [debts, setDebts] = useState<DebtEntry[]>(() => loadDebtState());
-  const [zakatState, setZakatState] = useState<ZakatState>(() => loadZakatState());
-  const [festiveBudgets, setFestiveBudgets] = useState<FestiveBudget[]>(() => loadFestiveState());
+  const [zakatState, setZakatState] = useState<ZakatState>(() => loadZakatState(loadCurrentUser().id));
+  const [festiveBudgets, setFestiveBudgets] = useState<FestiveBudget[]>(() => loadFestiveState(loadCurrentUser().id));
   const [aiWallet, setAiWallet] = useState<AICreditWallet>(() => loadAICreditWallet());
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => loadCurrentUser());
   const [activeTab, setActiveTab] = useState<NavTab>('home');
@@ -121,15 +123,19 @@ export default function App() {
         paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
         planningPeriodDays: budgetState.profile.planningPeriodDays,
       };
-      const [cloudState, cloudDebts, cloudCredits] = await Promise.all([
+      const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
         loadBudgetStateFromSupabase(financialProfile),
         loadDebtStateFromSupabase(authUser.id),
         loadAICreditStateFromSupabase(authUser.id),
+        loadZakatStateFromSupabase(authUser.id),
+        loadFestiveStateFromSupabase(authUser.id),
       ]);
       if (!active) return;
       if (cloudState) setBudgetState(cloudState);
       setDebts(cloudDebts ?? loadDebtState(authUser.id));
       setAiWallet(cloudCredits?.wallet ?? { userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+      setZakatState(cloudZakat ?? loadZakatState(authUser.id));
+      setFestiveBudgets(cloudFestive ?? loadFestiveState(authUser.id));
     }).catch((error) => console.error('Unable to restore Kenz cloud session:', error));
 
     return () => { active = false; };
@@ -137,12 +143,12 @@ export default function App() {
 
   const handleUpdateZakat = (state: ZakatState) => {
     setZakatState(state);
-    saveZakatState(state);
+    saveZakatState(state, currentUser.id);
   };
 
   const handleUpdateFestiveBudgets = (budgets: FestiveBudget[]) => {
     setFestiveBudgets(budgets);
-    saveFestiveState(budgets);
+    saveFestiveState(budgets, currentUser.id);
   };
 
   // Recalculate Safe-To-Spend deterministically
@@ -617,10 +623,14 @@ export default function App() {
               loadBudgetStateFromSupabase(financialProfile),
               loadDebtStateFromSupabase(u.id),
               loadAICreditStateFromSupabase(u.id),
-            ]).then(([cloudState, cloudDebts, cloudCredits]) => {
+              loadZakatStateFromSupabase(u.id),
+              loadFestiveStateFromSupabase(u.id),
+            ]).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
               if (cloudState) setBudgetState(cloudState);
               setDebts(cloudDebts ?? loadDebtState(u.id));
               setAiWallet(cloudCredits?.wallet ?? { userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+              setZakatState(cloudZakat ?? loadZakatState(u.id));
+              setFestiveBudgets(cloudFestive ?? loadFestiveState(u.id));
             });
           }
         }}
