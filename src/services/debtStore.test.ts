@@ -245,6 +245,25 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
     expect(allocations(mergeAB)).toEqual(allocations(mergeBA));
   });
 
+  it('recalculates refunded payments using their net amount and excludes confirmed duplicates', () => {
+    const base = sampleDebts[0];
+    const debt: DebtEntry = {
+      ...base,
+      payments: [
+        { id: 'payment_refund', debtId: base.id, amountMinor: 200000, refundedAmountMinor: 50000, resolutionStatus: 'partially_refunded', paymentDate: '2026-10-12', createdAt: '2026-10-12T10:00:00Z' },
+        { id: 'payment_duplicate', debtId: base.id, amountMinor: 100000, duplicateOfPaymentId: 'payment_refund', resolutionStatus: 'duplicate', paymentDate: '2026-10-12', createdAt: '2026-10-12T11:00:00Z' },
+      ],
+    };
+    const normalized = mergeDebtSnapshots([debt], [])[0];
+    const refunded = normalized.payments.find((payment) => payment.id === 'payment_refund')!;
+    const duplicate = normalized.payments.find((payment) => payment.id === 'payment_duplicate')!;
+    expect(refunded.appliedAmountMinor).toBe(150000);
+    expect(refunded.unappliedAmountMinor).toBe(0);
+    expect(duplicate.appliedAmountMinor).toBe(0);
+    expect(duplicate.unappliedAmountMinor).toBe(0);
+    expect(normalized.remainingAmountMinor).toBe(350000);
+  });
+
   it('rejects reconciliation when the debt is not in the authenticated snapshot', async () => {
     await expect(
       resolveUnappliedDebtPayment([], '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003')
