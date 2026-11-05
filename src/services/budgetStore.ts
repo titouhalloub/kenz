@@ -220,7 +220,7 @@ export function createEmptyBudgetState(profile: UserProfile): BudgetState {
   };
 }
 
-export async function loadBudgetStateFromSupabase(profile: UserProfile): Promise<BudgetState | null> {
+export async function loadBudgetStateFromSupabase(profile: UserProfile, persistLocal = true): Promise<BudgetState | null> {
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(profile.id)) return null;
 
@@ -283,7 +283,7 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile): Promise
     lastSyncedAt: new Date().toISOString(),
   };
 
-  saveBudgetStateLocally(state);
+  if (persistLocal) saveBudgetStateLocally(state);
   return state;
 }
 
