@@ -497,7 +497,7 @@ export function saveBudgetState(state: BudgetState): void {
   if (!isUuid(userId) || typeof localStorage === 'undefined') { saveBudgetStateLocally(state); return; }
   try {
     const previousRaw = localStorage.getItem(budgetStorageKey(userId));
-    const previous = previousRaw ? JSON.parse(previousRaw) as BudgetState : state;
+    const previous = previousRaw ? JSON.parse(previousRaw) as BudgetState : createEmptyBudgetState(state.profile);
     const pending = readPendingBudgetOutbox(userId);
     const deleted = pending?.deleted ?? emptyDeletedIds();
     const collections: BudgetCollection[] = ['transactions', 'recurringItems', 'budgets', 'savingsGoals', 'accounts'];
