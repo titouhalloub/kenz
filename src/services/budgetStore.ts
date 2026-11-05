@@ -441,9 +441,25 @@ async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBud
     const supabase = getSupabaseClient();
     const userId = state.profile.id;
     if (!supabase || !isUuid(userId)) return false;
-    const remoteState = await loadBudgetStateFromSupabase(state.profile, false);
-    if (!remoteState) return false;
-    state = mergeBudgetSnapshots(state, remoteState, baseState, deleted, localStamp);
+    const { error: atomicError } = await supabase.rpc('sync_kenz_financial_snapshot', {
+      p_snapshot: toFinancialSyncPayload(state),
+      p_base: toFinancialSyncPayload(baseState),
+      p_deleted: toDeletedSyncPayload(deleted),
+      p_updated_at: localStamp,
+    });
+    if (atomicError) {
+      console.error('Atomic Kenz financial sync failed:', atomicError.message);
+      return false;
+    }
+    const latest = await loadBudgetStateFromSupabase(state.profile, false);
+    if (!latest) return false;
+    if (typeof localStorage !== 'undefined' &&
+      localStorage.getItem(pendingBudgetKey(userId)) === expectedRaw) {
+      latest.transactions = latest.transactions.map((tx) => ({ ...tx, syncStatus: 'synced' as const }));
+      latest.lastSyncedAt = new Date().toISOString();
+      saveBudgetStateLocally(latest);
+    }
+    return true;
 
     // Apply owner-scoped deletes before upserts; child rows are removed before parents.
     const deleteSteps: Array<[BudgetCollection, string]> = [
