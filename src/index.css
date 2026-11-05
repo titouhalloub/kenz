@@ -17,3 +17,11 @@
   font-family: 'JetBrains Mono', monospace;
   font-variant-numeric: tabular-nums;
 }
+
+
+/* Locale-aware layout and native controls */
+html[dir="rtl"] { direction: rtl; }
+html[dir="rtl"] body { text-align: right; }
+[dir="rtl"] input, [dir="rtl"] textarea, [dir="rtl"] select { text-align: right; }
+[dir="rtl"] input[type="number"], [dir="rtl"] input[type="date"] { direction: ltr; text-align: right; }
+[dir="rtl"] .font-mono-numbers { direction: ltr; unicode-bidi: plaintext; }
