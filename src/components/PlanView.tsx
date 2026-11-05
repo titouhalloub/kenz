@@ -514,7 +514,11 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 <h3 className="text-xs font-semibold text-slate-100">Notifications de factures</h3>
                 <p className="text-[11px] text-slate-400">Permission : {notificationPermission === 'granted' ? 'Activée' : notificationPermission === 'denied' ? 'Bloquée dans le navigateur' : notificationPermission === 'unsupported' ? 'Non disponible' : 'Non activée'}</p>
               </div>
-              <button onClick={async () => setNotificationPermission(await requestBillNotificationPermission())}
+              <button onClick={async () => {
+                const permission = await requestBillNotificationPermission();
+                setNotificationPermission(permission);
+                if (permission === 'granted') dispatchBillReminders(profile.id, recurringItems);
+              }}
                 disabled={notificationPermission === 'unsupported' || notificationPermission === 'granted'}
                 className="min-h-[40px] px-3 rounded-xl bg-slate-800 text-xs font-semibold text-emerald-300 disabled:opacity-50">
                 <BellRing className="w-3.5 h-3.5 inline mr-1" /> Activer
