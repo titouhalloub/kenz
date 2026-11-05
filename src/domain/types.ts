@@ -217,7 +217,7 @@ export interface AIUsageEvent {
   tokensInput: number;
   tokensOutput: number;
   creditsDebited: number;
-  purpose: 'explain_budget' | 'spending_leak_detector' | 'categorize' | 'savings_optimizer' | 'general_query';
+  purpose: 'explain_budget' | 'spending_leak_detector' | 'categorize' | 'savings_optimizer' | 'general_query' | 'debt_kredy_optimizer';
   idempotencyKey?: string;
   createdAt: string;
 }
