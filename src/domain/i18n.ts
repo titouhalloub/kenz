@@ -86,7 +86,6 @@ const uiCopy: Record<string, { ar: string; en: string }> = {
   'Mode hors-ligne · Données locales sécurisées': { ar: 'وضع عدم الاتصال · البيانات المحلية محمية', en: 'Offline mode · Secure local data' },
   'Dans Safari, appuyez sur l’icône de Partage en bas d’écran.': { ar: 'في Safari، اضغط على أيقونة المشاركة أسفل الشاشة.', en: 'In Safari, tap the Share icon at the bottom of the screen.' },
   'Sur l’écran d’accueil': { ar: 'إلى الشاشة الرئيسية', en: 'Add to Home Screen' },
-  'Ajouter': { ar: 'إضافة', en: 'Add' },
   'Conseil de gestion de trésorerie': { ar: 'نصيحة لإدارة السيولة', en: 'Cash flow management tip' },
   'Enregistrer dépense': { ar: 'تسجيل مصروف', en: 'Record expense' },
   'Aucun résultat': { ar: 'لا توجد نتائج', en: 'No results' },
