@@ -110,6 +110,8 @@ export default function App() {
         createdAt: authUser.created_at,
       };
       setCurrentUser(authProfile);
+      setDebts([]);
+      setAiWallet({ userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
       const financialProfile = {
         id: authUser.id,
         email: authUser.email || '',
@@ -126,8 +128,8 @@ export default function App() {
       ]);
       if (!active) return;
       if (cloudState) setBudgetState(cloudState);
-      if (cloudDebts) setDebts(cloudDebts);
-      if (cloudCredits) setAiWallet(cloudCredits.wallet);
+      setDebts(cloudDebts ?? loadDebtState(authUser.id));
+      setAiWallet(cloudCredits?.wallet ?? { userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
     }).catch((error) => console.error('Unable to restore Kenz cloud session:', error));
 
     return () => { active = false; };
@@ -600,6 +602,10 @@ export default function App() {
           setCurrentUser(u);
           setActiveTab('profile');
           if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
+            setDebts([]);
+            setAiWallet({ userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+          }
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
             const financialProfile = {
               id: u.id, email: u.email, displayName: u.fullName,
               preferredCurrency: budgetState.profile.preferredCurrency,
@@ -613,8 +619,8 @@ export default function App() {
               loadAICreditStateFromSupabase(u.id),
             ]).then(([cloudState, cloudDebts, cloudCredits]) => {
               if (cloudState) setBudgetState(cloudState);
-              if (cloudDebts) setDebts(cloudDebts);
-              if (cloudCredits) setAiWallet(cloudCredits.wallet);
+              setDebts(cloudDebts ?? loadDebtState(u.id));
+              setAiWallet(cloudCredits?.wallet ?? { userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
             });
           }
         }}
