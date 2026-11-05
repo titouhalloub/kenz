@@ -19,6 +19,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const [wilaya, setWilaya] = useState('16 - Alger');
   const [region, setRegion] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -26,6 +27,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setLoading(true);
 
     try {
@@ -37,8 +39,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         }
         const res = await registerUser(email, password, fullName, country, wilaya, region);
         if (res.success && res.user) {
-          onLoginSuccess(res.user);
-          onClose();
+          if (res.confirmationRequired) {
+            setNotice('Compte créé. Consultez votre boîte mail et confirmez votre adresse avant de vous connecter.');
+          } else {
+            onLoginSuccess(res.user);
+            onClose();
+          }
         } else {
           setError(res.error || "Erreur lors de l'inscription.");
         }
@@ -96,6 +102,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center space-x-2 text-red-400 text-sm">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+          {notice && (
+            <div role="status" className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-sm">
+              {notice}
             </div>
           )}
 
