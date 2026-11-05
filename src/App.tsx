@@ -266,6 +266,14 @@ export default function App() {
 
   const handleAddChallengeContribution = (goalId: string, amountMinor: number, date: string) => {
     setChallengeContributions(addSavingsChallengeContribution(currentUser.id, goalId, amountMinor, date));
+    void flushPendingSavingsChallengeContributions(currentUser.id).then(async () => {
+      const [contributions, latestBudget] = await Promise.all([
+        loadSavingsChallengeContributionsFromSupabase(currentUser.id),
+        loadBudgetStateFromSupabase({ ...budgetState.profile, id: currentUser.id }),
+      ]);
+      if (contributions) setChallengeContributions(contributions);
+      if (latestBudget) setBudgetState(latestBudget);
+    });
   };
 
   const handleUpdateZakat = (state: ZakatState) => {
