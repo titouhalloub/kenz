@@ -59,6 +59,7 @@ import {
   loadFestiveState,
   saveFestiveState,
   loadFestiveStateFromSupabase,
+  flushPendingZakatFestiveSync,
   ZakatState,
   FestiveBudget,
 } from './services/zakatFestiveStore';
@@ -134,6 +135,7 @@ export default function App() {
       // Replay this user's durable local outbox before cloud hydration so offline edits aren't overwritten.
       await flushPendingBudgetSync(authUser.id);
       await flushPendingDebtSync(authUser.id);
+      await flushPendingZakatFestiveSync(authUser.id);
       const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
         loadBudgetStateFromSupabase(financialProfile),
         loadDebtStateFromSupabase(authUser.id),
