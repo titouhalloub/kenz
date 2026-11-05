@@ -156,10 +156,10 @@ export function loadDebtState(userId?: string): DebtEntry[] {
 }
 
 /** Load only the authenticated user's debts and payment history. */
-export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEntry[] | null> {
+export async function loadDebtStateFromSupabase(userId: string, flushPending = true): Promise<DebtEntry[] | null> {
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(userId)) return null;
-  await flushPendingDebtSync(userId);
+  if (flushPending) await flushPendingDebtSync(userId);
   // Never replace the local snapshot with stale cloud data while an outbox remains pending.
   if (readDebtOutbox(userId)) return loadDebtState(userId);
   const { data: debtRows, error: debtError } = await supabase.from('debts').select('*')
