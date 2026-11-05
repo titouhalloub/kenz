@@ -17,6 +17,7 @@ export interface UserProfile {
   locale: 'ar' | 'fr' | 'en';
   paydayDayOfMonth?: number; // 1-31
   planningPeriodDays: number; // default 30
+  syncUpdatedAt?: string;
 }
 
 export interface Account {
@@ -27,6 +28,7 @@ export interface Account {
   currency: string;
   initialBalanceMinor: number;
   isArchived: boolean;
+  syncUpdatedAt?: string;
 }
 
 export interface Category {
@@ -55,6 +57,7 @@ export interface Transaction {
   idempotencyKey?: string;
   syncStatus?: 'synced' | 'pending';
   createdAt: string;
+  syncUpdatedAt?: string;
 }
 
 export interface MonthlyBudget {
@@ -64,6 +67,7 @@ export interface MonthlyBudget {
   monthYear: string; // YYYY-MM-01
   budgetMinor: number;
   currency: string;
+  syncUpdatedAt?: string;
 }
 
 export interface RecurringItem {
@@ -77,6 +81,7 @@ export interface RecurringItem {
   categoryId?: string;
   nextDueDate: string; // YYYY-MM-DD
   isActive: boolean;
+  syncUpdatedAt?: string;
 }
 
 export interface SavingsGoal {
@@ -89,6 +94,7 @@ export interface SavingsGoal {
   targetDate?: string; // YYYY-MM-DD
   plannedMonthlyContributionMinor: number;
   status: GoalStatus;
+  syncUpdatedAt?: string;
 }
 
 export interface SafeToSpendBreakdown {
