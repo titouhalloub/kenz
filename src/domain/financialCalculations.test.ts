@@ -200,6 +200,45 @@ describe('Financial Calculations Engine', () => {
     expect(result.unpaidReservedCommitmentsMinor).toBe(0);
   });
 
+
+  it('uses the explicit recurring-item link even when the transaction description differs', () => {
+    const today = new Date(2026, 9, 20);
+    const bill: RecurringItem = {
+      id: 'rec-internet', userId: 'user-1', name: 'Internet Bill', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', frequency: 'monthly',
+      nextDueDate: '2026-10-20', isActive: true,
+    };
+    const linkedPayment: Transaction = {
+      id: 'tx-linked', userId: 'user-1', accountId: 'acc-1', type: 'expense',
+      amountMinor: 190000, currency: 'DZD', recurringItemId: 'rec-internet',
+      transactionDate: '2026-10-19', description: 'Paiement facture', createdAt: '2026-10-19T10:00:00Z',
+    };
+    const result = calculateSafeToSpend({
+      accounts: [dummyAccount1], transactions: [linkedPayment], recurringItems: [bill],
+      savingsGoals: [], todayDate: today, paydayDayOfMonth: 28,
+    });
+    expect(result.unpaidReservedCommitmentsMinor).toBe(0);
+  });
+
+  it('does not count a transaction explicitly linked to a different recurring item', () => {
+    const today = new Date(2026, 9, 20);
+    const bill: RecurringItem = {
+      id: 'rec-internet', userId: 'user-1', name: 'Internet Bill', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', frequency: 'monthly',
+      nextDueDate: '2026-10-20', isActive: true,
+    };
+    const otherLinkedPayment: Transaction = {
+      id: 'tx-other', userId: 'user-1', accountId: 'acc-1', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', recurringItemId: 'rec-rent',
+      transactionDate: '2026-10-19', description: 'Internet Bill', createdAt: '2026-10-19T10:00:00Z',
+    };
+    const result = calculateSafeToSpend({
+      accounts: [dummyAccount1], transactions: [otherLinkedPayment], recurringItems: [bill],
+      savingsGoals: [], todayDate: today, paydayDayOfMonth: 28,
+    });
+    expect(result.unpaidReservedCommitmentsMinor).toBe(250000);
+  });
+
   it('does not treat a future-dated payment as already paid', () => {
     const today = new Date(2026, 9, 13);
     const bill: RecurringItem = {
