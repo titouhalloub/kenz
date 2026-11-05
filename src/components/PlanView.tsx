@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   PieChart,
   Calendar,
@@ -10,6 +10,11 @@ import {
   Trophy,
   Flame,
   CalendarClock,
+  Bell,
+  BellRing,
+  Check,
+  Pause,
+  Play,
 } from 'lucide-react';
 import {
   MonthlyBudget,
@@ -20,7 +25,10 @@ import {
   UserProfile,
   SavingsChallengeContribution,
   SavingsChallengeFrequency,
+  Account,
+  CommitmentFrequency,
 } from '../domain/types';
+import { getBillReminderPermission, requestBillReminderPermission, dispatchBillReminders, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 import {
   formatMoney,
   calculateCategoryBudgets,
@@ -34,12 +42,16 @@ interface PlanViewProps {
   categories: Category[];
   budgets: MonthlyBudget[];
   recurringItems: RecurringItem[];
+  accounts: Account[];
   savingsGoals: SavingsGoal[];
   transactions: Transaction[];
   profile: UserProfile;
   onUpdateBudget: (categoryId: string, budgetMinor: number) => void;
   onAddRecurring: (data: Omit<RecurringItem, 'id'>) => void;
   onDeleteRecurring: (id: string) => void;
+  onMarkRecurringPaid: (id: string) => void;
+  onToggleRecurring: (id: string, isActive: boolean) => void;
+  onUpdateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
   onAddSavingsGoal: (data: Omit<SavingsGoal, 'id'>) => void;
   onUpdateSavingsGoal: (goalId: string, updates: Partial<SavingsGoal>) => void;
   challengeContributions: SavingsChallengeContribution[];
@@ -50,12 +62,16 @@ export const PlanView: React.FC<PlanViewProps> = ({
   categories,
   budgets,
   recurringItems,
+  accounts,
   savingsGoals,
   transactions,
   profile,
   onUpdateBudget,
   onAddRecurring,
   onDeleteRecurring,
+  onMarkRecurringPaid,
+  onToggleRecurring,
+  onUpdateRecurring,
   onAddSavingsGoal,
   onUpdateSavingsGoal,
   challengeContributions,
@@ -69,7 +85,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const [recType, setRecType] = useState<'income' | 'expense'>('expense');
   const [recAmountStr, setRecAmountStr] = useState('');
   const [recDueDate, setRecDueDate] = useState('');
-  const [recCategoryId, setRecCategoryId] = useState(categories[0]?.id || '');
+  const [recCategoryId, setRecCategoryId] = useState(categories.find((category) => !category.isIncome)?.id || '');
+  const [recFrequency, setRecFrequency] = useState<CommitmentFrequency>('monthly');
+  const [recAccountId, setRecAccountId] = useState(accounts.find((account) => !account.isArchived)?.id || '');
+  const [recReminderEnabled, setRecReminderEnabled] = useState(true);
+  const [recReminderDaysBefore, setRecReminderDaysBefore] = useState(1);
+  const [notificationPermission, setNotificationPermission] = useState(getBillReminderPermission());
 
   // New goal state
   const [showAddGoal, setShowAddGoal] = useState(false);
@@ -87,7 +108,24 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editBudgetAmount, setEditBudgetAmount] = useState('');
 
+  useEffect(() => {
+    const matchingCategory = categories.find((category) => category.isIncome === (recType === 'income'));
+    if (matchingCategory && !categories.some((category) => category.id === recCategoryId && category.isIncome === (recType === 'income'))) {
+      setRecCategoryId(matchingCategory.id);
+    }
+  }, [categories, recCategoryId, recType]);
+
+  useEffect(() => {
+    if (!accounts.some((account) => account.id === recAccountId && !account.isArchived && account.currency === profile.preferredCurrency)) {
+      setRecAccountId(accounts.find((account) => !account.isArchived && account.currency === profile.preferredCurrency)?.id || '');
+    }
+  }, [accounts, recAccountId, profile.preferredCurrency]);
+
   const today = new Date();
+  const activeBills = recurringItems.filter((item) => item.isActive);
+  const overdueBills = activeBills.filter((item) => daysUntilBill(item.nextDueDate) < 0);
+  const upcomingBills = activeBills.filter((item) => daysUntilBill(item.nextDueDate) >= 0 && daysUntilBill(item.nextDueDate) <= 7)
+    .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate));
   const categoryBudgets = calculateCategoryBudgets({
     categories,
     budgets,
@@ -106,15 +144,22 @@ export const PlanView: React.FC<PlanViewProps> = ({
       type: recType,
       amountMinor: minor,
       currency: profile.preferredCurrency,
-      frequency: 'monthly',
+      frequency: recFrequency,
       categoryId: recCategoryId || undefined,
       nextDueDate: recDueDate,
       isActive: true,
+      accountId: recAccountId || undefined,
+      billingDayOfMonth: Number(recDueDate.slice(8, 10)),
+      reminderEnabled: recReminderEnabled,
+      reminderDaysBefore: recReminderDaysBefore,
     });
 
     setRecName('');
     setRecAmountStr('');
     setRecDueDate('');
+    setRecFrequency('monthly');
+    setRecReminderEnabled(true);
+    setRecReminderDaysBefore(1);
     setShowAddRecurring(false);
   };
 
@@ -344,7 +389,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
               className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3 shadow-lg"
             >
               <h3 className="text-xs font-semibold text-slate-200">
-                Nouvel engagement mensuel
+                Nouvelle facture ou entrée récurrente
               </h3>
 
               <div className="grid grid-cols-2 gap-2">
@@ -411,6 +456,59 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Récurrence</label>
+                  <select value={recFrequency} onChange={(e) => setRecFrequency(e.target.value as CommitmentFrequency)}
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100">
+                    <option value="weekly">Chaque semaine</option>
+                    <option value="biweekly">Toutes les 2 semaines</option>
+                    <option value="monthly">Chaque mois</option>
+                    <option value="quarterly">Chaque trimestre</option>
+                    <option value="yearly">Chaque année</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Compte associé</label>
+                  <select value={recAccountId} onChange={(e) => setRecAccountId(e.target.value)}
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100">
+                    <option value="">Choisir un compte</option>
+                    {accounts.filter((account) => !account.isArchived && account.currency === profile.preferredCurrency).map((account) => (
+                      <option key={account.id} value={account.id}>{account.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Catégorie</label>
+                <select value={recCategoryId} onChange={(e) => setRecCategoryId(e.target.value)}
+                  className="w-full h-10 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100">
+                  {categories.filter((category) => category.isIncome === (recType === 'income')).map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-2">
+                <label className="flex items-center justify-between gap-3 text-xs text-slate-200">
+                  <span className="inline-flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-400" /> Rappel avant échéance</span>
+                  <input type="checkbox" checked={recReminderEnabled} onChange={(e) => setRecReminderEnabled(e.target.checked)} className="w-4 h-4 accent-emerald-500" />
+                </label>
+                {recReminderEnabled && (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Me prévenir</label>
+                    <select value={recReminderDaysBefore} onChange={(e) => setRecReminderDaysBefore(Number(e.target.value))}
+                      className="w-full h-10 px-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-100">
+                      <option value={0}>Le jour même</option>
+                      <option value={1}>1 jour avant</option>
+                      <option value={3}>3 jours avant</option>
+                      <option value={7}>7 jours avant</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
@@ -429,38 +527,113 @@ export const PlanView: React.FC<PlanViewProps> = ({
             </form>
           )}
 
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-100">Notifications de factures</h3>
+                <p className="text-[11px] text-slate-400">Permission : {notificationPermission === 'granted' ? 'Activée' : notificationPermission === 'denied' ? 'Bloquée dans le navigateur' : notificationPermission === 'unsupported' ? 'Non disponible' : 'Non activée'}</p>
+              </div>
+              <button onClick={async () => {
+                const permission = await requestBillNotificationPermission();
+                setNotificationPermission(permission);
+                if (permission === 'granted') dispatchBillReminders(profile.id, recurringItems);
+              }}
+                disabled={notificationPermission === 'unsupported' || notificationPermission === 'granted' || notificationPermission === 'denied'}
+                className="min-h-[40px] px-3 rounded-xl bg-slate-800 text-xs font-semibold text-emerald-300 disabled:opacity-50">
+                <BellRing className="w-3.5 h-3.5 inline mr-1" /> {notificationPermission === 'denied' ? 'Autoriser dans le navigateur' : notificationPermission === 'granted' ? 'Activées' : 'Activer'}
+              </button>
+            </div>
+            <p className="text-[10px] leading-relaxed text-slate-500">Kenz vérifie les échéances lorsque l'application est ouverte ou revient au premier plan. Les notifications programmées lorsque l'application est complètement fermée nécessitent un service push en arrière-plan.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-slate-950 p-3"><div className="text-[10px] text-slate-500">En retard</div><div className="text-xl font-bold text-rose-400">{overdueBills.length}</div></div>
+              <div className="rounded-xl bg-slate-950 p-3"><div className="text-[10px] text-slate-500">Dans les 7 jours</div><div className="text-xl font-bold text-amber-300">{upcomingBills.length}</div></div>
+            </div>
+          </div>
+
+          {overdueBills.length > 0 && (
+            <div className="rounded-2xl border border-rose-900/70 bg-rose-950/20 p-3 space-y-2">
+              <h3 className="text-xs font-semibold text-rose-300">Échéances en retard</h3>
+              {overdueBills.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-200">{item.name}</span>
+                  <span className="text-rose-300">{formatBillDueLabel(item.nextDueDate, profile.locale)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* List of Recurring */}
           <div className="divide-y divide-slate-800/80 rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
-            {recurringItems.map((item) => (
-              <div key={item.id} className="p-4 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-semibold text-slate-200 block">{item.name}</span>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
-                    <span className="capitalize">{item.type === 'income' ? 'Revenu' : 'Facture'}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>Échéance: {item.nextDueDate}</span>
+            {recurringItems.map((item) => {
+              const dueDays = daysUntilBill(item.nextDueDate);
+              const dueNow = dueDays <= 0;
+              const account = accounts.find((row) => row.id === item.accountId && !row.isArchived && row.currency === item.currency);
+              return (
+                <div key={item.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-slate-200 block">{item.name}</span>
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 mt-1">
+                        <span>{item.type === 'income' ? 'Revenu' : 'Facture'}</span>
+                        <span>·</span><span>{item.frequency === 'weekly' ? 'Hebdomadaire' : item.frequency === 'biweekly' ? 'Toutes les 2 semaines' : item.frequency === 'quarterly' ? 'Trimestriel' : item.frequency === 'yearly' ? 'Annuel' : 'Mensuel'}</span>
+                        <span>·</span><span>Échéance : {item.nextDueDate}</span>
+                      </div>
+                      <div className={`text-[11px] mt-1 ${dueDays < 0 ? 'text-rose-400' : dueDays === 0 ? 'text-amber-300' : 'text-slate-500'}`}>{item.isActive ? formatBillDueLabel(item.nextDueDate, profile.locale) : 'En pause'}{item.reminderEnabled ? ' · Rappel activé' : ''}</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs font-bold font-mono-numbers ${item.type === 'income' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {item.type === 'income' ? '+' : '-'}{formatMoney(item.amountMinor, item.currency, profile.locale)}
+                      </span>
+                      <button onClick={() => onToggleRecurring(item.id, !item.isActive)} title={item.isActive ? 'Mettre en pause' : 'Reprendre'}
+                        className="min-h-[40px] min-w-[36px] flex items-center justify-center text-slate-400 hover:text-emerald-300">
+                        {item.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => onDeleteRecurring(item.id)} className="min-h-[40px] min-w-[36px] flex items-center justify-center text-slate-500 hover:text-rose-400" aria-label="Supprimer cet engagement">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Compte de paiement</label>
+                      <select value={item.accountId || ''} onChange={(e) => onUpdateRecurring(item.id, { accountId: e.target.value || undefined })}
+                        className="w-full h-9 px-2 bg-slate-950 border border-slate-800 rounded-lg text-[11px] text-slate-200">
+                        <option value="">Choisir un compte</option>
+                        {accounts.filter((row) => !row.isArchived && row.currency === item.currency).map((row) => (
+                          <option key={row.id} value={row.id}>{row.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="flex items-center gap-2 text-[11px] text-slate-400 h-5">
+                        <input type="checkbox" checked={item.reminderEnabled ?? false}
+                          onChange={(e) => onUpdateRecurring(item.id, { reminderEnabled: e.target.checked })}
+                          className="w-3.5 h-3.5 accent-emerald-500" />
+                        Activer le rappel
+                      </label>
+                      {item.reminderEnabled && (
+                        <select value={item.reminderDaysBefore ?? 1}
+                          onChange={(e) => onUpdateRecurring(item.id, { reminderDaysBefore: Number(e.target.value) })}
+                          className="w-full h-8 px-2 bg-slate-950 border border-slate-800 rounded-lg text-[10px] text-slate-300">
+                          <option value={0}>Le jour même</option>
+                          <option value={1}>1 jour avant</option>
+                          <option value={3}>3 jours avant</option>
+                          <option value={7}>7 jours avant</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                  {dueNow && item.isActive && (
+                    <button onClick={() => onMarkRecurringPaid(item.id)} disabled={!account}
+                      className="w-full min-h-[42px] rounded-xl bg-emerald-700/80 hover:bg-emerald-600 text-xs font-semibold text-white disabled:opacity-40">
+                      <Check className="w-3.5 h-3.5 inline mr-1" /> {item.type === 'income' ? 'Enregistrer le revenu reçu' : 'Enregistrer le paiement'}
+                    </button>
+                  )}
+                  {!account && item.isActive && <p className="text-[10px] text-amber-400">Associez un compte à cet engagement pour enregistrer son paiement.</p>}
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-xs font-bold font-mono-numbers ${
-                      item.type === 'income' ? 'text-emerald-400' : 'text-amber-400'
-                    }`}
-                  >
-                    {item.type === 'income' ? '+' : '-'}
-                    {formatMoney(item.amountMinor, item.currency, profile.locale)}
-                  </span>
-                  <button
-                    onClick={() => onDeleteRecurring(item.id)}
-                    className="p-1.5 text-slate-500 hover:text-rose-400 transition min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
-                    aria-label="Supprimer cet engagement"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
+            {recurringItems.length === 0 && <p className="p-5 text-center text-xs text-slate-500">Aucune facture ou entrée récurrente.</p>}
           </div>
         </div>
       )}

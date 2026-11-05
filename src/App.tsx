@@ -24,6 +24,8 @@ import {
   addAccount,
   addRecurringItem,
   deleteRecurringItem,
+  updateRecurringItem,
+  recordRecurringPayment,
   addSavingsGoal,
   updateSavingsGoal,
   updateBudget,
@@ -88,6 +90,7 @@ import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { loadCurrentUser, logoutUser, UserProfile } from './services/authStore';
 import { getSupabaseClient } from './services/supabase';
+import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 
 type NavTab = 'home' | 'transactions' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
@@ -173,6 +176,21 @@ export default function App() {
       .catch((error) => console.error('Unable to restore savings challenge contributions:', error));
     return () => { active = false; };
   }, [currentUser.id]);
+
+  // Deliver due bill notifications while the app is active or returns to the foreground.
+  useEffect(() => {
+    const notify = () => dispatchBillReminders(currentUser.id, budgetState.recurringItems);
+    notify();
+    const onVisibility = () => { if (document.visibilityState === 'visible') notify(); };
+    window.addEventListener('focus', notify);
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = window.setInterval(notify, 15 * 60 * 1000);
+    return () => {
+      window.removeEventListener('focus', notify);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(interval);
+    };
+  }, [currentUser.id, budgetState.recurringItems]);
 
   // Keep Kredy views fresh on other devices. Pending local outboxes are never replayed
   // from realtime callbacks, preventing sync-event loops and stale local overwrites.
@@ -263,6 +281,10 @@ export default function App() {
       void supabase.removeChannel(channel);
     };
   }, [currentUser.id]);
+
+  const handleMarkRecurringPaid = (itemId: string) => {
+    setBudgetState((current) => recordRecurringPayment(current, itemId));
+  };
 
   const handleAddChallengeContribution = (goalId: string, amountMinor: number, date: string) => {
     setChallengeContributions(addSavingsChallengeContribution(currentUser.id, goalId, amountMinor, date));
@@ -542,6 +564,7 @@ export default function App() {
             accounts={budgetState.accounts}
             transactions={budgetState.transactions}
             recurringItems={budgetState.recurringItems}
+            accounts={budgetState.accounts}
             savingsGoals={budgetState.savingsGoals}
             safeToSpend={safeToSpend}
             onOpenAddModal={() => setIsAddModalOpen(true)}
@@ -567,6 +590,7 @@ export default function App() {
             categories={budgetState.categories}
             budgets={budgetState.budgets}
             recurringItems={budgetState.recurringItems}
+            accounts={budgetState.accounts}
             savingsGoals={budgetState.savingsGoals}
             transactions={budgetState.transactions}
             profile={budgetState.profile}
@@ -583,6 +607,9 @@ export default function App() {
             }
             onAddRecurring={(data) => setBudgetState(addRecurringItem(budgetState, data))}
             onDeleteRecurring={(id) => setBudgetState(deleteRecurringItem(budgetState, id))}
+            onMarkRecurringPaid={handleMarkRecurringPaid}
+            onToggleRecurring={(id, isActive) => setBudgetState((current) => updateRecurringItem(current, id, { isActive }))}
+            onUpdateRecurring={(id, updates) => setBudgetState((current) => updateRecurringItem(current, id, updates))}
             onAddSavingsGoal={(data) => setBudgetState(addSavingsGoal(budgetState, data))}
             onUpdateSavingsGoal={(id, updates) =>
               setBudgetState(updateSavingsGoal(budgetState, id, updates))

@@ -276,7 +276,12 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile, persistL
     recurringItems: (recurringResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, name: r.name, type: r.type, amountMinor: Number(r.amount_minor),
       currency: r.currency, frequency: r.frequency, categoryId: r.category_id || undefined,
-      nextDueDate: r.next_due_date, isActive: r.is_active, syncUpdatedAt: r.updated_at || r.created_at,
+      nextDueDate: r.next_due_date, isActive: r.is_active,
+      accountId: r.account_id || undefined,
+      billingDayOfMonth: r.billing_day_of_month == null ? undefined : Number(r.billing_day_of_month),
+      reminderEnabled: r.reminder_enabled ?? false,
+      reminderDaysBefore: r.reminder_days_before == null ? 1 : Number(r.reminder_days_before),
+      syncUpdatedAt: r.updated_at || r.created_at,
     })),
     savingsGoals: (goalsResult.data || []).map((r) => ({
       id: r.id, userId: r.user_id, name: r.name, targetAmountMinor: Number(r.target_amount_minor),
@@ -425,7 +430,12 @@ function toFinancialSyncPayload(state: BudgetState): Record<string, unknown> {
     recurring_items: state.recurringItems.map((r) => ({
       id: r.id, user_id: r.userId, name: r.name, type: r.type, amount_minor: r.amountMinor,
       currency: r.currency, frequency: r.frequency, category_id: r.categoryId || null,
-      next_due_date: r.nextDueDate, is_active: r.isActive, updated_at: r.syncUpdatedAt || null,
+      next_due_date: r.nextDueDate, is_active: r.isActive,
+      account_id: r.accountId || null,
+      billing_day_of_month: r.billingDayOfMonth ?? Number(r.nextDueDate.slice(8, 10)),
+      reminder_enabled: r.reminderEnabled ?? false,
+      reminder_days_before: r.reminderDaysBefore ?? 1,
+      updated_at: r.syncUpdatedAt || null,
     })),
     savings_goals: state.savingsGoals.map((r) => ({
       id: r.id, user_id: r.userId, name: r.name, target_amount_minor: r.targetAmountMinor,
@@ -624,6 +634,94 @@ export function deleteRecurringItem(currentState: BudgetState, itemId: string): 
   return nextState;
 }
 
+export function updateRecurringItem(
+  currentState: BudgetState,
+  itemId: string,
+  updates: Partial<RecurringItem>,
+): BudgetState {
+  const nextState: BudgetState = {
+    ...currentState,
+    recurringItems: currentState.recurringItems.map((item) =>
+      item.id === itemId ? { ...item, ...updates } : item
+    ),
+  };
+  saveBudgetState(nextState);
+  return nextState;
+}
+
+function addCalendarDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
+}
+
+function stableRecurringPaymentId(seed: string): string {
+  const hashes = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
+  for (let index = 0; index < seed.length; index += 1) {
+    const code = seed.charCodeAt(index);
+    for (let slot = 0; slot < hashes.length; slot += 1) {
+      hashes[slot] = Math.imul(hashes[slot] ^ (code + slot * 17), 0x01000193 + slot * 2);
+    }
+  }
+  const hex = hashes.map((value) => (value >>> 0).toString(16).padStart(8, '0')).join('').split('');
+  hex[12] = '5';
+  hex[16] = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  const value = hex.join('');
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+function nextRecurringDate(item: RecurringItem): string {
+  const [year, month, day] = item.nextDueDate.split('-').map(Number);
+  if (item.frequency === 'weekly') return addCalendarDays(item.nextDueDate, 7);
+  if (item.frequency === 'biweekly') return addCalendarDays(item.nextDueDate, 14);
+  const monthsToAdd = item.frequency === 'quarterly' ? 3 : item.frequency === 'yearly' ? 12 : 1;
+  const targetMonth = new Date(Date.UTC(year, month - 1 + monthsToAdd, 1));
+  const lastDay = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0)).getUTCDate();
+  const anchorDay = item.billingDayOfMonth || day;
+  const nextDay = Math.min(anchorDay, lastDay);
+  return `${targetMonth.getUTCFullYear()}-${String(targetMonth.getUTCMonth() + 1).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`;
+}
+
+/** Records a recurring payment and advances its due date in one offline-safe snapshot. */
+export function recordRecurringPayment(currentState: BudgetState, itemId: string): BudgetState {
+  const item = currentState.recurringItems.find((row) => row.id === itemId);
+  if (!item || !item.isActive || !item.accountId) return currentState;
+  const account = currentState.accounts.find((row) => row.id === item.accountId && !row.isArchived);
+  if (!account || account.currency !== item.currency) return currentState;
+  const paymentKey = `recurring-payment:${item.id}:${item.nextDueDate}`;
+  const paymentId = stableRecurringPaymentId(paymentKey);
+  const alreadyRecorded = currentState.transactions.some((tx) => tx.id === paymentId || tx.idempotencyKey === paymentKey);
+  const localToday = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+  const nextState: BudgetState = {
+    ...currentState,
+    transactions: alreadyRecorded ? currentState.transactions : [{
+      id: paymentId,
+      userId: currentState.profile.id,
+      accountId: account.id,
+      type: item.type,
+      amountMinor: item.amountMinor,
+      currency: item.currency,
+      categoryId: item.categoryId,
+      recurringItemId: item.id,
+      transactionDate: localToday,
+      description: `${item.type === 'expense' ? 'Paiement' : 'Encaissement'} · ${item.name}`,
+      idempotencyKey: paymentKey,
+      syncStatus: 'pending',
+      createdAt: new Date().toISOString(),
+    }, ...currentState.transactions],
+    recurringItems: currentState.recurringItems.map((row) => row.id === item.id ? {
+      ...row,
+      nextDueDate: nextRecurringDate(row),
+      billingDayOfMonth: row.billingDayOfMonth || Number(row.nextDueDate.slice(8, 10)),
+    } : row),
+  };
+  saveBudgetState(nextState);
+  return nextState;
+}
+
 export function addSavingsGoal(
   currentState: BudgetState,
   goalData: Omit<SavingsGoal, 'id'>
@@ -739,7 +837,7 @@ export function wipeAllLocalData(): void {
   const keys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key && (key.startsWith(STORAGE_KEY) || key.startsWith('kenz_budget_outbox_v1_') || key.startsWith('kenz_budget_outbox_v2_') || key.startsWith('kenz_savings_challenge_contributions_v1_'))) keys.push(key);
+    if (key && (key.startsWith(STORAGE_KEY) || key.startsWith('kenz_budget_outbox_v1_') || key.startsWith('kenz_budget_outbox_v2_') || key.startsWith('kenz_savings_challenge_contributions_v1_') || key.startsWith('kenz_bill_reminders_sent_v1_'))) keys.push(key);
   }
   keys.forEach((key) => localStorage.removeItem(key));
 }

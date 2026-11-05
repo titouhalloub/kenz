@@ -27,6 +27,7 @@ import {
   generateDeterministicWeeklySummary,
 } from '../domain/financialCalculations';
 import { calculateDebtSummary, calculateFinancialHealthScore } from '../services/debtStore';
+import { daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 
 interface HomeViewProps {
   profile: UserProfile;
@@ -64,6 +65,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   // Upcoming unpaid bills
   const upcomingBills = recurringItems
     .filter((i) => i.isActive && i.type === 'expense')
+    .sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate))
     .slice(0, 3);
 
   // Active savings goals
@@ -322,8 +324,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   </div>
                   <div>
                     <span className="text-xs font-semibold text-slate-200 block">{bill.name}</span>
-                    <span className="text-[11px] text-slate-500">
-                      Échéance: {bill.nextDueDate}
+                    <span className={`text-[11px] ${daysUntilBill(bill.nextDueDate) < 0 ? 'text-rose-400' : daysUntilBill(bill.nextDueDate) === 0 ? 'text-amber-300' : 'text-slate-500'}`}>
+                      {formatBillDueLabel(bill.nextDueDate, profile.locale)} · {bill.nextDueDate}
                     </span>
                   </div>
                 </div>

@@ -81,6 +81,10 @@ export interface RecurringItem {
   categoryId?: string;
   nextDueDate: string; // YYYY-MM-DD
   isActive: boolean;
+  accountId?: string;
+  billingDayOfMonth?: number;
+  reminderEnabled?: boolean;
+  reminderDaysBefore?: number;
   syncUpdatedAt?: string;
 }
 
