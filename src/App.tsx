@@ -2,7 +2,7 @@
  * Kenz Finance & Neighborhood Services — Mobile-First PWA
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   LayoutDashboard,
   Receipt,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   loadBudgetState,
+  loadBudgetStateFromSupabase,
   addTransaction,
   deleteTransaction,
   addAccount,
@@ -69,6 +70,7 @@ import { ProfileView } from './components/ProfileView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { loadCurrentUser, logoutUser, UserProfile } from './services/authStore';
+import { getSupabaseClient } from './services/supabase';
 import { User as UserIcon } from 'lucide-react';
 
 type NavTab = 'home' | 'transactions' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
@@ -87,6 +89,41 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAddDebtModalOpen, setIsAddDebtModalOpen] = useState(false);
   const [kredyPreselectedBiz, setKredyPreselectedBiz] = useState<Business | null>(null);
+
+  // Restore an existing Supabase session and hydrate only that user's cloud data.
+  useEffect(() => {
+    let active = true;
+    const supabase = getSupabaseClient();
+    if (!supabase) return () => { active = false; };
+
+    void supabase.auth.getUser().then(async ({ data, error }) => {
+      if (!active || error || !data.user) return;
+      const authUser = data.user;
+      const authProfile: UserProfile = {
+        id: authUser.id,
+        email: authUser.email || '',
+        fullName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Kenz',
+        country: authUser.user_metadata?.country || 'Algérie (DZ)',
+        wilaya: authUser.user_metadata?.wilaya || '16 - Alger',
+        membershipTier: authUser.user_metadata?.tier || 'Citoyen Free',
+        createdAt: authUser.created_at,
+      };
+      setCurrentUser(authProfile);
+      const financialProfile = {
+        id: authUser.id,
+        email: authUser.email || '',
+        displayName: authProfile.fullName,
+        preferredCurrency: budgetState.profile.preferredCurrency,
+        locale: budgetState.profile.locale,
+        paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
+        planningPeriodDays: budgetState.profile.planningPeriodDays,
+      };
+      const cloudState = await loadBudgetStateFromSupabase(financialProfile);
+      if (active && cloudState) setBudgetState(cloudState);
+    }).catch((error) => console.error('Unable to restore Kenz cloud session:', error));
+
+    return () => { active = false; };
+  }, []);
 
   const handleUpdateZakat = (state: ZakatState) => {
     setZakatState(state);
@@ -172,7 +209,7 @@ export default function App() {
         description: isPayable
           ? `Règlement Kredy · ${targetDebt.counterpartyName}`
           : `Recouvrement Kredy · ${targetDebt.counterpartyName}`,
-        categoryId: isPayable ? 'cat-groceries' : 'cat-salary',
+        categoryId: isPayable ? '00000000-0000-4000-8000-000000000001' : '00000000-0000-4000-8000-000000000007',
       });
       setBudgetState(updatedBudget);
     }
@@ -554,6 +591,18 @@ export default function App() {
         onLoginSuccess={(u) => {
           setCurrentUser(u);
           setActiveTab('profile');
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
+            const financialProfile = {
+              id: u.id, email: u.email, displayName: u.fullName,
+              preferredCurrency: budgetState.profile.preferredCurrency,
+              locale: budgetState.profile.locale,
+              paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
+              planningPeriodDays: budgetState.profile.planningPeriodDays,
+            };
+            void loadBudgetStateFromSupabase(financialProfile).then((cloudState) => {
+              if (cloudState) setBudgetState(cloudState);
+            });
+          }
         }}
       />
     </div>
