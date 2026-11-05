@@ -655,6 +655,21 @@ function addCalendarDays(date: string, days: number): string {
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
 }
 
+function stableRecurringPaymentId(seed: string): string {
+  const hashes = [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35];
+  for (let index = 0; index < seed.length; index += 1) {
+    const code = seed.charCodeAt(index);
+    for (let slot = 0; slot < hashes.length; slot += 1) {
+      hashes[slot] = Math.imul(hashes[slot] ^ (code + slot * 17), 0x01000193 + slot * 2);
+    }
+  }
+  const hex = hashes.map((value) => (value >>> 0).toString(16).padStart(8, '0')).join('').split('');
+  hex[12] = '5';
+  hex[16] = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  const value = hex.join('');
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
 function nextRecurringDate(item: RecurringItem): string {
   const [year, month, day] = item.nextDueDate.split('-').map(Number);
   if (item.frequency === 'weekly') return addCalendarDays(item.nextDueDate, 7);
@@ -674,7 +689,8 @@ export function recordRecurringPayment(currentState: BudgetState, itemId: string
   const account = currentState.accounts.find((row) => row.id === item.accountId && !row.isArchived);
   if (!account || account.currency !== item.currency) return currentState;
   const paymentKey = `recurring-payment:${item.id}:${item.nextDueDate}`;
-  const alreadyRecorded = currentState.transactions.some((tx) => tx.idempotencyKey === paymentKey);
+  const paymentId = stableRecurringPaymentId(paymentKey);
+  const alreadyRecorded = currentState.transactions.some((tx) => tx.id === paymentId || tx.idempotencyKey === paymentKey);
   const localToday = (() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -682,7 +698,7 @@ export function recordRecurringPayment(currentState: BudgetState, itemId: string
   const nextState: BudgetState = {
     ...currentState,
     transactions: alreadyRecorded ? currentState.transactions : [{
-      id: createId(),
+      id: paymentId,
       userId: currentState.profile.id,
       accountId: account.id,
       type: item.type,
