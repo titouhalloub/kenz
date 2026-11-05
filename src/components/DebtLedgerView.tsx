@@ -683,6 +683,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         businesses={businesses}
+        userId={profile.id}
         onSave={onAddDebt}
       />
 
