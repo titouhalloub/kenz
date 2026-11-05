@@ -470,7 +470,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Projets & Objectifs ({savingsGoals.length})
+              Projets & Objectifs ({savingsGoals.filter((goal) => !goal.challengeFrequency).length})
             </h2>
             <button
               onClick={() => setShowAddGoal(!showAddGoal)}
@@ -553,7 +553,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
           {/* Goals List */}
           <div className="space-y-3">
-            {savingsGoals.map((goal) => {
+            {savingsGoals.filter((goal) => !goal.challengeFrequency).map((goal) => {
               const progressPct = Math.min(
                 100,
                 Math.round((goal.currentAmountMinor / goal.targetAmountMinor) * 100)
@@ -658,7 +658,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Date de fin</label>
-                  <input type="date" value={challengeEndDate} min={getLocalDateString()} onChange={(e) => setChallengeEndDate(e.target.value)} required
+                  <input type="date" value={challengeEndDate} min={getLocalDateString(new Date(Date.now() + 86400000))} onChange={(e) => setChallengeEndDate(e.target.value)} required
                     className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100" />
                 </div>
               </div>
@@ -679,23 +679,36 @@ export const PlanView: React.FC<PlanViewProps> = ({
               const progress = goal.targetAmountMinor > 0 ? Math.min(100, Math.round(savedMinor / goal.targetAmountMinor * 100)) : 0;
               const frequencyLabel = goal.challengeFrequency === 'daily' ? 'Quotidien' : goal.challengeFrequency === 'weekly' ? 'Hebdomadaire' : 'Mensuel';
               const periodLabel = goal.challengeFrequency === 'daily' ? 'jour' : goal.challengeFrequency === 'weekly' ? 'semaine' : 'mois';
-              const dates = [...new Set(rows.map((row) => row.contributionDate))].sort();
-              const currentStreak = (() => {
-                const ordinal = (date: string) => {
-                  const d = new Date(date + 'T12:00:00');
-                  if (goal.challengeFrequency === 'monthly') return d.getFullYear() * 12 + d.getMonth();
-                  const days = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
-                  return goal.challengeFrequency === 'weekly' ? Math.floor((days + 3) / 7) : days;
-                };
-                const periods = new Set(dates.map(ordinal));
-                let cursor = ordinal(getLocalDateString());
-                if (!periods.has(cursor)) cursor -= 1;
-                let streak = 0;
-                while (periods.has(cursor - streak)) streak += 1;
-                return streak;
-              })();
+              const ordinal = (date: string) => {
+                const d = new Date(date + 'T12:00:00');
+                if (goal.challengeFrequency === 'monthly') return d.getFullYear() * 12 + d.getMonth();
+                const days = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+                return goal.challengeFrequency === 'weekly' ? Math.floor((days + 3) / 7) : days;
+              };
+              const periodTotals = new Map<number, number>();
+              for (const row of rows) {
+                const period = ordinal(row.contributionDate);
+                periodTotals.set(period, (periodTotals.get(period) || 0) + row.amountMinor);
+              }
+              const periods = new Set([...periodTotals.entries()]
+                .filter(([, amount]) => amount >= (goal.challengePeriodAmountMinor || 0))
+                .map(([period]) => period));
+              let cursor = ordinal(getLocalDateString());
+              if (!periods.has(cursor)) cursor -= 1;
+              let currentStreak = 0;
+              while (periods.has(cursor - currentStreak)) currentStreak += 1;
+              let bestStreak = 0;
+              let runningStreak = 0;
+              let previousPeriod: number | null = null;
+              for (const period of [...periods].sort((a, b) => a - b)) {
+                runningStreak = previousPeriod !== null && period === previousPeriod + 1 ? runningStreak + 1 : 1;
+                bestStreak = Math.max(bestStreak, runningStreak);
+                previousPeriod = period;
+              }
               const recent = rows.slice(0, 3);
+              const expired = getLocalDateString() > (goal.challengeEndDate || '9999-12-31');
               const completed = goal.status === 'achieved' || progress >= 100;
+              const paused = goal.status === 'paused';
               return (
                 <div key={goal.id} className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -706,7 +719,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                       </div>
                       <div className="text-[11px] text-slate-400 mt-1">{frequencyLabel} · {formatMoney(goal.challengePeriodAmountMinor || 0, goal.currency, profile.locale)} / {periodLabel}</div>
                     </div>
-                    <span className={`text-xs font-bold ${completed ? 'text-emerald-400' : 'text-blue-300'}`}>{completed ? 'Terminé' : `${progress}%`}</span>
+                    <span className={`text-xs font-bold ${completed ? 'text-emerald-400' : 'text-blue-300'}`}>{completed ? 'Terminé' : expired ? 'Expiré' : paused ? 'En pause' : `${progress}%`}</span>
                   </div>
                   <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
@@ -716,13 +729,19 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     <span>{formatMoney(goal.targetAmountMinor, goal.currency, profile.locale)} cible</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
-                    <span className="inline-flex items-center gap-1"><Flame className="w-3.5 h-3.5 text-orange-400" /> Série actuelle : {currentStreak} période(s)</span>
+                    <span className="inline-flex items-center gap-1"><Flame className="w-3.5 h-3.5 text-orange-400" /> Série actuelle : {currentStreak} · Record : {bestStreak}</span>
                     <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Jusqu'au {goal.challengeEndDate}</span>
                   </div>
-                  {!completed && goal.status === 'active' && (
+                  {!completed && !expired && goal.status === 'active' && (
                     <button onClick={() => onAddChallengeContribution(goal.id, goal.challengePeriodAmountMinor || 0, getLocalDateString())}
                       className="w-full min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-300">
                       Enregistrer mon dépôt · {formatMoney(goal.challengePeriodAmountMinor || 0, goal.currency, profile.locale)}
+                    </button>
+                  )}
+                  {!completed && !expired && (
+                    <button onClick={() => onUpdateSavingsGoal(goal.id, { status: paused ? 'active' : 'paused' })}
+                      className="w-full min-h-[40px] rounded-xl border border-slate-800 text-[11px] text-slate-400 hover:text-slate-200">
+                      {paused ? 'Reprendre le défi' : 'Mettre en pause'}
                     </button>
                   )}
                   {recent.length > 0 && (
