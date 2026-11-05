@@ -163,25 +163,58 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
   if (!raw) return true;
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return false; }
+  const localStamp = payload?.updatedAt || new Date(0).toISOString();
+
   if (table === 'zakat_settings') {
+    const local: ZakatState = payload?.state || payload;
+    const base: ZakatState = payload?.baseState || EMPTY_ZAKAT_STATE;
+    const { data: row, error: readError } = await supabase.from(table).select('*').eq('user_id', userId).maybeSingle();
+    if (readError) return false;
+    const remote: ZakatState = row ? {
+      nisabThresholdMinor: Number(row.nisab_threshold_minor),
+      goldPricePerGramMinor: Number(row.gold_price_per_gram_minor),
+      customCashMinor: Number(row.custom_cash_minor),
+      customSavingsMinor: Number(row.custom_savings_minor),
+      customBusinessGoodsMinor: Number(row.custom_business_goods_minor),
+      customLiabilitiesMinor: Number(row.custom_liabilities_minor),
+      isPaid: Boolean(row.is_paid), paidDate: row.paid_date || undefined,
+      paidAmountMinor: row.paid_amount_minor == null ? undefined : Number(row.paid_amount_minor),
+    } : EMPTY_ZAKAT_STATE;
+    const merged = mergeZakatFields(local, remote, base, localStamp, row?.updated_at || '');
     const result = await supabase.from(table).upsert({
-      user_id: userId,
-      nisab_threshold_minor: payload.nisabThresholdMinor,
-      gold_price_per_gram_minor: payload.goldPricePerGramMinor,
-      custom_cash_minor: payload.customCashMinor,
-      custom_savings_minor: payload.customSavingsMinor,
-      custom_business_goods_minor: payload.customBusinessGoodsMinor,
-      custom_liabilities_minor: payload.customLiabilitiesMinor,
-      is_paid: payload.isPaid,
-      paid_date: payload.paidDate || null,
-      paid_amount_minor: payload.paidAmountMinor ?? null,
+      user_id: userId, nisab_threshold_minor: merged.nisabThresholdMinor,
+      gold_price_per_gram_minor: merged.goldPricePerGramMinor, custom_cash_minor: merged.customCashMinor,
+      custom_savings_minor: merged.customSavingsMinor, custom_business_goods_minor: merged.customBusinessGoodsMinor,
+      custom_liabilities_minor: merged.customLiabilitiesMinor, is_paid: merged.isPaid,
+      paid_date: merged.paidDate || null, paid_amount_minor: merged.paidAmountMinor ?? null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
     if (result.error) { console.error('Failed to sync Zakat outbox:', result.error.message); return false; }
+    if (localStorage.getItem(key) === raw) localStorage.setItem(scopedKey(ZAKAT_STORAGE_KEY, userId), JSON.stringify(merged));
   } else {
-    const owned = (payload as FestiveBudget[]).filter((item) => item.userId === userId && isUuid(item.id));
-    if (owned.length) {
-      const result = await supabase.from(table).upsert(owned.map((item) => ({
+    const local: FestiveBudget[] = Array.isArray(payload) ? payload : payload?.state || [];
+    const base: FestiveBudget[] = payload?.baseState || [];
+    const { data: rows, error: readError } = await supabase.from(table).select('*').eq('user_id', userId);
+    if (readError) return false;
+    const remote: FestiveBudget[] = (rows || []).map((row) => ({
+      id: row.id, userId: row.user_id, festivalType: row.festival_type, year: row.year,
+      targetBudgetMinor: Number(row.target_budget_minor), actualSpentMinor: Number(row.actual_spent_minor),
+      currency: row.currency, notes: row.notes || undefined, isCompleted: Boolean(row.is_completed),
+      syncUpdatedAt: row.updated_at || row.created_at,
+    }));
+    const deletedIds = [
+      ...(payload?.deletedIds || []),
+      ...base.filter((item) => !local.some((next) => next.id === item.id)).map((item) => item.id),
+    ];
+    const merged = mergeFestiveRows(local, remote, base, [...new Set(deletedIds)], localStamp)
+      .filter((item) => item.userId === userId && isUuid(item.id));
+    const removed = [...new Set(deletedIds)].filter(isUuid);
+    if (removed.length) {
+      const deleted = await supabase.from(table).delete().in('id', removed).eq('user_id', userId);
+      if (deleted.error) return false;
+    }
+    if (merged.length) {
+      const result = await supabase.from(table).upsert(merged.map((item) => ({
         id: item.id, user_id: userId, festival_type: item.festivalType, year: item.year,
         target_budget_minor: item.targetBudgetMinor, actual_spent_minor: item.actualSpentMinor,
         currency: item.currency, notes: item.notes || null, is_completed: item.isCompleted,
@@ -189,6 +222,7 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
       })), { onConflict: 'id' });
       if (result.error) { console.error('Failed to sync festive outbox:', result.error.message); return false; }
     }
+    if (localStorage.getItem(key) === raw) localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(merged));
   }
   if (localStorage.getItem(key) === raw) localStorage.removeItem(key);
   return true;
