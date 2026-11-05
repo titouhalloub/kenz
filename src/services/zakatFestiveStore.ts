@@ -159,11 +159,12 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
   if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(userId) || typeof localStorage === 'undefined') return false;
-  const raw = localStorage.getItem(key);
+  const legacyKey = table === 'zakat_settings' ? `kenz_zakat_outbox_v1_${userId}` : `kenz_festive_outbox_v1_${userId}`;
+  const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey);
   if (!raw) return true;
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return false; }
-  const localStamp = payload?.updatedAt || new Date(0).toISOString();
+  const localStamp = payload?.updatedAt || new Date().toISOString();
 
   if (table === 'zakat_settings') {
     const local: ZakatState = payload?.state || payload;
