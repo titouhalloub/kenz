@@ -378,10 +378,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
           error: 'Clé API Google Gemini manquante.',
         });
       }
-      return res.status(200).json({
+      return await sendMeteredAIResponse(req, res, {
         success: true,
         source: 'deterministic_fallback',
         text: generateFallbackAdvice(purpose, financialContext),
+        tokensInput: 0,
+        tokensOutput: 0,
       });
     }
 
