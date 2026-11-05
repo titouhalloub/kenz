@@ -1,4 +1,5 @@
 export type KenzLocale = 'ar' | 'fr' | 'en';
+
 const messages: Record<KenzLocale, Record<string, string>> = {
   fr: {},
   en: {
@@ -28,5 +29,140 @@ const messages: Record<KenzLocale, Record<string, string>> = {
     accountType: 'نوع الحساب', initialBalance: 'الرصيد الافتتاحي',
   },
 };
+
+// Transitional UI catalogue: translates legacy screen copy consistently until each
+// feature's domain wording is migrated to keyed messages. User-entered data is never translated.
+const uiCopy: Record<string, { ar: string; en: string }> = {
+  'Nouvelle opération': { ar: 'عملية جديدة', en: 'New transaction' },
+  'Dépense': { ar: 'مصروف', en: 'Expense' }, 'Revenu': { ar: 'دخل', en: 'Income' },
+  'Virement': { ar: 'تحويل', en: 'Transfer' }, 'Annuler': { ar: 'إلغاء', en: 'Cancel' },
+  'Enregistrer': { ar: 'حفظ', en: 'Save' }, 'Ajouter': { ar: 'إضافة', en: 'Add' },
+  'Supprimer': { ar: 'حذف', en: 'Delete' }, 'Fermer': { ar: 'إغلاق', en: 'Close' },
+  'Rechercher': { ar: 'بحث', en: 'Search' }, 'Rechercher...': { ar: 'بحث...', en: 'Search...' },
+  'Montant': { ar: 'المبلغ', en: 'Amount' }, 'Date': { ar: 'التاريخ', en: 'Date' },
+  'Description': { ar: 'الوصف', en: 'Description' }, 'Catégorie': { ar: 'الفئة', en: 'Category' },
+  'Compte': { ar: 'الحساب', en: 'Account' }, 'Comptes': { ar: 'الحسابات', en: 'Accounts' },
+  'Solde': { ar: 'الرصيد', en: 'Balance' }, 'Historique': { ar: 'السجل', en: 'History' },
+  'Aucune opération trouvée': { ar: 'لم يتم العثور على عمليات', en: 'No transactions found' },
+  'Modifiez vos filtres ou enregistrez une nouvelle opération pour commencer.': { ar: 'غيّر عوامل التصفية أو أضف عملية جديدة للبدء.', en: 'Adjust your filters or add a transaction to get started.' },
+  'Carnet Kredy & Santé Financière': { ar: 'دفتر كريدي والصحة المالية', en: 'Kredy Ledger & Financial Health' },
+  'Phase 5 · Gestion des ardoises commerçants, créances et diagnostic financier': { ar: 'المرحلة 5 · إدارة ديون المتاجر والمستحقات والتقييم المالي', en: 'Phase 5 · Merchant tabs, receivables and financial health' },
+  'Score de Santé': { ar: 'مؤشر الصحة المالية', en: 'Financial Health Score' },
+  'À rembourser': { ar: 'مبالغ مستحقة عليك', en: 'To repay' },
+  'On me doit (Créances)': { ar: 'مبالغ مستحقة لي', en: 'Owed to me' },
+  'À recouvrer': { ar: 'مبالغ للتحصيل', en: 'To collect' },
+  'Régulariser une ardoise': { ar: 'تسوية دين', en: 'Settle a tab' },
+  'Encaisser un remboursement': { ar: 'تحصيل دفعة', en: 'Collect a payment' },
+  'Solde restant dû :': { ar: 'الرصيد المتبقي:', en: 'Remaining balance:' },
+  'Montant total initial :': { ar: 'المبلغ الأصلي:', en: 'Original amount:' },
+  'Montant du versement (DZD) *': { ar: 'مبلغ الدفعة (دج) *', en: 'Payment amount (DZD) *' },
+  'Solde total': { ar: 'الرصيد الإجمالي', en: 'Total balance' },
+  'Annuaire de proximité': { ar: 'دليل الخدمات القريبة', en: 'Local services directory' },
+  'Documents vérifiés': { ar: 'وثائق تم التحقق منها', en: 'Verified documents' },
+  'Emplacement confirmé': { ar: 'موقع مؤكد', en: 'Location confirmed' },
+  'Non vérifié': { ar: 'غير موثق', en: 'Unverified' },
+  'Professionnels locaux vérifiés par pièces justificatives à Alger et environs.': { ar: 'مهنيون محليون تم التحقق منهم بالوثائق في الجزائر وضواحيها.', en: 'Local professionals verified through supporting documents in Algiers and nearby areas.' },
+  'Vérifiés': { ar: 'موثقون', en: 'Verified' }, 'points repérés': { ar: 'مواقع محددة', en: 'locations found' },
+  'Nouvel établissement': { ar: 'إضافة نشاط جديد', en: 'Add a business' },
+  'Nom de l’établissement / Artisan *': { ar: 'اسم المؤسسة أو الحرفي *', en: 'Business or professional name *' },
+  'Catégorie d’activité': { ar: 'فئة النشاط', en: 'Business category' },
+  'Publication dans l’annuaire local et dépôt de documents de vérification.': { ar: 'النشر في الدليل المحلي وإرفاق وثائق التحقق.', en: 'Publish in the local directory and submit verification documents.' },
+  'Merci. Votre signalement a été transmis à l’équipe de modération.': { ar: 'شكرًا، تم إرسال البلاغ إلى فريق المراجعة.', en: 'Thank you. Your report has been sent to the moderation team.' },
+  'Commerce concerné :': { ar: 'النشاط المعني:', en: 'Reported business:' },
+  'Détails': { ar: 'التفاصيل', en: 'Details' },
+  'Précisez ce qui doit être corrigé...': { ar: 'يرجى توضيح المعلومات المطلوب تصحيحها...', en: 'Explain what needs to be corrected...' },
+  'Numéro ou horaires inexacts': { ar: 'رقم الهاتف أو أوقات العمل غير صحيحة', en: 'Incorrect phone number or opening hours' },
+  'Établissement définitivement fermé': { ar: 'النشاط مغلق نهائيًا', en: 'Business permanently closed' },
+  'Activité suspecte ou non conforme': { ar: 'نشاط مشبوه أو غير مطابق', en: 'Suspicious or non-compliant activity' },
+  'Veuillez saisir un montant valide supérieur à 0.': { ar: 'يرجى إدخال مبلغ صحيح أكبر من صفر.', en: 'Enter a valid amount greater than 0.' },
+  'Veuillez sélectionner un compte.': { ar: 'يرجى اختيار حساب.', en: 'Please select an account.' },
+  'Veuillez sélectionner le compte de destination.': { ar: 'يرجى اختيار حساب الوجهة.', en: 'Please select a destination account.' },
+  'Le compte de destination doit être différent du compte source.': { ar: 'يجب أن يختلف حساب الوجهة عن حساب المصدر.', en: 'The destination account must differ from the source account.' },
+  'Veuillez saisir un montant supérieur à 0.': { ar: 'يرجى إدخال مبلغ أكبر من صفر.', en: 'Enter an amount greater than 0.' },
+  'Erreur lors de la mise à jour du profil.': { ar: 'حدث خطأ أثناء تحديث الملف الشخصي.', en: 'Error updating profile.' },
+  'Modifications enregistrées avec succès !': { ar: 'تم حفظ التغييرات بنجاح!', en: 'Changes saved successfully!' },
+  'Membre depuis': { ar: 'عضو منذ', en: 'Member since' },
+  'Région EU / International': { ar: 'منطقة أوروبا / دولي', en: 'EU / International region' },
+  'Mode hors-ligne · Données locales sécurisées': { ar: 'وضع عدم الاتصال · البيانات المحلية محمية', en: 'Offline mode · Secure local data' },
+  'Dans Safari, appuyez sur l’icône de Partage en bas d’écran.': { ar: 'في Safari، اضغط على أيقونة المشاركة أسفل الشاشة.', en: 'In Safari, tap the Share icon at the bottom of the screen.' },
+  'Sur l’écran d’accueil': { ar: 'إلى الشاشة الرئيسية', en: 'Add to Home Screen' },
+  'Ajouter': { ar: 'إضافة', en: 'Add' },
+  'Conseil de gestion de trésorerie': { ar: 'نصيحة لإدارة السيولة', en: 'Cash flow management tip' },
+  'Enregistrer dépense': { ar: 'تسجيل مصروف', en: 'Record expense' },
+  'Aucun résultat': { ar: 'لا توجد نتائج', en: 'No results' },
+  'Aucun compte disponible': { ar: 'لا توجد حسابات متاحة', en: 'No accounts available' },
+  'Créer un compte': { ar: 'إنشاء حساب', en: 'Create an account' },
+  'Nom du compte': { ar: 'اسم الحساب', en: 'Account name' },
+  'Type de compte': { ar: 'نوع الحساب', en: 'Account type' },
+  'Solde initial': { ar: 'الرصيد الافتتاحي', en: 'Opening balance' },
+  'Paramètres': { ar: 'الإعدادات', en: 'Settings' },
+  'Profil': { ar: 'الملف الشخصي', en: 'Profile' },
+  'Déconnexion': { ar: 'تسجيل الخروج', en: 'Log out' },
+  'Se connecter': { ar: 'تسجيل الدخول', en: 'Sign in' },
+  'Créer un compte': { ar: 'إنشاء حساب', en: 'Create account' },
+  'Mot de passe': { ar: 'كلمة المرور', en: 'Password' },
+  'Adresse e-mail': { ar: 'البريد الإلكتروني', en: 'Email address' },
+  'Nouvelle dette': { ar: 'دين جديد', en: 'New debt' },
+  'Ajouter une dette': { ar: 'إضافة دين', en: 'Add debt' },
+  'Aucune dette enregistrée': { ar: 'لا توجد ديون مسجلة', en: 'No debts recorded' },
+  'Calculer la zakat': { ar: 'حساب الزكاة', en: 'Calculate zakat' },
+  'Zakat': { ar: 'الزكاة', en: 'Zakat' },
+  'Ramadan': { ar: 'رمضان', en: 'Ramadan' },
+  'Aïd el-Fitr': { ar: 'عيد الفطر', en: 'Eid al-Fitr' },
+  'Aïd al-Adha': { ar: 'عيد الأضحى', en: 'Eid al-Adha' },
+  'Budget festif': { ar: 'ميزانية المناسبات', en: 'Event budget' },
+  'Budget': { ar: 'الميزانية', en: 'Budget' },
+  'Objectif': { ar: 'الهدف', en: 'Target' },
+  'Dépensé': { ar: 'المصروف', en: 'Spent' },
+  'Reste': { ar: 'المتبقي', en: 'Remaining' },
+  'Ajouter un objectif': { ar: 'إضافة هدف', en: 'Add a goal' },
+  'Mes comptes': { ar: 'حساباتي', en: 'My accounts' },
+  'Données et confidentialité': { ar: 'البيانات والخصوصية', en: 'Data & privacy' },
+  'Exporter les données': { ar: 'تصدير البيانات', en: 'Export data' },
+  'Effacer toutes les données': { ar: 'مسح جميع البيانات', en: 'Erase all data' },
+  'Partager un portefeuille': { ar: 'مشاركة محفظة', en: 'Share a wallet' },
+  'Portefeuilles partagés': { ar: 'المحافظ المشتركة', en: 'Shared wallets' },
+  'Crédits IA insuffisants. Il faut 20 crédits pour analyser un reçu.': { ar: 'رصيد الذكاء الاصطناعي غير كافٍ. يلزم 20 رصيدًا لتحليل الإيصال.', en: 'Not enough AI credits. 20 credits are required to scan a receipt.' },
+  'Analyse du reçu impossible.': { ar: 'تعذر تحليل الإيصال.', en: 'Receipt analysis failed.' },
+  'Erreur inattendue pendant l’analyse.': { ar: 'حدث خطأ غير متوقع أثناء التحليل.', en: 'Unexpected error during analysis.' },
+  'Scanner un reçu': { ar: 'مسح إيصال', en: 'Scan receipt' },
+  'Choisir une image': { ar: 'اختيار صورة', en: 'Choose an image' },
+  'Prendre une photo': { ar: 'التقاط صورة', en: 'Take a photo' },
+  'Analyser le reçu': { ar: 'تحليل الإيصال', en: 'Analyze receipt' },
+  'Résultat de l’analyse': { ar: 'نتيجة التحليل', en: 'Scan result' },
+  'Clé API': { ar: 'مفتاح API', en: 'API key' },
+  'Tester la connexion': { ar: 'اختبار الاتصال', en: 'Test connection' },
+  'Crédits disponibles': { ar: 'الأرصدة المتاحة', en: 'Available credits' },
+  'Mode IA': { ar: 'وضع الذكاء الاصطناعي', en: 'AI mode' },
+  'Veuillez saisir une clé API à tester.': { ar: 'يرجى إدخال مفتاح API لاختباره.', en: 'Enter an API key to test.' },
+  'Plomberie & Dépannage': { ar: 'السباكة والإصلاح', en: 'Plumbing & repairs' },
+  'Alimentation & Épicerie': { ar: 'المواد الغذائية والبقالة', en: 'Food & grocery' },
+  'Santé & Pharmacie': { ar: 'الصحة والصيدلة', en: 'Health & pharmacy' },
+  'Mécanique & Entretien': { ar: 'الميكانيك والصيانة', en: 'Mechanics & maintenance' },
+  'Électricité & Dépannage': { ar: 'الكهرباء والإصلاح', en: 'Electrical & repairs' },
+};
+
 export const kenzText = (locale: string, key: string, fallback?: string) =>
   messages[(locale === 'ar' || locale === 'en' ? locale : 'fr')][key] || fallback || key;
+
+export const translateKenzDOM = (root: ParentNode, locale: string) => {
+  if (locale === 'fr') return;
+  const language = locale === 'ar' ? 'ar' : 'en';
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const parent = node.parentElement;
+    if (!parent || ['SCRIPT','STYLE','TEXTAREA','INPUT','OPTION'].includes(parent.tagName)) continue;
+    const original = node.nodeValue || '';
+    const key = original.trim();
+    const translated = uiCopy[key]?.[language];
+    if (translated) node.nodeValue = original.replace(key, translated);
+  }
+  root.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]').forEach((element) => {
+    for (const attr of ['placeholder','title','aria-label']) {
+      const value = element.getAttribute(attr);
+      const translated = value ? uiCopy[value.trim()]?.[language] : undefined;
+      if (translated) element.setAttribute(attr, translated);
+    }
+  });
+};
