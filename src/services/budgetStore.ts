@@ -220,9 +220,10 @@ export function createEmptyBudgetState(profile: UserProfile): BudgetState {
   };
 }
 
-export async function loadBudgetStateFromSupabase(profile: UserProfile, persistLocal = true): Promise<BudgetState | null> {
+export async function loadBudgetStateFromSupabase(profile: UserProfile, persistLocal = true, ignorePendingOutbox = false): Promise<BudgetState | null> {
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(profile.id)) return null;
+  if (!ignorePendingOutbox && readPendingBudgetOutbox(profile.id)) return loadBudgetState(profile);
 
   const [profileResult, accountsResult, categoriesResult, transactionsResult, budgetsResult, recurringResult, goalsResult] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', profile.id).maybeSingle(),
@@ -454,7 +455,7 @@ async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBud
       console.error('Atomic Kenz financial sync failed:', atomicError.message);
       return false;
     }
-    const latest = await loadBudgetStateFromSupabase(state.profile, false);
+    const latest = await loadBudgetStateFromSupabase(state.profile, false, true);
     if (!latest) return false;
     if (typeof localStorage !== 'undefined' &&
       localStorage.getItem(pendingBudgetKey(userId)) === expectedRaw) {
