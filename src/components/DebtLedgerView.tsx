@@ -33,7 +33,7 @@ import {
   SavingsGoal,
   UserProfile,
 } from '../domain/types';
-import { formatMoney } from '../domain/financialCalculations';
+import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 import {
   calculateDebtSummary,
   calculateFinancialHealthScore,
@@ -153,7 +153,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
 
   const confirmPaymentIssue = async () => {
     if (!paymentIssueTarget || !paymentIssuePayment) return;
-    const refundAmountMinor = Number(refundAmountInput);
+    const refundAmountMinor = parseToMinorUnits(refundAmountInput);
     if (paymentIssueAction === 'refund' && (!Number.isSafeInteger(refundAmountMinor) || refundAmountMinor <= 0 || refundAmountMinor > refundableAmountMinor)) {
       setPaymentIssueError('Saisissez un montant de remboursement valide.');
       return;
@@ -922,8 +922,8 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
 
             {paymentIssueAction === 'refund' ? (
               <div className="space-y-2">
-                <label htmlFor="kredy-refund-amount" className="block text-xs text-slate-300">Montant réellement remboursé</label>
-                <input id="kredy-refund-amount" type="number" min="1" max={refundableAmountMinor} step="1" inputMode="numeric" value={refundAmountInput} onChange={(event) => setRefundAmountInput(event.target.value)} className="w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-sm text-slate-100" placeholder={String(refundableAmountMinor)} />
+                <label htmlFor="kredy-refund-amount" className="block text-xs text-slate-300">Montant réellement remboursé ({paymentIssueDebt?.currency || 'DZD'})</label>
+                <input id="kredy-refund-amount" type="text" inputMode="decimal" value={refundAmountInput} onChange={(event) => setRefundAmountInput(event.target.value)} className="w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-sm text-slate-100" placeholder={(refundableAmountMinor / 100).toFixed(2).replace(/\\.00$/, '')} />
                 <p className="text-[11px] text-slate-400">Reste remboursable : {paymentIssueDebt ? formatMoney(refundableAmountMinor, paymentIssueDebt.currency) : '—'}. Le remboursement augmente à nouveau le solde dû. Vous pouvez enregistrer plusieurs remboursements partiels.</p>
               </div>
             ) : (
