@@ -168,6 +168,9 @@ export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEnt
       appliedAmountMinor: Number(row.applied_amount_minor ?? row.amount_minor),
       unappliedAmountMinor: Number(row.unapplied_amount_minor ?? 0),
       reconciliationStatus: row.reconciliation_status || 'applied',
+      refundedAmountMinor: Number(row.refunded_amount_minor ?? 0),
+      duplicateOfPaymentId: row.duplicate_of_payment_id || undefined,
+      resolutionStatus: row.resolution_status || 'normal',
     };
     const items = paymentsByDebt.get(payment.debtId) || [];
     items.push(payment);
@@ -213,9 +216,12 @@ export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEnt
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) ||
         a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .map((payment) => {
-        const appliedAmountMinor = Math.min(payment.amountMinor, Math.max(0, availableToApply));
+        const effectiveAmountMinor = payment.resolutionStatus === 'duplicate'
+          ? 0
+          : Math.max(0, payment.amountMinor - (payment.refundedAmountMinor || 0));
+        const appliedAmountMinor = Math.min(effectiveAmountMinor, Math.max(0, availableToApply));
         availableToApply -= appliedAmountMinor;
-        const unappliedAmountMinor = payment.amountMinor - appliedAmountMinor;
+        const unappliedAmountMinor = effectiveAmountMinor - appliedAmountMinor;
         return {
           ...payment,
           appliedAmountMinor,
@@ -244,9 +250,12 @@ export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEnt
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) ||
         a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .map((payment) => {
-        const appliedAmountMinor = Math.min(payment.amountMinor, Math.max(0, availableToApply));
+        const effectiveAmountMinor = payment.resolutionStatus === 'duplicate'
+          ? 0
+          : Math.max(0, payment.amountMinor - (payment.refundedAmountMinor || 0));
+        const appliedAmountMinor = Math.min(effectiveAmountMinor, Math.max(0, availableToApply));
         availableToApply -= appliedAmountMinor;
-        const unappliedAmountMinor = payment.amountMinor - appliedAmountMinor;
+        const unappliedAmountMinor = effectiveAmountMinor - appliedAmountMinor;
         return {
           ...payment,
           appliedAmountMinor,
@@ -308,6 +317,9 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
         appliedAmountMinor: Number(row.applied_amount_minor ?? row.amount_minor),
         unappliedAmountMinor: Number(row.unapplied_amount_minor ?? 0),
         reconciliationStatus: row.reconciliation_status || 'applied',
+        refundedAmountMinor: Number(row.refunded_amount_minor ?? 0),
+        duplicateOfPaymentId: row.duplicate_of_payment_id || undefined,
+        resolutionStatus: row.resolution_status || 'normal',
         paymentDate: row.payment_date, sourceAccountId: row.source_account_id || undefined,
         notes: row.notes || undefined, createdAt: row.created_at,
       };
@@ -390,6 +402,9 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
         appliedAmountMinor: Number(row.applied_amount_minor),
         unappliedAmountMinor: Number(row.unapplied_amount_minor),
         reconciliationStatus: row.reconciliation_status,
+        refundedAmountMinor: Number(row.refunded_amount_minor ?? 0),
+        duplicateOfPaymentId: row.duplicate_of_payment_id || undefined,
+        resolutionStatus: row.resolution_status || 'normal',
         paymentDate: row.payment_date, sourceAccountId: row.source_account_id || undefined,
         notes: row.notes || undefined, createdAt: row.created_at,
       };
@@ -563,6 +578,58 @@ export async function resolveUnappliedDebtPayment(
 
   const refreshed = await loadDebtStateFromSupabase(userId);
   if (!refreshed) throw new Error('The payment was reconciled, but the latest balance could not be refreshed');
+  return refreshed;
+}
+
+/**
+ * Record a partial/full refund or confirm a duplicate payment.
+ * The server keeps the original event immutable and recalculates allocations atomically.
+ */
+export async function resolveKredyPaymentIssue(
+  debts: DebtEntry[],
+  debtId: string,
+  paymentId: string,
+  userId: string,
+  action: 'duplicate' | 'refund',
+  refundAmountMinor?: number,
+  duplicateOfPaymentId?: string,
+): Promise<DebtEntry[]> {
+  const debt = debts.find((item) => item.id === debtId);
+  if (!debt || debt.userId !== userId || !isUuid(userId) || !isUuid(debtId) || !isUuid(paymentId)) {
+    throw new Error('Debt or payment not found or access denied');
+  }
+  const payment = debt.payments.find((item) => item.id === paymentId);
+  if (!payment || (payment.resolutionStatus || 'normal') !== 'normal') {
+    throw new Error('Payment not found or already resolved');
+  }
+  if (action === 'refund') {
+    const remainingRefundable = payment.amountMinor - (payment.refundedAmountMinor || 0);
+    if (!Number.isSafeInteger(refundAmountMinor) || !refundAmountMinor || refundAmountMinor <= 0 || refundAmountMinor > remainingRefundable) {
+      throw new Error('Refund amount must be positive and no greater than the unrefunded payment amount');
+    }
+  } else {
+    const original = debt.payments.find((item) => item.id === duplicateOfPaymentId);
+    if (!duplicateOfPaymentId || duplicateOfPaymentId === paymentId || !isUuid(duplicateOfPaymentId) ||
+      !original || (original.resolutionStatus || 'normal') === 'duplicate') {
+      throw new Error('Select a valid original payment from this debt');
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error('A secure connection is required to resolve this payment');
+  await flushPendingDebtSync(userId);
+  if (readDebtOutbox(userId)) throw new Error('Kredy sync is still pending. Reconnect and try again.');
+
+  const { error } = await supabase.rpc('resolve_kredy_payment_issue', {
+    p_payment_id: paymentId,
+    p_action: action,
+    p_refund_amount_minor: action === 'refund' ? refundAmountMinor : null,
+    p_duplicate_of_payment_id: action === 'duplicate' ? duplicateOfPaymentId : null,
+  });
+  if (error) throw new Error(error.message);
+
+  const refreshed = await loadDebtStateFromSupabase(userId);
+  if (!refreshed) throw new Error('The payment was updated, but the latest balance could not be refreshed');
   return refreshed;
 }
 
