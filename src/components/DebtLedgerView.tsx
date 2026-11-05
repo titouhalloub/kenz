@@ -581,7 +581,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                               )}
                               {(pmt.refundedAmountMinor || 0) > 0 && (
                                 <p className="text-[11px] font-semibold text-sky-300">
-                                  Remboursé : {formatMoney(pmt.refundedAmountMinor || 0, debt.currency)}
+                                  {pmt.resolutionStatus === 'refunded' ? 'Remboursé' : 'Remboursé partiellement'} : {formatMoney(pmt.refundedAmountMinor || 0, debt.currency)}
                                 </p>
                               )}
                               {pmt.notes && <p className="text-[11px] text-slate-300">{pmt.notes}</p>}
