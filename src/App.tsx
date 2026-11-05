@@ -38,9 +38,10 @@ import {
   resolveReport,
   DirectoryState,
 } from './services/directoryStore';
-import { loadAICreditWallet } from './services/aiCreditStore';
+import { loadAICreditWallet, loadAICreditStateFromSupabase } from './services/aiCreditStore';
 import {
   loadDebtState,
+  loadDebtStateFromSupabase,
   addDebtEntry,
   recordDebtPayment,
   deleteDebtEntry,
@@ -118,8 +119,15 @@ export default function App() {
         paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
         planningPeriodDays: budgetState.profile.planningPeriodDays,
       };
-      const cloudState = await loadBudgetStateFromSupabase(financialProfile);
-      if (active && cloudState) setBudgetState(cloudState);
+      const [cloudState, cloudDebts, cloudCredits] = await Promise.all([
+        loadBudgetStateFromSupabase(financialProfile),
+        loadDebtStateFromSupabase(authUser.id),
+        loadAICreditStateFromSupabase(authUser.id),
+      ]);
+      if (!active) return;
+      if (cloudState) setBudgetState(cloudState);
+      if (cloudDebts) setDebts(cloudDebts);
+      if (cloudCredits) setAiWallet(cloudCredits.wallet);
     }).catch((error) => console.error('Unable to restore Kenz cloud session:', error));
 
     return () => { active = false; };
@@ -599,8 +607,14 @@ export default function App() {
               paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
               planningPeriodDays: budgetState.profile.planningPeriodDays,
             };
-            void loadBudgetStateFromSupabase(financialProfile).then((cloudState) => {
+            void Promise.all([
+              loadBudgetStateFromSupabase(financialProfile),
+              loadDebtStateFromSupabase(u.id),
+              loadAICreditStateFromSupabase(u.id),
+            ]).then(([cloudState, cloudDebts, cloudCredits]) => {
               if (cloudState) setBudgetState(cloudState);
+              if (cloudDebts) setDebts(cloudDebts);
+              if (cloudCredits) setAiWallet(cloudCredits.wallet);
             });
           }
         }}
