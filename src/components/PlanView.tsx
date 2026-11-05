@@ -107,10 +107,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const [editBudgetAmount, setEditBudgetAmount] = useState('');
 
   useEffect(() => {
-    if (!recAccountId && accounts.some((account) => !account.isArchived)) {
-      setRecAccountId(accounts.find((account) => !account.isArchived)!.id);
+    if (!accounts.some((account) => account.id === recAccountId && !account.isArchived && account.currency === profile.preferredCurrency)) {
+      setRecAccountId(accounts.find((account) => !account.isArchived && account.currency === profile.preferredCurrency)?.id || '');
     }
-  }, [accounts, recAccountId]);
+  }, [accounts, recAccountId, profile.preferredCurrency]);
 
   const today = new Date();
   const activeBills = recurringItems.filter((item) => item.isActive);
@@ -464,7 +464,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                   <select value={recAccountId} onChange={(e) => setRecAccountId(e.target.value)}
                     className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100">
                     <option value="">Choisir un compte</option>
-                    {accounts.filter((account) => !account.isArchived).map((account) => (
+                    {accounts.filter((account) => !account.isArchived && account.currency === profile.preferredCurrency).map((account) => (
                       <option key={account.id} value={account.id}>{account.name}</option>
                     ))}
                   </select>
@@ -548,7 +548,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
             {recurringItems.map((item) => {
               const dueDays = daysUntilBill(item.nextDueDate);
               const dueNow = dueDays <= 0;
-              const account = accounts.find((row) => row.id === item.accountId && !row.isArchived);
+              const account = accounts.find((row) => row.id === item.accountId && !row.isArchived && row.currency === item.currency);
               return (
                 <div key={item.id} className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
