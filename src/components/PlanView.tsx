@@ -7,6 +7,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Trash2,
+  Trophy,
+  Flame,
+  CalendarClock,
 } from 'lucide-react';
 import {
   MonthlyBudget,
@@ -15,6 +18,8 @@ import {
   Category,
   Transaction,
   UserProfile,
+  SavingsChallengeContribution,
+  SavingsChallengeFrequency,
 } from '../domain/types';
 import {
   formatMoney,
@@ -34,6 +39,8 @@ interface PlanViewProps {
   onDeleteRecurring: (id: string) => void;
   onAddSavingsGoal: (data: Omit<SavingsGoal, 'id'>) => void;
   onUpdateSavingsGoal: (goalId: string, updates: Partial<SavingsGoal>) => void;
+  challengeContributions: SavingsChallengeContribution[];
+  onAddChallengeContribution: (goalId: string, amountMinor: number, date: string) => void;
 }
 
 export const PlanView: React.FC<PlanViewProps> = ({
@@ -48,8 +55,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onDeleteRecurring,
   onAddSavingsGoal,
   onUpdateSavingsGoal,
+  challengeContributions,
+  onAddChallengeContribution,
 }) => {
-  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals'>('budgets');
+  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges'>('budgets');
 
   // New recurring state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
@@ -64,6 +73,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const [goalName, setGoalName] = useState('');
   const [goalTargetStr, setGoalTargetStr] = useState('');
   const [goalMonthlyStr, setGoalMonthlyStr] = useState('');
+  const [showAddChallenge, setShowAddChallenge] = useState(false);
+  const [challengeName, setChallengeName] = useState('');
+  const [challengeTargetStr, setChallengeTargetStr] = useState('');
+  const [challengePeriodStr, setChallengePeriodStr] = useState('');
+  const [challengeFrequency, setChallengeFrequency] = useState<SavingsChallengeFrequency>('weekly');
+  const [challengeEndDate, setChallengeEndDate] = useState('');
 
   // Editing budget inline state
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
@@ -98,6 +113,34 @@ export const PlanView: React.FC<PlanViewProps> = ({
     setRecAmountStr('');
     setRecDueDate('');
     setShowAddRecurring(false);
+  };
+
+  const handleCreateChallenge = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetMinor = parseToMinorUnits(challengeTargetStr);
+    const periodMinor = parseToMinorUnits(challengePeriodStr);
+    const startDate = new Date().toLocaleDateString('en-CA');
+    if (!challengeName.trim() || targetMinor <= 0 || periodMinor <= 0 || !challengeEndDate || challengeEndDate <= startDate) return;
+    onAddSavingsGoal({
+      userId: profile.id,
+      name: challengeName.trim(),
+      targetAmountMinor: targetMinor,
+      currentAmountMinor: 0,
+      currency: profile.preferredCurrency,
+      plannedMonthlyContributionMinor: challengeFrequency === 'monthly' ? periodMinor : 0,
+      status: 'active',
+      challengeFrequency,
+      challengePeriodAmountMinor: periodMinor,
+      challengeStartDate: startDate,
+      challengeEndDate,
+      challengeStartingAmountMinor: 0,
+    });
+    setChallengeName('');
+    setChallengeTargetStr('');
+    setChallengePeriodStr('');
+    setChallengeEndDate('');
+    setChallengeFrequency('weekly');
+    setShowAddChallenge(false);
   };
 
   const handleCreateGoal = (e: React.FormEvent) => {
@@ -163,6 +206,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
           }`}
         >
           Objectifs d'épargne
+        </button>
+        <button
+          onClick={() => setActiveTab('challenges')}
+          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
+            activeTab === 'challenges' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Défis d'épargne
         </button>
       </div>
 
@@ -557,6 +608,138 @@ export const PlanView: React.FC<PlanViewProps> = ({
           </div>
         </div>
       )}
+      {activeTab === 'challenges' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-300">Mes défis ({savingsGoals.filter((goal) => goal.challengeFrequency).length})</h2>
+              <p className="text-[11px] text-slate-500 mt-1">Un objectif, un rythme et des dépôts suivis dans le temps.</p>
+            </div>
+            <button
+              onClick={() => setShowAddChallenge(!showAddChallenge)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white min-h-[44px]"
+            >
+              <PlusCircle className="w-3.5 h-3.5" /> Nouveau défi
+            </button>
+          </div>
+
+          {showAddChallenge && (
+            <form onSubmit={handleCreateChallenge} className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3">
+              <h3 className="text-xs font-semibold text-slate-100">Créer un défi d'épargne</h3>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Nom du défi</label>
+                <input value={challengeName} onChange={(e) => setChallengeName(e.target.value)} required maxLength={70}
+                  placeholder="Ex. Économiser pour un projet" className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Objectif total ({profile.preferredCurrency})</label>
+                  <input value={challengeTargetStr} onChange={(e) => setChallengeTargetStr(e.target.value)} required inputMode="decimal" placeholder="Ex. 30000"
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono-numbers text-slate-100" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Dépôt par période</label>
+                  <input value={challengePeriodStr} onChange={(e) => setChallengePeriodStr(e.target.value)} required inputMode="decimal" placeholder="Ex. 2000"
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono-numbers text-slate-100" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Fréquence</label>
+                  <select value={challengeFrequency} onChange={(e) => setChallengeFrequency(e.target.value as SavingsChallengeFrequency)}
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100">
+                    <option value="daily">Quotidien</option>
+                    <option value="weekly">Hebdomadaire</option>
+                    <option value="monthly">Mensuel</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Date de fin</label>
+                  <input type="date" value={challengeEndDate} min={new Date().toLocaleDateString('en-CA')} onChange={(e) => setChallengeEndDate(e.target.value)} required
+                    className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100" />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">Le défi reste modifiable et peut être mis en pause depuis la gestion des objectifs.</p>
+              <div className="flex gap-2">
+                <button type="submit" className="flex-1 h-11 rounded-xl bg-emerald-600 text-white text-xs font-semibold">Créer le défi</button>
+                <button type="button" onClick={() => setShowAddChallenge(false)} className="px-4 h-11 rounded-xl border border-slate-800 text-slate-400 text-xs">Annuler</button>
+              </div>
+            </form>
+          )}
+
+          <div className="space-y-3">
+            {savingsGoals.filter((goal) => goal.challengeFrequency).map((goal) => {
+              const rows = challengeContributions.filter((row) => row.savingsGoalId === goal.id);
+              const pendingMinor = rows.filter((row) => row.syncStatus === 'pending').reduce((sum, row) => sum + row.amountMinor, 0);
+              const startingMinor = goal.challengeStartingAmountMinor ?? 0;
+              const savedMinor = Math.max(0, goal.currentAmountMinor - startingMinor) + pendingMinor;
+              const progress = goal.targetAmountMinor > 0 ? Math.min(100, Math.round(savedMinor / goal.targetAmountMinor * 100)) : 0;
+              const frequencyLabel = goal.challengeFrequency === 'daily' ? 'Quotidien' : goal.challengeFrequency === 'weekly' ? 'Hebdomadaire' : 'Mensuel';
+              const periodLabel = goal.challengeFrequency === 'daily' ? 'jour' : goal.challengeFrequency === 'weekly' ? 'semaine' : 'mois';
+              const dates = [...new Set(rows.map((row) => row.contributionDate))].sort();
+              const currentStreak = (() => {
+                const ordinal = (date: string) => {
+                  const d = new Date(date + 'T12:00:00');
+                  if (goal.challengeFrequency === 'monthly') return d.getFullYear() * 12 + d.getMonth();
+                  const days = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+                  return goal.challengeFrequency === 'weekly' ? Math.floor((days + 3) / 7) : days;
+                };
+                const periods = new Set(dates.map(ordinal));
+                let cursor = ordinal(new Date().toLocaleDateString('en-CA'));
+                if (!periods.has(cursor)) cursor -= 1;
+                let streak = 0;
+                while (periods.has(cursor - streak)) streak += 1;
+                return streak;
+              })();
+              const recent = rows.slice(0, 3);
+              const completed = goal.status === 'achieved' || progress >= 100;
+              return (
+                <div key={goal.id} className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="text-sm font-semibold text-slate-100 truncate">{goal.name}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1">{frequencyLabel} · {formatMoney(goal.challengePeriodAmountMinor || 0, goal.currency, profile.locale)} / {periodLabel}</div>
+                    </div>
+                    <span className={`text-xs font-bold ${completed ? 'text-emerald-400' : 'text-blue-300'}`}>{completed ? 'Terminé' : `${progress}%`}</span>
+                  </div>
+                  <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-400 font-mono-numbers">
+                    <span>{formatMoney(savedMinor, goal.currency, profile.locale)} économisés</span>
+                    <span>{formatMoney(goal.targetAmountMinor, goal.currency, profile.locale)} cible</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                    <span className="inline-flex items-center gap-1"><Flame className="w-3.5 h-3.5 text-orange-400" /> Série actuelle : {currentStreak} période(s)</span>
+                    <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Jusqu'au {goal.challengeEndDate}</span>
+                  </div>
+                  {!completed && goal.status === 'active' && (
+                    <button onClick={() => onAddChallengeContribution(goal.id, goal.challengePeriodAmountMinor || 0, new Date().toLocaleDateString('en-CA'))}
+                      className="w-full min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-300">
+                      Enregistrer mon dépôt · {formatMoney(goal.challengePeriodAmountMinor || 0, goal.currency, profile.locale)}
+                    </button>
+                  )}
+                  {recent.length > 0 && (
+                    <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500">Derniers dépôts</p>
+                      {recent.map((row) => <div key={row.id} className="flex justify-between text-[11px] text-slate-400"><span>{row.contributionDate}</span><span>{formatMoney(row.amountMinor, goal.currency, profile.locale)}{row.syncStatus === 'pending' ? ' · En attente de synchronisation' : ''}</span></div>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {savingsGoals.every((goal) => !goal.challengeFrequency) && !showAddChallenge && (
+              <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-center text-xs text-slate-500">
+                Aucun défi pour le moment. Crée ton premier défi et suis tes dépôts période après période.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
