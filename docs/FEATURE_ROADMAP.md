@@ -26,7 +26,7 @@ This roadmap tracks the eight approved product enhancements. Implement in small,
 
 ## Phase 2 — Convenience and access
 
-4. **Offline Mode and Sync** — durable per-user budget snapshot outbox is implemented. Kredy now has a durable outbox, cloud deletion tombstones, payment-ID deduplication, last-write-wins debt metadata, and Supabase Realtime refreshes; migration 016 is committed but still pending application to the live Supabase project. Remaining work: budget delete tombstones/conflict handling, durable Zakat/festive queues, retry/backoff and visible sync status, plus user-facing reconciliation for simultaneous offline payments that exceed the original debt total.
+4. **Offline Mode and Sync** — durable per-user budget snapshot outbox is implemented. Kredy now has a durable outbox, cloud deletion tombstones, payment-ID deduplication, row-locked chronological payment allocation, unapplied-payment reconciliation warnings, last-write-wins debt metadata, and Supabase Realtime refreshes. Migrations 016–018 are applied to the connected Supabase project. Remaining work: budget delete tombstones/conflict handling, durable Zakat/festive queues, retry/backoff and visible sync status, plus a guided workflow for users to resolve unapplied payment amounts.
 5. **Receipt Scanner** — deferred; any future receipt image handling must be explicit opt-in, preview-only before user confirmation, and have strict retention/deletion controls. This is separate from merchant identity verification.
 6. **Arabic/French Experience** — complete translations, RTL layout, locale-aware dates/numbers, and Algerian DZD formatting.
 
