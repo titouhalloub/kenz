@@ -384,11 +384,14 @@ export function mergeBudgetSnapshots(
   };
 }
 
-async function syncBudgetStateToSupabase(state: BudgetState, deleted = emptyDeletedIds()): Promise<boolean> {
+async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBudgetOutbox['deleted'], baseState: BudgetState, localStamp: string, expectedRaw: string): Promise<boolean> {
   cloudSyncQueue = cloudSyncQueue.then(async () => {
     const supabase = getSupabaseClient();
     const userId = state.profile.id;
     if (!supabase || !isUuid(userId)) return false;
+    const remoteState = await loadBudgetStateFromSupabase(state.profile, false);
+    if (!remoteState) return false;
+    state = mergeBudgetSnapshots(state, remoteState, baseState, deleted, localStamp);
 
     // Apply owner-scoped deletes before upserts; child rows are removed before parents.
     const deleteSteps: Array<[BudgetCollection, string]> = [
@@ -455,16 +458,11 @@ async function syncBudgetStateToSupabase(state: BudgetState, deleted = emptyDele
       if (result.error) { console.error('Kenz transaction sync failed:', result.error.message); return false; }
     }
 
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(budgetStorageKey(state.profile.id));
-        if (raw) {
-          const current = JSON.parse(raw) as BudgetState;
-          current.transactions = current.transactions.map((tx) => ({ ...tx, syncStatus: 'synced' }));
-          current.lastSyncedAt = new Date().toISOString();
-          localStorage.setItem(budgetStorageKey(state.profile.id), JSON.stringify(current));
-        }
-      } catch { /* local cache remains usable if sync metadata cannot be updated */ }
+    if (typeof localStorage !== 'undefined' &&
+      localStorage.getItem(pendingBudgetKey(userId)) === expectedRaw) {
+      state.transactions = state.transactions.map((tx) => ({ ...tx, syncStatus: 'synced' }));
+      state.lastSyncedAt = new Date().toISOString();
+      saveBudgetStateLocally(state);
     }
     return true;
   }).catch((error) => {
