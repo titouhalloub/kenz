@@ -48,6 +48,7 @@ import {
   flushPendingDebtSync,
   addDebtEntry,
   recordDebtPayment,
+  resolveUnappliedDebtPayment,
   deleteDebtEntry,
 } from './services/debtStore';
 import {
@@ -298,6 +299,16 @@ export default function App() {
     }
   };
 
+  const handleReconcileUnappliedPayment = async (params: { debtId: string; paymentId: string }) => {
+    const latestDebts = await resolveUnappliedDebtPayment(
+      debts,
+      params.debtId,
+      params.paymentId,
+      currentUser.id
+    );
+    setDebts(latestDebts);
+  };
+
   const handleDeleteDebt = (id: string) => {
     setDebts((prev) => deleteDebtEntry(prev, id));
   };
@@ -510,6 +521,7 @@ export default function App() {
             onAddDebt={handleAddDebt}
             onSettleDebt={handleSettleDebt}
             onDeleteDebt={handleDeleteDebt}
+            onReconcilePayment={handleReconcileUnappliedPayment}
             onOpenAIModal={() => setIsAIModalOpen(true)}
           />
         )}
