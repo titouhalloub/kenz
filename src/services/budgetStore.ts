@@ -327,7 +327,7 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
         id: r.id, user_id: userId, name: r.name, type: r.type, currency: r.currency,
         initial_balance_minor: r.initialBalanceMinor, is_archived: r.isArchived,
       })), { onConflict: 'id' });
-      if (result.error) { console.error('Kenz account sync failed:', result.error.message); return; }
+      if (result.error) { console.error('Kenz account sync failed:', result.error.message); return false; }
     }
     if (state.recurringItems.length) {
       const result = await supabase.from('recurring_items').upsert(state.recurringItems.map((r) => ({
@@ -335,14 +335,14 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
         currency: r.currency, frequency: r.frequency, category_id: r.categoryId || null,
         next_due_date: r.nextDueDate, is_active: r.isActive,
       })), { onConflict: 'id' });
-      if (result.error) { console.error('Kenz recurring sync failed:', result.error.message); return; }
+      if (result.error) { console.error('Kenz recurring sync failed:', result.error.message); return false; }
     }
     if (state.budgets.length) {
       const result = await supabase.from('budgets').upsert(state.budgets.map((r) => ({
         id: r.id, user_id: userId, category_id: r.categoryId, month_year: r.monthYear,
         budget_minor: r.budgetMinor, currency: r.currency,
       })), { onConflict: 'id' });
-      if (result.error) { console.error('Kenz budget sync failed:', result.error.message); return; }
+      if (result.error) { console.error('Kenz budget sync failed:', result.error.message); return false; }
     }
     if (state.savingsGoals.length) {
       const result = await supabase.from('savings_goals').upsert(state.savingsGoals.map((r) => ({
@@ -350,7 +350,7 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
         current_amount_minor: r.currentAmountMinor, currency: r.currency, target_date: r.targetDate || null,
         planned_monthly_contribution_minor: r.plannedMonthlyContributionMinor, status: r.status,
       })), { onConflict: 'id' });
-      if (result.error) { console.error('Kenz savings sync failed:', result.error.message); return; }
+      if (result.error) { console.error('Kenz savings sync failed:', result.error.message); return false; }
     }
     if (state.transactions.length) {
       const result = await supabase.from('transactions').upsert(state.transactions.map((r) => ({
@@ -359,7 +359,7 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
         linked_transfer_id: r.linkedTransferId || null, recurring_item_id: r.recurringItemId || null,
         transaction_date: r.transactionDate, description: r.description || null, idempotency_key: r.idempotencyKey || null,
       })), { onConflict: 'id' });
-      if (result.error) { console.error('Kenz transaction sync failed:', result.error.message); return; }
+      if (result.error) { console.error('Kenz transaction sync failed:', result.error.message); return false; }
     }
 
     if (typeof localStorage !== 'undefined') {
