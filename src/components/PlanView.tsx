@@ -28,7 +28,7 @@ import {
   Account,
   CommitmentFrequency,
 } from '../domain/types';
-import { getBillReminderPermission, requestBillReminderPermission, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
+import { getBillReminderPermission, requestBillReminderPermission, dispatchBillReminders, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 import {
   formatMoney,
   calculateCategoryBudgets,
