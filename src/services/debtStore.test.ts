@@ -110,8 +110,10 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
   it('computes deterministic Financial Health Score', () => {
     const mockSafeToSpend: SafeToSpendBreakdown = {
       availableBalanceMinor: 9000000, // 90,000 DA
+      expectedIncomeMinor: 0,
       unpaidReservedCommitmentsMinor: 2000000,
       plannedSavingsMinor: 1000000,
+      otherReservedMinor: 0,
       safeToSpendMinor: 6000000, // 60,000 DA safe
       daysUntilPayday: 15,
       dailyGuidelineMinor: 400000,
