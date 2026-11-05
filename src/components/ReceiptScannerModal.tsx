@@ -124,7 +124,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
       const result = payload.receipt as ReceiptScanResult;
       setScan(result);
       setAmount(String(result.amount ?? ''));
-      setDate(/^\\d{4}-\\d{2}-\\d{2}$/.test(result.date) ? result.date : today());
+      setDate(/^\d{4}-\d{2}-\d{2}$/.test(result.date) ? result.date : today());
       setMerchant(result.merchant || '');
       setDescription(result.description || result.merchant || 'Achat');
       setCurrency(result.currency || profile.preferredCurrency);
