@@ -63,6 +63,7 @@ export async function loginUser(email: string, password: string):Promise<{ succe
           id: data.user.id,
           email: data.user.email || email,
           fullName: data.user.user_metadata?.full_name || email.split('@')[0],
+          country: data.user.user_metadata?.country || 'Algérie (DZ)',
           wilaya: data.user.user_metadata?.wilaya || '16 - Alger',
           membershipTier: data.user.user_metadata?.tier || 'Citoyen Free',
           createdAt: data.user.created_at,
