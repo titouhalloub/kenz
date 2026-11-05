@@ -274,6 +274,9 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
     for (const row of paymentRows) {
       const payment: DebtPayment = {
         id: row.id, debtId: row.debt_id, amountMinor: Number(row.amount_minor),
+        appliedAmountMinor: Number(row.applied_amount_minor ?? row.amount_minor),
+        unappliedAmountMinor: Number(row.unapplied_amount_minor ?? 0),
+        reconciliationStatus: row.reconciliation_status || 'applied',
         paymentDate: row.payment_date, sourceAccountId: row.source_account_id || undefined,
         notes: row.notes || undefined, createdAt: row.created_at,
       };
