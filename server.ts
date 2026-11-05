@@ -510,7 +510,7 @@ app.post('/api/ai/receipt-scan', rateLimitAi, requireAuthenticatedUser, async (r
       merchant: typeof parsed.merchant === 'string' ? parsed.merchant.slice(0, 120) : '',
       amount: Number.isFinite(amount) && amount > 0 && amount <= 1_000_000_000_000 ? amount : 0,
       currency: typeof parsed.currency === 'string' && /^[A-Z]{3}$/.test(parsed.currency) ? parsed.currency : String(currency).slice(0, 8),
-      date: typeof parsed.date === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(parsed.date) ? parsed.date : '',
+      date: typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : '',
       description: typeof parsed.description === 'string' ? parsed.description.slice(0, 180) : '',
       categoryHint: typeof parsed.categoryHint === 'string' ? parsed.categoryHint.slice(0, 80) : '',
       confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low',
