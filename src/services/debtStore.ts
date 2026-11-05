@@ -171,7 +171,7 @@ export function saveDebtState(debts: DebtEntry[], ownerId?: string): void {
   debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
     if (!ownedDebts.length) return;
     const { error } = await supabase.from('debts').upsert(ownedDebts.map((d) => ({
-      id: d.id, user_id: userId, business_id: d.businessId || null,
+      id: d.id, user_id: userId, business_id: d.businessId && isUuid(d.businessId) ? d.businessId : null,
       counterparty_name: d.counterpartyName, counterparty_phone: d.counterpartyPhone || null,
       type: d.type, total_amount_minor: d.totalAmountMinor,
       remaining_amount_minor: d.remainingAmountMinor, currency: d.currency,
@@ -181,7 +181,7 @@ export function saveDebtState(debts: DebtEntry[], ownerId?: string): void {
     if (error) { console.error('Kredy debt sync failed:', error.message); return; }
     const paymentRows = ownedDebts.flatMap((d) => d.payments.filter((p) => isUuid(p.id)).map((p) => ({
       id: p.id, debt_id: d.id, amount_minor: p.amountMinor,
-      payment_date: p.paymentDate, source_account_id: p.sourceAccountId || null,
+      payment_date: p.paymentDate, source_account_id: p.sourceAccountId && isUuid(p.sourceAccountId) ? p.sourceAccountId : null,
       notes: p.notes || null, created_at: p.createdAt,
     })));
     if (paymentRows.length) {
