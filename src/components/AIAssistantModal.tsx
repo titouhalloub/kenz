@@ -479,7 +479,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
             <div>
               <h3 className="text-xs font-bold text-slate-200">Recharger vos crédits IA</h3>
               <p className="text-[11px] text-slate-400">
-                Chaque analyse approfondie consomme 20 crédits. Choisissez votre pack :
+                Chaque analyse approfondie consomme 20 crédits. Les recharges en ligne restent désactivées tant qu’un prestataire de paiement sécurisé n’est pas configuré.
               </p>
             </div>
 
@@ -498,10 +498,11 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
                   </div>
 
                   <button
+                    disabled={/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profile.id)}
                     onClick={() => handlePurchase(pkg)}
-                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer min-h-[40px] shrink-0"
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold text-xs transition cursor-pointer min-h-[40px] shrink-0"
                   >
-                    {formatMoney(pkg.priceMinor, pkg.currency, profile.locale)}
+                    {/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profile.id) ? 'Non disponible' : formatMoney(pkg.priceMinor, pkg.currency, profile.locale)}
                   </button>
                 </div>
               ))}
