@@ -27,6 +27,9 @@ import {
   parseToMinorUnits,
 } from '../domain/financialCalculations';
 
+const getLocalDateString = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 interface PlanViewProps {
   categories: Category[];
   budgets: MonthlyBudget[];
@@ -119,7 +122,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
     e.preventDefault();
     const targetMinor = parseToMinorUnits(challengeTargetStr);
     const periodMinor = parseToMinorUnits(challengePeriodStr);
-    const startDate = new Date().toLocaleDateString('en-CA');
+    const startDate = getLocalDateString();
     if (!challengeName.trim() || targetMinor <= 0 || periodMinor <= 0 || !challengeEndDate || challengeEndDate <= startDate) return;
     onAddSavingsGoal({
       userId: profile.id,
@@ -655,7 +658,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Date de fin</label>
-                  <input type="date" value={challengeEndDate} min={new Date().toLocaleDateString('en-CA')} onChange={(e) => setChallengeEndDate(e.target.value)} required
+                  <input type="date" value={challengeEndDate} min={getLocalDateString()} onChange={(e) => setChallengeEndDate(e.target.value)} required
                     className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100" />
                 </div>
               </div>
@@ -685,7 +688,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                   return goal.challengeFrequency === 'weekly' ? Math.floor((days + 3) / 7) : days;
                 };
                 const periods = new Set(dates.map(ordinal));
-                let cursor = ordinal(new Date().toLocaleDateString('en-CA'));
+                let cursor = ordinal(getLocalDateString());
                 if (!periods.has(cursor)) cursor -= 1;
                 let streak = 0;
                 while (periods.has(cursor - streak)) streak += 1;
@@ -717,7 +720,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Jusqu'au {goal.challengeEndDate}</span>
                   </div>
                   {!completed && goal.status === 'active' && (
-                    <button onClick={() => onAddChallengeContribution(goal.id, goal.challengePeriodAmountMinor || 0, new Date().toLocaleDateString('en-CA'))}
+                    <button onClick={() => onAddChallengeContribution(goal.id, goal.challengePeriodAmountMinor || 0, getLocalDateString())}
                       className="w-full min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-300">
                       Enregistrer mon dépôt · {formatMoney(goal.challengePeriodAmountMinor || 0, goal.currency, profile.locale)}
                     </button>
