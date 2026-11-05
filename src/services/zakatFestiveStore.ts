@@ -110,7 +110,7 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
-function mergeZakatFields(local: ZakatState, remote: ZakatState, base: ZakatState, localStamp: string, remoteStamp: string): ZakatState {
+export function mergeZakatFields(local: ZakatState, remote: ZakatState, base: ZakatState, localStamp: string, remoteStamp: string): ZakatState {
   const merged = { ...remote };
   for (const key of Object.keys(base) as Array<keyof ZakatState>) {
     const localChanged = !valuesEqual(local[key], base[key]);
@@ -126,7 +126,7 @@ function mergeZakatFields(local: ZakatState, remote: ZakatState, base: ZakatStat
   return merged;
 }
 
-function mergeFestiveRows(
+export function mergeFestiveRows(
   local: FestiveBudget[], remote: FestiveBudget[], base: FestiveBudget[],
   deletedIds: string[], localStamp: string,
 ): FestiveBudget[] {
