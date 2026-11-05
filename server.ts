@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 
 dotenv.config();
 
@@ -70,10 +71,63 @@ async function requireAuthenticatedUser(
       return res.status(401).json({ success: false, error: 'Session invalide ou expirée.' });
     }
     res.locals.authUserId = data.user.id;
+    res.locals.accessToken = accessToken;
     return next();
   } catch {
     return res.status(401).json({ success: false, error: 'Impossible de vérifier la session.' });
   }
+}
+
+/**
+ * Meter every authenticated AI response on the server. The caller's JWT is
+ * forwarded to Supabase so the RPC derives ownership from auth.uid().
+ */
+async function sendMeteredAIResponse(
+  req: express.Request,
+  res: express.Response,
+  payload: Record<string, unknown>,
+) {
+  const userId = res.locals.authUserId as string | undefined;
+  if (!userId) return res.json(payload); // local demo mode only
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const accessToken = res.locals.accessToken as string | undefined;
+  if (!supabaseUrl || !supabaseAnonKey || !accessToken) {
+    return res.status(503).json({ success: false, error: 'La facturation IA sécurisée n’est pas configurée.' });
+  }
+
+  const mode = req.body?.mode === 'byok' || Boolean(req.body?.byokKey) ? 'byok' : 'managed';
+  const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose : 'general_query';
+  const provider = typeof req.body?.byokProvider === 'string' ? req.body.byokProvider : 'google_gemini';
+  const model = typeof req.body?.byokModel === 'string' ? req.body.byokModel : 'gemini-2.5-flash';
+  const idempotencyKey = typeof req.body?.idempotencyKey === 'string' && req.body.idempotencyKey.length <= 128
+    ? req.body.idempotencyKey
+    : randomUUID();
+
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { data, error } = await userClient.rpc('record_ai_usage', {
+    p_credits_to_debit: mode === 'byok' ? 0 : 20,
+    p_mode: mode,
+    p_provider: provider,
+    p_model: model,
+    p_tokens_input: Number(payload.tokensInput || 0),
+    p_tokens_output: Number(payload.tokensOutput || 0),
+    p_purpose: purpose,
+    p_idempotency_key: idempotencyKey,
+  });
+
+  if (error) {
+    const insufficient = error.message?.includes('INSUFFICIENT_CREDITS');
+    return res.status(insufficient ? 402 : 503).json({
+      success: false,
+      error: insufficient ? 'Crédits IA insuffisants.' : 'Impossible d’enregistrer la consommation IA.',
+    });
+  }
+  return res.json({ ...payload, balanceCredits: Number(data) });
 }
 
 function trimTrailingSlashes(value: string): string {
@@ -190,10 +244,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
             error: `Clé API manquante pour ${preset.label}. Veuillez configurer votre clé dans le mode BYOK.`,
           });
         }
-        return res.status(200).json({
+        return await sendMeteredAIResponse(req, res, {
           success: true,
           source: 'deterministic_fallback',
           text: generateFallbackAdvice(purpose, financialContext),
+          tokensInput: 0,
+          tokensOutput: 0,
         });
       }
 
@@ -242,7 +298,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || 'Analyse terminée.';
 
-      return res.json({
+      return await sendMeteredAIResponse(req, res, {
         success: true,
         source: `${preset.label} (${model})`,
         text: content,
@@ -261,10 +317,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
             error: 'Clé API Anthropic manquante. Veuillez configurer votre clé dans le mode BYOK.',
           });
         }
-        return res.status(200).json({
+        return await sendMeteredAIResponse(req, res, {
           success: true,
           source: 'deterministic_fallback',
           text: generateFallbackAdvice(purpose, financialContext),
+          tokensInput: 0,
+          tokensOutput: 0,
         });
       }
 
@@ -301,7 +359,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       const data = await response.json();
       const content = data.content?.[0]?.text || 'Analyse terminée.';
 
-      return res.json({
+      return await sendMeteredAIResponse(req, res, {
         success: true,
         source: `Anthropic (${model})`,
         text: content,
@@ -347,7 +405,7 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       },
     });
 
-    return res.json({
+    return await sendMeteredAIResponse(req, res, {
       success: true,
       source: `Google Gemini (${model})`,
       text: response.text || 'Analyse terminée avec succès.',
@@ -365,10 +423,12 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       });
     }
 
-    return res.json({
+    return await sendMeteredAIResponse(req, res, {
       success: true,
       source: 'deterministic_fallback',
       text: generateFallbackAdvice(req.body?.purpose, req.body?.financialContext),
+      tokensInput: 0,
+      tokensOutput: 0,
     });
   }
 });
