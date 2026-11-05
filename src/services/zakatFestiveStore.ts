@@ -169,9 +169,23 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
   if (table === 'zakat_settings') {
     const local: ZakatState = payload?.state || payload;
     const base: ZakatState = payload?.baseState || EMPTY_ZAKAT_STATE;
+    const toRow = (state: ZakatState) => ({
+      nisab_threshold_minor: state.nisabThresholdMinor,
+      gold_price_per_gram_minor: state.goldPricePerGramMinor,
+      custom_cash_minor: state.customCashMinor,
+      custom_savings_minor: state.customSavingsMinor,
+      custom_business_goods_minor: state.customBusinessGoodsMinor,
+      custom_liabilities_minor: state.customLiabilitiesMinor,
+      is_paid: state.isPaid, paid_date: state.paidDate || null,
+      paid_amount_minor: state.paidAmountMinor ?? null,
+    });
+    const { error } = await supabase.rpc('sync_kenz_zakat_snapshot', {
+      p_local: toRow(local), p_base: toRow(base), p_updated_at: localStamp,
+    });
+    if (error) { console.error('Atomic Zakat sync failed:', error.message); return false; }
     const { data: row, error: readError } = await supabase.from(table).select('*').eq('user_id', userId).maybeSingle();
-    if (readError) return false;
-    const remote: ZakatState = row ? {
+    if (readError || !row) return false;
+    const merged: ZakatState = {
       nisabThresholdMinor: Number(row.nisab_threshold_minor),
       goldPricePerGramMinor: Number(row.gold_price_per_gram_minor),
       customCashMinor: Number(row.custom_cash_minor),
@@ -180,51 +194,46 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
       customLiabilitiesMinor: Number(row.custom_liabilities_minor),
       isPaid: Boolean(row.is_paid), paidDate: row.paid_date || undefined,
       paidAmountMinor: row.paid_amount_minor == null ? undefined : Number(row.paid_amount_minor),
-    } : EMPTY_ZAKAT_STATE;
-    const merged = mergeZakatFields(local, remote, base, localStamp, row?.updated_at || '');
-    const result = await supabase.from(table).upsert({
-      user_id: userId, nisab_threshold_minor: merged.nisabThresholdMinor,
-      gold_price_per_gram_minor: merged.goldPricePerGramMinor, custom_cash_minor: merged.customCashMinor,
-      custom_savings_minor: merged.customSavingsMinor, custom_business_goods_minor: merged.customBusinessGoodsMinor,
-      custom_liabilities_minor: merged.customLiabilitiesMinor, is_paid: merged.isPaid,
-      paid_date: merged.paidDate || null, paid_amount_minor: merged.paidAmountMinor ?? null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
-    if (result.error) { console.error('Failed to sync Zakat outbox:', result.error.message); return false; }
-    if (localStorage.getItem(key) === raw) localStorage.setItem(scopedKey(ZAKAT_STORAGE_KEY, userId), JSON.stringify(merged));
+    };
+    if (localStorage.getItem(key) === raw || localStorage.getItem(legacyKey) === raw) {
+      localStorage.setItem(scopedKey(ZAKAT_STORAGE_KEY, userId), JSON.stringify(merged));
+    }
   } else {
     const local: FestiveBudget[] = Array.isArray(payload) ? payload : payload?.state || [];
     const base: FestiveBudget[] = payload?.baseState || [];
+    const deletedIds = [...new Set([
+      ...(payload?.deletedIds || []),
+      ...base.filter((item) => !local.some((next) => next.id === item.id)).map((item) => item.id),
+    ])];
+    const toRows = (items: FestiveBudget[]) => items
+      .filter((item) => item.userId === userId && isUuid(item.id))
+      .map((item) => ({
+        id: item.id, user_id: userId, festival_type: item.festivalType, year: item.year,
+        target_budget_minor: item.targetBudgetMinor, actual_spent_minor: item.actualSpentMinor,
+        currency: item.currency, notes: item.notes || null, is_completed: item.isCompleted,
+        updated_at: item.syncUpdatedAt || null,
+      }));
+    const { error } = await supabase.rpc('sync_kenz_collection', {
+      p_table: 'festive_budgets',
+      p_local_rows: toRows(local),
+      p_base_rows: toRows(base),
+      p_deleted_ids: deletedIds,
+      p_updated_at: localStamp,
+    });
+    if (error) { console.error('Atomic festive sync failed:', error.message); return false; }
     const { data: rows, error: readError } = await supabase.from(table).select('*').eq('user_id', userId);
     if (readError) return false;
-    const remote: FestiveBudget[] = (rows || []).map((row) => ({
+    const merged: FestiveBudget[] = (rows || []).map((row) => ({
       id: row.id, userId: row.user_id, festivalType: row.festival_type, year: row.year,
       targetBudgetMinor: Number(row.target_budget_minor), actualSpentMinor: Number(row.actual_spent_minor),
       currency: row.currency, notes: row.notes || undefined, isCompleted: Boolean(row.is_completed),
       syncUpdatedAt: row.updated_at || row.created_at,
     }));
-    const deletedIds = [
-      ...(payload?.deletedIds || []),
-      ...base.filter((item) => !local.some((next) => next.id === item.id)).map((item) => item.id),
-    ];
-    const merged = mergeFestiveRows(local, remote, base, [...new Set(deletedIds)], localStamp)
-      .filter((item) => item.userId === userId && isUuid(item.id));
-    const removed = [...new Set(deletedIds)].filter(isUuid);
-    if (removed.length) {
-      const deleted = await supabase.from(table).delete().in('id', removed).eq('user_id', userId);
-      if (deleted.error) return false;
+    if (localStorage.getItem(key) === raw || localStorage.getItem(legacyKey) === raw) {
+      localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(merged));
     }
-    if (merged.length) {
-      const result = await supabase.from(table).upsert(merged.map((item) => ({
-        id: item.id, user_id: userId, festival_type: item.festivalType, year: item.year,
-        target_budget_minor: item.targetBudgetMinor, actual_spent_minor: item.actualSpentMinor,
-        currency: item.currency, notes: item.notes || null, is_completed: item.isCompleted,
-        updated_at: new Date().toISOString(),
-      })), { onConflict: 'id' });
-      if (result.error) { console.error('Failed to sync festive outbox:', result.error.message); return false; }
-    }
-    if (localStorage.getItem(key) === raw) localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(merged));
   }
+
   if (localStorage.getItem(key) === raw || localStorage.getItem(legacyKey) === raw) {
     localStorage.removeItem(key);
     localStorage.removeItem(legacyKey);
