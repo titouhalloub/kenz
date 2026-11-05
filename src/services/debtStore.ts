@@ -223,13 +223,14 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
   const supabase = getSupabaseClient();
   if (!supabase) return;
 
+  let newerSnapshotArrived = false;
   debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
     const pending = readDebtOutbox(userId);
     const { data: tombstoneRows, error: tombstoneError } = await supabase
       .from('debt_sync_tombstones').select('debt_id').eq('user_id', userId);
     if (tombstoneError) throw tombstoneError;
     const cloudDeletedIds = (tombstoneRows || []).map((row) => row.debt_id as string);
-    const deletedIds = [...new Set([...pending.deletedDebtIds, ...cloudDeletedIds])];
+    const deletedIds = [...new Set([...(pending?.deletedDebtIds || []), ...cloudDeletedIds])];
     if (pending?.deletedDebtIds.length) {
       const { error } = await supabase.from('debt_sync_tombstones').upsert(
         pending.deletedDebtIds.map((debtId) => ({ debt_id: debtId, user_id: userId })),
@@ -299,13 +300,15 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
     if (latest && JSON.stringify(latest) === JSON.stringify(pending)) {
       if (typeof localStorage !== 'undefined') localStorage.removeItem(debtOutboxKey(userId));
     } else if (latest) {
-      // Keep edits that arrived while this batch was syncing; the next online retry will replay them.
+      // Replay edits that arrived while this batch was syncing.
+      newerSnapshotArrived = true;
       return;
     }
   }).catch((error) => {
     console.error('Kredy outbox sync failed; edits remain queued:', error);
   });
   await debtCloudSyncQueue;
+  if (newerSnapshotArrived) await flushPendingDebtSync(userId);
 }
 
 /** Persist locally first, then durably queue every authenticated user's change. */
