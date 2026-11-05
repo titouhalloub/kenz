@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '8mb' }));
 
 // Small per-process limiter for public AI endpoints. Use a shared store in multi-instance deployments.
 const aiRequestBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -469,6 +469,62 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       tokensInput: 0,
       tokensOutput: 0,
     });
+  }
+});
+
+// Extract receipt details. Kenz does not persist the uploaded image.
+app.post('/api/ai/receipt-scan', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
+  const { data, mimeType, currency = 'DZD' } = req.body || {};
+  if (typeof data !== 'string' || data.length > 7_000_000 || !/^[A-Za-z0-9+/]+=*$/.test(data)) {
+    return res.status(400).json({ success: false, error: 'Image invalide ou trop volumineuse. Choisissez une image plus petite.' });
+  }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    return res.status(400).json({ success: false, error: 'Format non pris en charge. Utilisez JPG, PNG ou WebP.' });
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'Le service de lecture des reçus n’est pas configuré.' });
+
+  try {
+    const reservation = await recordMeteredAIUsage(req, res, 0, 0);
+    if (!reservation.ok) {
+      return res.status(reservation.status || 503).json({ success: false, error: reservation.error || 'Impossible de vérifier les crédits IA.' });
+    }
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+    const prompt = [
+      'Read this purchase receipt and return ONLY valid JSON with this exact schema:',
+      '{"merchant":"store name or empty string","amount":0,"currency":"XXX","date":"YYYY-MM-DD or empty string","description":"short purchase description","categoryHint":"short category label","confidence":"high|medium|low","notes":[]}',
+      'Amount is the final total actually paid, not subtotal or tax. Use a number in major currency units with dot decimals. Identify printed currency if clear, otherwise use provided currency. Never guess a missing amount or date; use amount 0 and empty date when unreadable. Ignore card numbers, phone numbers, loyalty IDs and personal addresses. Do not return sensitive personal information. Date must be ISO format. Keep notes short and mention ambiguity only.',
+      'Provided currency context: ' + String(currency).slice(0, 8),
+    ].join(' ');
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ inlineData: { mimeType, data } }, { text: prompt }],
+      config: { temperature: 0.1, responseMimeType: 'application/json' },
+    });
+    const rawText = result.text || '';
+    const jsonText = rawText.slice(rawText.indexOf('{'), rawText.lastIndexOf('}') + 1);
+    const parsed = JSON.parse(jsonText);
+    const amount = Number(parsed.amount);
+    const receipt = {
+      merchant: typeof parsed.merchant === 'string' ? parsed.merchant.slice(0, 120) : '',
+      amount: Number.isFinite(amount) && amount > 0 && amount <= 1_000_000_000_000 ? amount : 0,
+      currency: typeof parsed.currency === 'string' && /^[A-Z]{3}$/.test(parsed.currency) ? parsed.currency : String(currency).slice(0, 8),
+      date: typeof parsed.date === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(parsed.date) ? parsed.date : '',
+      description: typeof parsed.description === 'string' ? parsed.description.slice(0, 180) : '',
+      categoryHint: typeof parsed.categoryHint === 'string' ? parsed.categoryHint.slice(0, 80) : '',
+      confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low',
+      notes: Array.isArray(parsed.notes) ? parsed.notes.filter((note: unknown) => typeof note === 'string').slice(0, 5).map((note: string) => note.slice(0, 140)) : [],
+    };
+    const finalized = await recordMeteredAIUsage(req, res, 1200, 250);
+    if (!finalized.ok && typeof res.locals.balanceCredits !== 'number') {
+      return res.status(finalized.status || 503).json({ success: false, error: finalized.error || 'Impossible de finaliser les crédits IA.' });
+    }
+    return res.json({ success: true, receipt, balanceCredits: finalized.balanceCredits ?? Number(res.locals.balanceCredits) });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Receipt scan failed';
+    console.error('Kenz receipt scan failed:', message);
+    return res.status(502).json({ success: false, error: 'Impossible de lire ce reçu. Essayez une photo plus nette ou réessayez.' });
   }
 });
 
