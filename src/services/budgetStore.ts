@@ -319,11 +319,14 @@ function readPendingBudgetOutbox(userId: string): PendingBudgetOutbox | null {
     const parsed = JSON.parse(raw);
     const state: BudgetState = parsed?.state || parsed as BudgetState;
     if (state?.profile?.id !== userId) return null;
+    const legacySnapshot = !parsed?.baseState;
     const outbox: PendingBudgetOutbox = {
       version: 2, state,
-      baseState: parsed?.baseState || loadBudgetState(state.profile),
+      // A v1 full-snapshot queue has no trustworthy ancestor. Treat its rows
+      // as pending additions and retain them during the one-time migration.
+      baseState: parsed?.baseState || createEmptyBudgetState(state.profile),
       deleted: { ...emptyDeletedIds(), ...(parsed?.deleted || {}) },
-      updatedAt: parsed?.updatedAt || new Date(0).toISOString(),
+      updatedAt: parsed?.updatedAt || (legacySnapshot ? new Date().toISOString() : new Date(0).toISOString()),
     };
     if (!localStorage.getItem(key)) { localStorage.setItem(key, JSON.stringify(outbox)); localStorage.removeItem(legacyKey); }
     return outbox;
