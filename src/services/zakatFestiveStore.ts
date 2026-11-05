@@ -225,7 +225,10 @@ async function flushSnapshot(key: string, userId: string, table: 'zakat_settings
     }
     if (localStorage.getItem(key) === raw) localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(merged));
   }
-  if (localStorage.getItem(key) === raw) localStorage.removeItem(key);
+  if (localStorage.getItem(key) === raw || localStorage.getItem(legacyKey) === raw) {
+    localStorage.removeItem(key);
+    localStorage.removeItem(legacyKey);
+  }
   return true;
 }
 
