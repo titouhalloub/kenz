@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import {
   DebtEntry,
-  DebtPayment,
   DebtType,
   Business,
   Account,
