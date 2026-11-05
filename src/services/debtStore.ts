@@ -220,20 +220,17 @@ export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEnt
  * concurrent edits to debt details use updatedAt last-write-wins. */
 export async function flushPendingDebtSync(userId: string): Promise<void> {
   if (!isUuid(userId)) return;
-  const outbox = readDebtOutbox(userId);
-  if (!outbox) return;
   const supabase = getSupabaseClient();
   if (!supabase) return;
 
   debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
     const pending = readDebtOutbox(userId);
-    if (!pending) return;
     const { data: tombstoneRows, error: tombstoneError } = await supabase
       .from('debt_sync_tombstones').select('debt_id').eq('user_id', userId);
     if (tombstoneError) throw tombstoneError;
     const cloudDeletedIds = (tombstoneRows || []).map((row) => row.debt_id as string);
     const deletedIds = [...new Set([...pending.deletedDebtIds, ...cloudDeletedIds])];
-    if (pending.deletedDebtIds.length) {
+    if (pending?.deletedDebtIds.length) {
       const { error } = await supabase.from('debt_sync_tombstones').upsert(
         pending.deletedDebtIds.map((debtId) => ({ debt_id: debtId, user_id: userId })),
         { onConflict: 'debt_id' },
@@ -271,6 +268,9 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
       const { error } = await supabase.from('debts').delete().eq('user_id', userId).in('id', deletedIds);
       if (error) throw error;
     }
+    // Even without a local outbox, enforce cloud tombstones to clean up a stale
+    // row that raced with another device's delete operation.
+    if (!pending) return;
     const merged = mergeDebtSnapshots(pending.debts, remoteDebts, deletedIds);
     const owned = merged.filter((debt) => debt.userId === userId && isUuid(debt.id));
     if (owned.length) {
