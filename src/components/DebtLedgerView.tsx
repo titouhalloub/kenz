@@ -66,6 +66,7 @@ interface DebtLedgerViewProps {
   }) => void;
   onDeleteDebt: (id: string) => void;
   onReconcilePayment: (params: { debtId: string; paymentId: string }) => Promise<void>;
+  onResolvePaymentIssue: (params: { debtId: string; paymentId: string; action: 'duplicate' | 'refund'; refundAmountMinor?: number; duplicateOfPaymentId?: string }) => Promise<void>;
   onOpenAIModal?: () => void;
 }
 
@@ -82,6 +83,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   onSettleDebt,
   onDeleteDebt,
   onReconcilePayment,
+  onResolvePaymentIssue,
   onOpenAIModal,
 }) => {
   const [activeTab, setActiveTab] = useState<'kredy' | 'health' | 'analytics'>('kredy');
@@ -93,6 +95,12 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   const [reconciliationTarget, setReconciliationTarget] = useState<{ debtId: string; paymentId: string } | null>(null);
   const [isReconciling, setIsReconciling] = useState(false);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+  const [paymentIssueTarget, setPaymentIssueTarget] = useState<{ debtId: string; paymentId: string } | null>(null);
+  const [paymentIssueAction, setPaymentIssueAction] = useState<'duplicate' | 'refund'>('refund');
+  const [refundAmountInput, setRefundAmountInput] = useState('');
+  const [duplicateOriginalId, setDuplicateOriginalId] = useState('');
+  const [isResolvingPaymentIssue, setIsResolvingPaymentIssue] = useState(false);
+  const [paymentIssueError, setPaymentIssueError] = useState<string | null>(null);
 
   const summary = useMemo(() => calculateDebtSummary(debts), [debts]);
 
@@ -134,6 +142,44 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
     (payment) => payment.id === reconciliationTarget?.paymentId
   );
   const reconciliationAmountMinor = reconciliationPayment?.unappliedAmountMinor || 0;
+  const paymentIssueDebt = paymentIssueTarget ? debts.find((debt) => debt.id === paymentIssueTarget.debtId) : undefined;
+  const paymentIssuePayment = paymentIssueDebt?.payments.find((payment) => payment.id === paymentIssueTarget?.paymentId);
+  const duplicateCandidates = paymentIssueDebt?.payments.filter((payment) =>
+    payment.id !== paymentIssueTarget?.paymentId && (payment.resolutionStatus || 'normal') !== 'duplicate'
+  ) || [];
+  const refundableAmountMinor = paymentIssuePayment
+    ? paymentIssuePayment.amountMinor - (paymentIssuePayment.refundedAmountMinor || 0)
+    : 0;
+
+  const confirmPaymentIssue = async () => {
+    if (!paymentIssueTarget || !paymentIssuePayment) return;
+    const refundAmountMinor = Number(refundAmountInput);
+    if (paymentIssueAction === 'refund' && (!Number.isSafeInteger(refundAmountMinor) || refundAmountMinor <= 0 || refundAmountMinor > refundableAmountMinor)) {
+      setPaymentIssueError('Saisissez un montant de remboursement valide.');
+      return;
+    }
+    if (paymentIssueAction === 'duplicate' && !duplicateOriginalId) {
+      setPaymentIssueError('Sélectionnez le versement original.');
+      return;
+    }
+    setIsResolvingPaymentIssue(true);
+    setPaymentIssueError(null);
+    try {
+      await onResolvePaymentIssue({
+        ...paymentIssueTarget,
+        action: paymentIssueAction,
+        refundAmountMinor: paymentIssueAction === 'refund' ? refundAmountMinor : undefined,
+        duplicateOfPaymentId: paymentIssueAction === 'duplicate' ? duplicateOriginalId : undefined,
+      });
+      setPaymentIssueTarget(null);
+      setRefundAmountInput('');
+      setDuplicateOriginalId('');
+    } catch (error) {
+      setPaymentIssueError(error instanceof Error ? error.message : 'Impossible de traiter ce versement');
+    } finally {
+      setIsResolvingPaymentIssue(false);
+    }
+  };
 
   const confirmReconciliation = async () => {
     if (!reconciliationTarget || reconciliationAmountMinor <= 0) return;
@@ -530,13 +576,21 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                                   À rapprocher : {formatMoney(pmt.unappliedAmountMinor || 0, debt.currency)}
                                 </p>
                               )}
+                              {pmt.resolutionStatus === 'duplicate' && (
+                                <p className="text-[11px] font-semibold text-slate-500">Doublon confirmé · exclu du calcul</p>
+                              )}
+                              {(pmt.refundedAmountMinor || 0) > 0 && (
+                                <p className="text-[11px] font-semibold text-sky-300">
+                                  Remboursé : {formatMoney(pmt.refundedAmountMinor || 0, debt.currency)}
+                                </p>
+                              )}
                               {pmt.notes && <p className="text-[11px] text-slate-300">{pmt.notes}</p>}
                             </div>
                             <div className="flex flex-col items-end gap-1.5">
                               <span className="font-mono-numbers font-bold text-emerald-300">
                                 +{formatMoney(pmt.amountMinor, debt.currency)}
                               </span>
-                              {(pmt.unappliedAmountMinor || 0) > 0 && (
+                              {(pmt.unappliedAmountMinor || 0) > 0 && (pmt.resolutionStatus || 'normal') === 'normal' && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -546,6 +600,20 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
                                   className="px-2.5 py-1 rounded-lg border border-amber-700/70 bg-amber-950/40 text-amber-200 text-[10px] font-semibold hover:bg-amber-900/50 transition cursor-pointer min-h-[34px]"
                                 >
                                   Examiner le reliquat
+                                </button>
+                              )}
+                              {(pmt.resolutionStatus || 'normal') === 'normal' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPaymentIssueError(null);
+                                    setPaymentIssueTarget({ debtId: debt.id, paymentId: pmt.id });
+                                    setRefundAmountInput('');
+                                    setDuplicateOriginalId('');
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg border border-sky-800/70 bg-sky-950/30 text-sky-200 text-[10px] font-semibold hover:bg-sky-900/40 transition cursor-pointer min-h-[34px]"
+                                >
+                                  Doublon / remboursement
                                 </button>
                               )}
                             </div>
@@ -833,6 +901,49 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
               >
                 {isReconciling ? 'Synchronisation…' : 'Confirmer l’ajustement'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentIssueTarget && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="kredy-payment-issue-title" className="w-full max-w-md rounded-2xl bg-slate-900 border border-sky-800/70 shadow-2xl p-5 space-y-4">
+            <div>
+              <h2 id="kredy-payment-issue-title" className="text-base font-bold text-slate-100">Traiter un doublon ou un remboursement</h2>
+              <p className="text-xs text-slate-400 mt-1">{paymentIssueDebt?.counterpartyName} · {paymentIssuePayment?.paymentDate}</p>
+              <p className="text-sm font-bold text-slate-100 mt-2">Versement initial : {paymentIssueDebt && paymentIssuePayment ? formatMoney(paymentIssuePayment.amountMinor, paymentIssueDebt.currency) : '—'}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => { setPaymentIssueAction('refund'); setPaymentIssueError(null); }} className={`min-h-[42px] rounded-xl text-xs font-semibold border ${paymentIssueAction === 'refund' ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>Remboursement</button>
+              <button type="button" onClick={() => { setPaymentIssueAction('duplicate'); setPaymentIssueError(null); }} className={`min-h-[42px] rounded-xl text-xs font-semibold border ${paymentIssueAction === 'duplicate' ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>Doublon</button>
+            </div>
+
+            {paymentIssueAction === 'refund' ? (
+              <div className="space-y-2">
+                <label htmlFor="kredy-refund-amount" className="block text-xs text-slate-300">Montant réellement remboursé</label>
+                <input id="kredy-refund-amount" type="number" min="1" max={refundableAmountMinor} step="1" inputMode="numeric" value={refundAmountInput} onChange={(event) => setRefundAmountInput(event.target.value)} className="w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-sm text-slate-100" placeholder={String(refundableAmountMinor)} />
+                <p className="text-[11px] text-slate-400">Reste remboursable : {paymentIssueDebt ? formatMoney(refundableAmountMinor, paymentIssueDebt.currency) : '—'}. Le remboursement augmente à nouveau le solde dû.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label htmlFor="kredy-duplicate-original" className="block text-xs text-slate-300">Versement original correspondant</label>
+                <select id="kredy-duplicate-original" value={duplicateOriginalId} onChange={(event) => setDuplicateOriginalId(event.target.value)} className="w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100">
+                  <option value="">Choisir le versement original</option>
+                  {duplicateCandidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>{candidate.paymentDate} · {formatMoney(candidate.amountMinor, paymentIssueDebt?.currency)} · {candidate.id.slice(0, 8)}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400">Le versement marqué comme doublon sera conservé dans l'historique, mais exclu du calcul. Il ne sera pas supprimé.</p>
+              </div>
+            )}
+
+            <p className="text-[11px] leading-relaxed text-amber-200/90">Vérifiez vos relevés avant confirmation. Cette action est enregistrée et synchronisée sur vos appareils.</p>
+            {paymentIssueError && <p role="alert" className="p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-xs text-rose-200">{paymentIssueError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setPaymentIssueTarget(null)} disabled={isResolvingPaymentIssue} className="flex-1 h-11 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold disabled:opacity-50">Annuler</button>
+              <button type="button" onClick={() => void confirmPaymentIssue()} disabled={isResolvingPaymentIssue || (paymentIssueAction === 'duplicate' && duplicateCandidates.length === 0)} className="flex-1 h-11 rounded-xl bg-sky-600 hover:bg-sky-500 text-slate-950 text-xs font-bold disabled:opacity-50">{isResolvingPaymentIssue ? 'Synchronisation…' : 'Confirmer'}</button>
             </div>
           </div>
         </div>
