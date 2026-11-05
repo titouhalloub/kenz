@@ -186,7 +186,7 @@ export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEnt
 
 let debtCloudSyncQueue: Promise<void> = Promise.resolve();
 
-function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEntry[], deletedIds: string[] = []): DebtEntry[] {
+export function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEntry[], deletedIds: string[] = []): DebtEntry[] {
   const deleted = new Set(deletedIds);
   const merged = new Map<string, DebtEntry>();
   for (const debt of remoteDebts) if (!deleted.has(debt.id)) merged.set(debt.id, debt);
