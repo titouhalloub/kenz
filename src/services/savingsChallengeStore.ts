@@ -1,5 +1,6 @@
 import { SavingsChallengeContribution } from '../domain/types';
 import { getSupabaseClient } from './supabase';
+import { flushPendingBudgetSync } from './budgetStore';
 
 const STORAGE_PREFIX = 'kenz_savings_challenge_contributions_v1_';
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -60,6 +61,8 @@ export async function loadSavingsChallengeContributionsFromSupabase(userId: stri
 
 export async function flushPendingSavingsChallengeContributions(userId: string): Promise<boolean> {
   if (!isUuid(userId) || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
+  const budgetSynced = await flushPendingBudgetSync(userId);
+  if (!budgetSynced) return false;
   const supabase = getSupabaseClient();
   if (!supabase) return false;
   const rows = loadSavingsChallengeContributions(userId);
