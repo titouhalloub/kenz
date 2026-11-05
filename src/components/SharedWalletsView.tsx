@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Users, Plus, RefreshCw, Trash2, LogOut, Mail, Wallet, Shield, Eye, Pencil, X, Check, AlertCircle } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Users, Plus, RefreshCw, Trash2, LogOut, Mail, Wallet, X, AlertCircle } from 'lucide-react';
 import { getSupabaseClient } from '../services/supabase';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 
 type SharedWallet = { id: string; owner_id: string; name: string; currency: string; created_at: string };
-type Member = { wallet_id: string; user_id: string; owner_id: string; role: 'owner' | 'editor' | 'viewer'; joined_at: string };
+type Member = { wallet_id: string; user_id: string; owner_id: string; member_email: string; role: 'owner' | 'editor' | 'viewer'; joined_at: string };
 type Invite = { id: string; wallet_id: string; owner_id: string; invitee_email: string; role: 'editor' | 'viewer'; status: 'pending' | 'accepted' | 'revoked'; created_at: string; accepted_at?: string | null };
 type Entry = { id: string; wallet_id: string; created_by: string; type: 'income' | 'expense'; amount_minor: number; currency: string; description: string; transaction_date: string; created_at: string };
 
@@ -50,6 +50,11 @@ export const SharedWalletsView: React.FC<SharedWalletsViewProps> = ({ userId, em
   const incomingInvites = invites.filter((invite) => invite.invitee_email === email.toLowerCase() && invite.status === 'pending');
 
   const refresh = useCallback(async (walletId?: string) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+      setError('Connectez-vous à votre compte Kenz pour utiliser les portefeuilles partagés.');
+      setLoading(false);
+      return;
+    }
     if (!supabase) {
       setError('Connexion Supabase indisponible. Connectez votre compte pour utiliser les portefeuilles partagés.');
       setLoading(false);
@@ -140,7 +145,7 @@ export const SharedWalletsView: React.FC<SharedWalletsViewProps> = ({ userId, em
   const acceptInvite = (invite: Invite) => run(async () => {
     if (!supabase) throw new Error('Connexion Supabase indisponible.');
     const { error: memberError } = await supabase.from('shared_wallet_members').insert({
-      wallet_id: invite.wallet_id, user_id: userId, owner_id: invite.owner_id, role: invite.role,
+      wallet_id: invite.wallet_id, user_id: userId, owner_id: invite.owner_id, member_email: email.toLowerCase(), role: invite.role,
     });
     if (memberError && memberError.code !== '23505') throw memberError;
     const { error: acceptError } = await supabase.from('shared_wallet_invites').update({
@@ -256,7 +261,7 @@ export const SharedWalletsView: React.FC<SharedWalletsViewProps> = ({ userId, em
 
         {selected && <section className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3">
           <h2 className="text-sm font-semibold text-slate-100 flex items-center gap-2"><Users className="w-4 h-4 text-emerald-400" /> Membres & accès</h2>
-          {selectedMembers.map((member) => <div key={member.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-950 p-3"><div className="min-w-0"><p className="text-xs text-slate-200">{member.user_id === userId ? 'Vous' : 'Membre Kenz'}</p><p className="text-[10px] text-slate-500">{member.role === 'owner' ? 'Propriétaire' : member.role === 'editor' ? 'Peut modifier' : 'Lecture seule'}</p></div><div className="flex items-center gap-1">{isOwner && member.role !== 'owner' && <><select value={member.role} onChange={(e) => void changeRole(member, e.target.value as 'editor' | 'viewer')} className="h-9 rounded-lg bg-slate-900 border border-slate-700 px-2 text-[10px] text-white"><option value="editor">Éditeur</option><option value="viewer">Lecture seule</option></select><button onClick={() => void removeMember(member)} className="min-h-9 min-w-9 text-slate-500 hover:text-rose-300" title="Retirer"><X className="w-4 h-4" /></button></>}{!isOwner && member.user_id === userId && <button onClick={() => void removeMember(member)} className="min-h-9 px-2 rounded-lg text-[10px] text-rose-300">Quitter</button>}</div></div>)}
+          {selectedMembers.map((member) => <div key={member.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-950 p-3"><div className="min-w-0"><p className="text-xs text-slate-200">{member.user_id === userId ? 'Vous' : member.member_email}</p><p className="text-[10px] text-slate-500">{member.role === 'owner' ? 'Propriétaire' : member.role === 'editor' ? 'Peut modifier' : 'Lecture seule'}</p></div><div className="flex items-center gap-1">{isOwner && member.role !== 'owner' && <><select value={member.role} onChange={(e) => void changeRole(member, e.target.value as 'editor' | 'viewer')} className="h-9 rounded-lg bg-slate-900 border border-slate-700 px-2 text-[10px] text-white"><option value="editor">Éditeur</option><option value="viewer">Lecture seule</option></select><button onClick={() => void removeMember(member)} className="min-h-9 min-w-9 text-slate-500 hover:text-rose-300" title="Retirer"><X className="w-4 h-4" /></button></>}{!isOwner && member.user_id === userId && <button onClick={() => void removeMember(member)} className="min-h-9 px-2 rounded-lg text-[10px] text-rose-300">Quitter</button>}</div></div>)}
 
           {isOwner && <form onSubmit={(event) => { event.preventDefault(); void sendInvite(); }} className="pt-2 space-y-2"><label className="block text-[11px] text-slate-400">Inviter par e-mail (compte Kenz existant)<input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="nom@exemple.com" className="mt-1 w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-xs text-white" required /></label><div className="flex gap-2"><select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'editor' | 'viewer')} className="flex-1 h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-xs text-white"><option value="editor">Éditeur</option><option value="viewer">Lecture seule</option></select><button disabled={busy} className="min-h-11 px-4 rounded-xl bg-emerald-600 text-white text-xs font-semibold">Inviter</button></div></form>}
 
