@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarRange, Download, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BarChart3, CalendarRange, Download, Wallet } from 'lucide-react';
 import { Category, Transaction, UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 
@@ -44,10 +44,6 @@ const arabicCategory: Record<string, string> = {
 };
 const money = (amount: number, currency: string, locale: string) => formatMoney(amount, currency, locale);
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-const parseDate = (value: string) => {
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
 const monthLabel = (key: string, locale: string) => {
   const [y, m] = key.split('-').map(Number);
   return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-DZ' : 'fr-DZ', { month: 'short' }).format(new Date(y, m - 1, 1));

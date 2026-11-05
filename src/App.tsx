@@ -482,7 +482,7 @@ export default function App() {
               activeTab === 'reports' ? 'text-violet-300 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Rapports
+            {budgetState.profile.locale === 'ar' ? 'التقارير' : 'Rapports'}
           </button>
           <button
             onClick={() => setActiveTab('plan')}
