@@ -49,6 +49,7 @@ import {
   addDebtEntry,
   recordDebtPayment,
   resolveUnappliedDebtPayment,
+  resolveKredyPaymentIssue,
   deleteDebtEntry,
 } from './services/debtStore';
 import {
@@ -309,6 +310,19 @@ export default function App() {
     setDebts(latestDebts);
   };
 
+  const handleResolveKredyPaymentIssue = async (params: { debtId: string; paymentId: string; action: 'duplicate' | 'refund'; refundAmountMinor?: number; duplicateOfPaymentId?: string }) => {
+    const latestDebts = await resolveKredyPaymentIssue(
+      debts,
+      params.debtId,
+      params.paymentId,
+      currentUser.id,
+      params.action,
+      params.refundAmountMinor,
+      params.duplicateOfPaymentId
+    );
+    setDebts(latestDebts);
+  };
+
   const handleDeleteDebt = (id: string) => {
     setDebts((prev) => deleteDebtEntry(prev, id));
   };
@@ -522,6 +536,7 @@ export default function App() {
             onSettleDebt={handleSettleDebt}
             onDeleteDebt={handleDeleteDebt}
             onReconcilePayment={handleReconcileUnappliedPayment}
+            onResolvePaymentIssue={handleResolveKredyPaymentIssue}
             onOpenAIModal={() => setIsAIModalOpen(true)}
           />
         )}
