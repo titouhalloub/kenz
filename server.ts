@@ -171,7 +171,6 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
       const response = await fetch(endpoint, {
         method: 'POST',
         signal: AbortSignal.timeout(15_000),
-        signal: AbortSignal.timeout(15_000),
         headers,
         body: JSON.stringify({
           model,
