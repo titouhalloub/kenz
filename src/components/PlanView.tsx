@@ -534,7 +534,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 <p className="text-[11px] text-slate-400">Permission : {notificationPermission === 'granted' ? 'Activée' : notificationPermission === 'denied' ? 'Bloquée dans le navigateur' : notificationPermission === 'unsupported' ? 'Non disponible' : 'Non activée'}</p>
               </div>
               <button onClick={async () => {
-                const permission = await requestBillNotificationPermission();
+                const permission = await requestBillReminderPermission();
                 setNotificationPermission(permission);
                 if (permission === 'granted') dispatchBillReminders(profile.id, recurringItems);
               }}
