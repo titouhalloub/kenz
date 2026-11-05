@@ -474,22 +474,38 @@ async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBud
 /** Flushes a durable per-user snapshot after app restart or network recovery. */
 export async function flushPendingBudgetSync(userId: string): Promise<boolean> {
   if (!isUuid(userId) || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
-  const pending = readPendingBudgetOutbox(userId);
-  if (!pending) return true;
+  if (typeof localStorage === 'undefined') return false;
+
   const key = pendingBudgetKey(userId);
-  const raw = localStorage.getItem(key);
-  if (!raw) return false;
-  const succeeded = await syncBudgetStateToSupabase(
-    pending.state, pending.deleted, pending.baseState, pending.updatedAt, raw,
-  );
-  if (!succeeded || typeof localStorage === 'undefined') return false;
-  try {
-    if (localStorage.getItem(key) === raw) localStorage.removeItem(key);
-  } catch (error) {
-    console.error('Unable to clear synced Kenz outbox snapshot:', error);
-    return false;
+  // A save can arrive while an earlier snapshot is in flight. Drain a few
+  // successive revisions now instead of leaving the newest edit stranded until
+  // the next reconnect or user action. The durable outbox remains if writes
+  // continue faster than the bounded drain can complete.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const pending = readPendingBudgetOutbox(userId);
+    if (!pending) return true;
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+
+    const succeeded = await syncBudgetStateToSupabase(
+      pending.state, pending.deleted, pending.baseState, pending.updatedAt, raw,
+    );
+    if (!succeeded) return false;
+
+    const latestRaw = localStorage.getItem(key);
+    if (latestRaw === raw) {
+      try {
+        localStorage.removeItem(key);
+      } catch (error) {
+        console.error('Unable to clear synced Kenz outbox snapshot:', error);
+        return false;
+      }
+      return true;
+    }
+    if (!latestRaw) return true;
+    // A newer local revision replaced the one just synchronized; loop and send it.
   }
-  return true;
+  return false;
 }
 
 export function saveBudgetState(state: BudgetState): void {
