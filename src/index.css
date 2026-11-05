@@ -1,25 +1,115 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: light;
+  --kenz-ink: #21184f;
+  --kenz-muted: #777294;
+  --kenz-purple: #5524c7;
+  --kenz-purple-dark: #4017a5;
+  --kenz-lavender: #f4f0ff;
+  --kenz-line: #e8e0fb;
+  --kenz-green: #18b98a;
+}
+
 @layer base {
+  * { -webkit-tap-highlight-color: transparent; }
+  html { min-height: 100%; background: #f5f1ff; }
   body {
+    min-height: 100vh;
+    margin: 0;
+    color: var(--kenz-ink);
+    background: linear-gradient(145deg, #faf8ff 0%, #f2edff 52%, #eee8ff 100%);
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-
-  /* Support RTL smoothly when Arabic is selected */
-  [dir="rtl"] {
-    text-align: right;
-  }
+  button, input, select, textarea { font: inherit; }
+  button { touch-action: manipulation; }
+  [dir="rtl"] { text-align: right; }
 }
 
-.font-mono-numbers {
-  font-family: 'JetBrains Mono', monospace;
-  font-variant-numeric: tabular-nums;
+.font-mono-numbers { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+/* Kenz lavender design system: remap the existing component palette without
+   changing financial logic, stored data, or feature behavior. */
+[class~="bg-slate-950"] { background-color: #f7f4ff !important; }
+[class~="bg-slate-950/80"], [class~="bg-slate-950/90"] { background-color: rgb(247 244 255 / .94) !important; }
+[class~="bg-slate-900"], [class~="bg-slate-900/80"], [class~="bg-slate-900/40"] { background-color: #fff !important; }
+[class~="bg-slate-800"], [class~="bg-slate-800/80"] { background-color: #eee8fc !important; }
+[class~="bg-slate-800/30"] { background-color: #f8f5ff !important; }
+[class~="border-slate-800"], [class~="border-slate-800/80"], [class~="border-slate-700"] { border-color: var(--kenz-line) !important; }
+[class~="divide-slate-800/80"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--kenz-line) !important; }
+[class~="text-white"] { color: #fff !important; }
+[class~="text-slate-100"], [class~="text-slate-200"] { color: var(--kenz-ink) !important; }
+[class~="text-slate-300"] { color: #514b70 !important; }
+[class~="text-slate-400"], [class~="text-slate-500"] { color: var(--kenz-muted) !important; }
+[class~="text-emerald-300"], [class~="text-emerald-400"] { color: var(--kenz-purple) !important; }
+[class~="text-emerald-500"] { color: var(--kenz-purple-dark) !important; }
+[class~="bg-emerald-600"], [class~="bg-emerald-500"] { background-color: var(--kenz-purple) !important; }
+[class~="hover:bg-emerald-500"]:hover, [class~="hover:bg-emerald-500"]:active { background-color: var(--kenz-purple-dark) !important; }
+[class~="border-emerald-500"], [class~="border-emerald-800/70"] { border-color: #cbb9f5 !important; }
+[class~="focus:border-emerald-500"]:focus { border-color: #8a63e8 !important; }
+[class~="selection:bg-emerald-500"] { --tw-selection-bg: var(--kenz-purple); }
+
+/* Shell, cards, fields and navigation */
+#root > div { min-height: 100dvh; background: transparent !important; color: var(--kenz-ink) !important; }
+#root header {
+  background: rgb(255 255 255 / .88) !important;
+  border-color: var(--kenz-line) !important;
+  box-shadow: 0 4px 24px rgb(74 43 145 / .06);
+  color: var(--kenz-ink);
 }
+#root header button:first-child span:first-child {
+  background: linear-gradient(145deg, #6e3bdd, #4318a9) !important;
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgb(85 36 199 / .22) !important;
+}
+#root main { max-width: 1180px; padding-top: 24px; padding-bottom: 110px; }
+#root main article, #root main section,
+#root main [class*="rounded-2xl"][class*="border"] {
+  border-color: var(--kenz-line);
+}
+#root main input, #root main select, #root main textarea,
+#root input, #root select, #root textarea {
+  color: var(--kenz-ink);
+  background-color: #fff;
+  border-color: var(--kenz-line);
+}
+#root input::placeholder, #root textarea::placeholder { color: #a29bbd; }
+#root nav[aria-label="Navigation principale"] {
+  background: rgb(255 255 255 / .96) !important;
+  border-color: var(--kenz-line) !important;
+  box-shadow: 0 -8px 28px rgb(69 42 130 / .08);
+  padding-bottom: max(.35rem, env(safe-area-inset-bottom));
+}
+#root nav[aria-label="Navigation principale"] button { min-width: 0; gap: 2px; }
+#root nav[aria-label="Navigation principale"] svg { width: 19px; height: 19px; }
+#root nav[aria-label="Navigation principale"] span { font-size: 9px; }
 
+/* Primary actions use the reference purple; semantic income/success colors remain green. */
+#root button[class*="bg-emerald-600"],
+#root button[class*="bg-emerald-500"] {
+  background: linear-gradient(135deg, #6334d2, #4b1bb5) !important;
+  box-shadow: 0 6px 16px rgb(85 36 199 / .18);
+}
+#root button[class*="bg-slate-900"] { box-shadow: 0 2px 8px rgb(64 38 120 / .04); }
+#root main h1 { letter-spacing: -.025em; }
+#root main .rounded-2xl { border-radius: 20px; }
 
-/* Locale-aware layout and native controls */
+/* Transaction rows: keep descriptions, metadata and amounts readable on phones. */
+.kenz-transaction-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; }
+.kenz-transaction-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.kenz-transaction-copy { min-width: 0; flex: 1 1 auto; }
+.kenz-transaction-title { display: block; overflow-wrap: anywhere; line-height: 1.4; }
+.kenz-transaction-meta { display: flex; flex-wrap: wrap; gap: 4px 7px; line-height: 1.45; }
+.kenz-transaction-amount { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 520px) {
+  #root main { padding-left: 16px; padding-right: 16px; padding-top: 18px; }
+  .kenz-transaction-row { align-items: flex-start; gap: 8px; padding: 14px 12px; }
+  .kenz-transaction-main { gap: 9px; }
+  .kenz-transaction-amount { flex-direction: column; align-items: flex-end; gap: 0; font-size: 12px; }
+  .kenz-transaction-meta { font-size: 10px; }
+}
 html[dir="rtl"] { direction: rtl; }
 html[dir="rtl"] body { text-align: right; }
 [dir="rtl"] input, [dir="rtl"] textarea, [dir="rtl"] select { text-align: right; }
