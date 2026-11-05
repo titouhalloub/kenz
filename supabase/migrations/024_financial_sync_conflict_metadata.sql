@@ -359,3 +359,88 @@ $$;
 
 REVOKE ALL ON FUNCTION public.sync_kenz_zakat_snapshot(jsonb, jsonb, timestamptz) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.sync_kenz_zakat_snapshot(jsonb, jsonb, timestamptz) TO authenticated;
+
+-- Debt metadata uses the same per-user lock; payment events remain handled by
+-- record_kredy_payment, which already locks the debt row and is idempotent.
+CREATE OR REPLACE FUNCTION public.sync_kenz_debt_metadata(
+  p_local jsonb, p_base jsonb, p_updated_at timestamptz
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_debt_id uuid := (p_local ->> 'id')::uuid;
+  v_remote jsonb;
+  v_merged jsonb;
+BEGIN
+  IF v_user_id IS NULL OR COALESCE(p_local ->> 'user_id', '') <> v_user_id::text THEN
+    RAISE EXCEPTION 'INVALID_DEBT_OWNER';
+  END IF;
+  PERFORM 1 FROM public.profiles WHERE id = v_user_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROFILE_NOT_FOUND'; END IF;
+
+  SELECT to_jsonb(d) INTO v_remote
+  FROM public.debts d WHERE d.id = v_debt_id AND d.user_id = v_user_id FOR UPDATE;
+
+  v_merged := public.kenz_merge_jsonb(
+    p_base, p_local, COALESCE(v_remote, '{}'::jsonb),
+    p_updated_at, NULLIF(v_remote ->> 'updated_at', '')::timestamptz
+  );
+
+  INSERT INTO public.debts (
+    id, user_id, business_id, counterparty_name, counterparty_phone, type,
+    total_amount_minor, remaining_amount_minor, currency, due_date, notes, status,
+    created_at, updated_at
+  ) VALUES (
+    v_debt_id, v_user_id, NULLIF(v_merged ->> 'business_id', '')::uuid,
+    v_merged ->> 'counterparty_name', NULLIF(v_merged ->> 'counterparty_phone', ''),
+    v_merged ->> 'type', (v_merged ->> 'total_amount_minor')::bigint,
+    COALESCE((v_merged ->> 'remaining_amount_minor')::bigint, (v_merged ->> 'total_amount_minor')::bigint),
+    COALESCE(v_merged ->> 'currency', 'DZD'), NULLIF(v_merged ->> 'due_date', '')::date,
+    NULLIF(v_merged ->> 'notes', ''), COALESCE(v_merged ->> 'status', 'active'),
+    COALESCE(NULLIF(v_merged ->> 'created_at', '')::timestamptz, now()), now()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    business_id = EXCLUDED.business_id,
+    counterparty_name = EXCLUDED.counterparty_name,
+    counterparty_phone = EXCLUDED.counterparty_phone,
+    type = EXCLUDED.type,
+    total_amount_minor = EXCLUDED.total_amount_minor,
+    currency = EXCLUDED.currency,
+    due_date = EXCLUDED.due_date,
+    notes = EXCLUDED.notes,
+    updated_at = now();
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.sync_kenz_delete_debts(p_debt_ids jsonb)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_debt_id text;
+BEGIN
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+  PERFORM 1 FROM public.profiles WHERE id = v_user_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROFILE_NOT_FOUND'; END IF;
+
+  FOR v_debt_id IN SELECT jsonb_array_elements_text(COALESCE(p_debt_ids, '[]'::jsonb))
+  LOOP
+    INSERT INTO public.debt_sync_tombstones (debt_id, user_id)
+    VALUES (v_debt_id::uuid, v_user_id)
+    ON CONFLICT (debt_id) DO NOTHING;
+    DELETE FROM public.debts WHERE id = v_debt_id::uuid AND user_id = v_user_id;
+  END LOOP;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_kenz_debt_metadata(jsonb, jsonb, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sync_kenz_debt_metadata(jsonb, jsonb, timestamptz) TO authenticated;
+REVOKE ALL ON FUNCTION public.sync_kenz_delete_debts(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sync_kenz_delete_debts(jsonb) TO authenticated;
