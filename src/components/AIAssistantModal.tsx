@@ -188,12 +188,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
 
       // 2. Forward the Supabase access token; the server verifies and meters it.
       const accessToken = await getSupabaseAccessToken();
-      const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (ch) => {
-            const r = Math.random() * 16 | 0;
-            return (ch === 'x' ? r : (r & 3 | 8)).toString(16);
-          });
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
         headers: {
@@ -203,7 +197,6 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
         body: JSON.stringify({
           purpose,
           mode,
-          idempotencyKey,
           userPrompt: queryPrompt,
           financialContext: {
             safeToSpendFormatted: formatMoney(
