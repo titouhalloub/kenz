@@ -31,6 +31,12 @@ function rateLimitAi(req: express.Request, res: express.Response, next: express.
   next();
 }
 
+function trimTrailingSlashes(value: string): string {
+  let result = value;
+  while (result.endsWith('/')) result = result.slice(0, -1);
+  return result;
+}
+
 function resolveOpenAIBaseUrl(
   provider: string,
   preset: { defaultBaseUrl: string },
@@ -44,7 +50,7 @@ function resolveOpenAIBaseUrl(
       const url = new URL(requestedBaseUrl?.trim() || preset.defaultBaseUrl);
       const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
       if (url.protocol !== 'http:' || !localHosts.has(url.hostname) || url.username || url.password || url.search || url.hash) return null;
-      return url.toString().replace(/\\/+$/, '');
+      return trimTrailingSlashes(url.toString());
     } catch { return null; }
   }
 
@@ -54,8 +60,8 @@ function resolveOpenAIBaseUrl(
     const expected = new URL(preset.defaultBaseUrl);
     if (requestedBaseUrl?.trim()) {
       const requested = new URL(requestedBaseUrl.trim());
-      const expectedPath = expected.pathname.replace(/\\/+$/, '');
-      const requestedPath = requested.pathname.replace(/\\/+$/, '');
+      const expectedPath = trimTrailingSlashes(expected.pathname);
+      const requestedPath = trimTrailingSlashes(requested.pathname);
       if (requested.origin !== expected.origin || requestedPath !== expectedPath || requested.username || requested.password || requested.search || requested.hash) return null;
     }
     return preset.defaultBaseUrl;
