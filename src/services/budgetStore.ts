@@ -477,11 +477,15 @@ export async function flushPendingBudgetSync(userId: string): Promise<boolean> {
   if (!isUuid(userId) || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
   const pending = readPendingBudgetOutbox(userId);
   if (!pending) return true;
-  const succeeded = await syncBudgetStateToSupabase(pending.state, pending.deleted);
+  const key = pendingBudgetKey(userId);
+  const raw = localStorage.getItem(key);
+  if (!raw) return false;
+  const succeeded = await syncBudgetStateToSupabase(
+    pending.state, pending.deleted, pending.baseState, pending.updatedAt, raw,
+  );
   if (!succeeded || typeof localStorage === 'undefined') return false;
   try {
-    const key = pendingBudgetKey(userId);
-    if (localStorage.getItem(key) === JSON.stringify(pending)) localStorage.removeItem(key);
+    if (localStorage.getItem(key) === raw) localStorage.removeItem(key);
   } catch (error) {
     console.error('Unable to clear synced Kenz outbox snapshot:', error);
     return false;
@@ -505,7 +509,14 @@ export function saveBudgetState(state: BudgetState): void {
       for (const id of nextIds) tombstones.delete(id);
       deleted[collection] = [...tombstones];
     }
-    localStorage.setItem(pendingBudgetKey(userId), JSON.stringify({ state, deleted } satisfies PendingBudgetOutbox));
+    const outbox: PendingBudgetOutbox = {
+      version: 2,
+      state,
+      baseState: pending?.baseState || previous,
+      deleted,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(pendingBudgetKey(userId), JSON.stringify(outbox));
     saveBudgetStateLocally(state);
   } catch (error) { console.error('Unable to persist Kenz offline outbox:', error); saveBudgetStateLocally(state); return; }
   void flushPendingBudgetSync(userId);
