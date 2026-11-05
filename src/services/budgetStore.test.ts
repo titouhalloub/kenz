@@ -87,10 +87,18 @@ describe('budget offline persistence', () => {
 
   it('keeps a durable snapshot queued while offline and clears it on local wipe', async () => {
     const state = createEmptyBudgetState(profile(userA));
+    state.accounts = [{
+      id: '66666666-6666-4666-8666-666666666666', userId: userA,
+      name: 'First offline account', type: 'cash', currency: 'DZD',
+      initialBalanceMinor: 1000, isArchived: false,
+    }];
     saveBudgetState(state);
 
     const outboxKey = `kenz_budget_outbox_v2_${userA}`;
     expect(storage.has(outboxKey)).toBe(true);
+    const queued = JSON.parse(storage.get(outboxKey) || '{}');
+    expect(queued.baseState.accounts).toEqual([]);
+    expect(queued.state.accounts).toHaveLength(1);
     await expect(flushPendingBudgetSync(userA)).resolves.toBe(false);
     expect(storage.has(outboxKey)).toBe(true);
 
