@@ -207,11 +207,8 @@ export default function App() {
     let refreshQueue: Promise<void> = Promise.resolve();
     const refresh = () => {
       refreshQueue = refreshQueue.then(async () => {
-        await flushPendingBudgetSync(userId);
-        await flushPendingDebtSync(userId);
-        await flushPendingZakatFestiveSync(userId);
         const [budget, zakat, festive, credits] = await Promise.all([
-          loadBudgetStateFromSupabase(budgetState.profile, false),
+          loadBudgetStateFromSupabase({ ...budgetState.profile, id: userId }),
           loadZakatStateFromSupabase(userId),
           loadFestiveStateFromSupabase(userId),
           loadAICreditStateFromSupabase(userId),
