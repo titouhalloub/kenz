@@ -99,6 +99,15 @@ BEGIN
   IF p_amount_minor IS NULL OR p_amount_minor <= 0 THEN
     RAISE EXCEPTION 'Payment amount must be positive';
   END IF;
+  IF p_payment_date IS NULL THEN
+    RAISE EXCEPTION 'Payment date is required';
+  END IF;
+  IF p_source_account_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.accounts a
+    WHERE a.id = p_source_account_id AND a.user_id = v_user_id
+  ) THEN
+    RAISE EXCEPTION 'Source account not found or access denied';
+  END IF;
 
   SELECT d.* INTO v_debt
   FROM public.debts d
