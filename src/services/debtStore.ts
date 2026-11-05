@@ -273,8 +273,11 @@ export function deleteDebtEntry(debts: DebtEntry[], debtId: string): DebtEntry[]
   saveDebtState(next, target?.userId);
   const supabase = getSupabaseClient();
   if (supabase && target && isUuid(target.userId) && isUuid(debtId)) {
-    void supabase.from('debts').delete().eq('id', debtId).eq('user_id', target.userId)
-      .then(({ error }) => { if (error) console.error('Failed to delete cloud Kredy debt:', error.message); });
+    debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
+      const { error } = await supabase.from('debts').delete()
+        .eq('id', debtId).eq('user_id', target.userId);
+      if (error) console.error('Failed to delete cloud Kredy debt:', error.message);
+    }).catch((error) => console.error('Unexpected Kredy delete failure:', error));
   }
   return next;
 }
