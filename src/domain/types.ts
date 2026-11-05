@@ -253,6 +253,11 @@ export interface DebtPayment {
   id: string;
   debtId: string;
   amountMinor: number;
+  /** Portion allocated to the debt after deterministic cross-device reconciliation. */
+  appliedAmountMinor?: number;
+  /** Portion retained for manual reconciliation instead of reducing the debt twice. */
+  unappliedAmountMinor?: number;
+  reconciliationStatus?: 'applied' | 'partial' | 'pending';
   paymentDate: string;
   sourceAccountId?: string;
   notes?: string;
