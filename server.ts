@@ -54,7 +54,7 @@ async function requireAuthenticatedUser(
   }
 
   const authorization = req.header('authorization') || '';
-  const tokenMatch = authorization.match(/^Bearer\\s+(.+)$/i);
+  const tokenMatch = authorization.match(/^Bearer\s+(.+)$/i);
   const accessToken = tokenMatch?.[1]?.trim();
   if (!accessToken) {
     return res.status(401).json({ success: false, error: 'Authentification requise.' });
