@@ -460,8 +460,6 @@ async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBud
       saveBudgetStateLocally(latest);
     }
     return true;
-
-    return true;
   }).catch((error) => {
     console.error('Unexpected Kenz cloud sync failure:', error);
     return false;
