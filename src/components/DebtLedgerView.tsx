@@ -145,7 +145,8 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   const paymentIssueDebt = paymentIssueTarget ? debts.find((debt) => debt.id === paymentIssueTarget.debtId) : undefined;
   const paymentIssuePayment = paymentIssueDebt?.payments.find((payment) => payment.id === paymentIssueTarget?.paymentId);
   const duplicateCandidates = paymentIssueDebt?.payments.filter((payment) =>
-    payment.id !== paymentIssueTarget?.paymentId && (payment.resolutionStatus || 'normal') !== 'duplicate'
+    payment.id !== paymentIssueTarget?.paymentId && (payment.resolutionStatus || 'normal') !== 'duplicate' &&
+    !paymentIssueDebt.payments.some((item) => item.duplicateOfPaymentId === payment.id)
   ) || [];
   const refundableAmountMinor = paymentIssuePayment
     ? paymentIssuePayment.amountMinor - (paymentIssuePayment.refundedAmountMinor || 0)
