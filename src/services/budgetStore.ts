@@ -16,6 +16,11 @@ import { getSupabaseClient } from './supabase';
 
 const STORAGE_KEY = 'kenz_budget_state_v1';
 
+function budgetStorageKey(userId?: string): string {
+  return userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)
+    ? `${STORAGE_KEY}_${userId}` : STORAGE_KEY;
+}
+
 export interface BudgetState {
   profile: UserProfile;
   accounts: Account[];
@@ -168,23 +173,25 @@ const INITIAL_STATE: BudgetState = {
   ],
 };
 
-export function loadBudgetState(): BudgetState {
-  if (typeof localStorage === 'undefined') return INITIAL_STATE;
+export function loadBudgetState(profile?: UserProfile): BudgetState {
+  const authenticated = Boolean(profile && isUuid(profile.id));
+  const fallback = authenticated ? createEmptyBudgetState(profile!) : INITIAL_STATE;
+  if (typeof localStorage === 'undefined') return fallback;
+  const key = budgetStorageKey(profile?.id);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_STATE));
-      return INITIAL_STATE;
+      localStorage.setItem(key, JSON.stringify(fallback));
+      return fallback;
     }
     const parsed = JSON.parse(raw);
     return {
-      ...INITIAL_STATE,
+      ...fallback,
       ...parsed,
+      profile: authenticated ? { ...fallback.profile, ...parsed.profile, id: profile!.id } : { ...fallback.profile, ...parsed.profile },
       categories: parsed.categories?.length ? parsed.categories : DEFAULT_CATEGORIES,
     };
-  } catch {
-    return INITIAL_STATE;
-  }
+  } catch { return fallback; }
 }
 
 function createId(): string {
@@ -282,7 +289,7 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile): Promise
 
 function saveBudgetStateLocally(state: BudgetState): void {
   if (typeof localStorage === 'undefined') return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  try { localStorage.setItem(budgetStorageKey(state.profile.id), JSON.stringify(state)); }
   catch (e) { console.error('Failed to save budget state to localStorage', e); }
 }
 
@@ -364,12 +371,12 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
 
     if (typeof localStorage !== 'undefined') {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(budgetStorageKey(state.profile.id));
         if (raw) {
           const current = JSON.parse(raw) as BudgetState;
           current.transactions = current.transactions.map((tx) => ({ ...tx, syncStatus: 'synced' }));
           current.lastSyncedAt = new Date().toISOString();
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+          localStorage.setItem(budgetStorageKey(state.profile.id), JSON.stringify(current));
         }
       } catch { /* local cache remains usable if sync metadata cannot be updated */ }
     }
@@ -610,7 +617,11 @@ export function exportTransactionsToCSV(state: BudgetState): string {
  * Completely wipes all personal financial data from local storage.
  */
 export function wipeAllLocalData(): void {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(STORAGE_KEY);
+  if (typeof localStorage === 'undefined') return;
+  const keys: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key && key.startsWith(STORAGE_KEY)) keys.push(key);
   }
+  keys.forEach((key) => localStorage.removeItem(key));
 }
