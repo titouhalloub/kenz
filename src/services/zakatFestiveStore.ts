@@ -106,6 +106,55 @@ function writePendingSnapshot(key: string, value: unknown): void {
   catch (error) { console.error('Unable to persist Zakat/Festive offline outbox:', error); }
 }
 
+function valuesEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function mergeZakatFields(local: ZakatState, remote: ZakatState, base: ZakatState, localStamp: string, remoteStamp: string): ZakatState {
+  const merged = { ...remote };
+  for (const key of Object.keys(base) as Array<keyof ZakatState>) {
+    const localChanged = !valuesEqual(local[key], base[key]);
+    const remoteChanged = !valuesEqual(remote[key], base[key]);
+    if (localChanged && !remoteChanged) (merged as any)[key] = local[key];
+    else if (localChanged && remoteChanged && valuesEqual(local[key], remote[key])) (merged as any)[key] = local[key];
+    else if (localChanged && remoteChanged) {
+      if ((Date.parse(localStamp) || 0) > (Date.parse(remoteStamp) || 0)) (merged as any)[key] = local[key];
+      else if ((Date.parse(localStamp) || 0) === (Date.parse(remoteStamp) || 0) &&
+        JSON.stringify(local[key]) > JSON.stringify(remote[key])) (merged as any)[key] = local[key];
+    }
+  }
+  return merged;
+}
+
+function mergeFestiveRows(
+  local: FestiveBudget[], remote: FestiveBudget[], base: FestiveBudget[],
+  deletedIds: string[], localStamp: string,
+): FestiveBudget[] {
+  const lm = new Map(local.map((row) => [row.id, row]));
+  const rm = new Map(remote.map((row) => [row.id, row]));
+  const bm = new Map(base.map((row) => [row.id, row]));
+  const removed = new Set(deletedIds);
+  const result: FestiveBudget[] = [];
+  for (const id of new Set([...lm.keys(), ...rm.keys()])) {
+    if (removed.has(id)) continue;
+    const l = lm.get(id), r = rm.get(id), b = bm.get(id);
+    if (l && r) {
+      if (!b) { result.push((Date.parse(localStamp) > Date.parse(r.syncUpdatedAt || '') ? { ...r, ...l } : { ...l, ...r })); continue; }
+      const merged = { ...r };
+      for (const key of Object.keys(b) as Array<keyof FestiveBudget>) {
+        if (key === 'syncUpdatedAt') continue;
+        const lc = !valuesEqual(l[key], b[key]), rc = !valuesEqual(r[key], b[key]);
+        if (lc && !rc) (merged as any)[key] = l[key];
+        else if (lc && rc && valuesEqual(l[key], r[key])) (merged as any)[key] = l[key];
+        else if (lc && rc && (Date.parse(localStamp) || 0) > (Date.parse(r.syncUpdatedAt || '') || 0)) (merged as any)[key] = l[key];
+      }
+      result.push(merged);
+    } else if (l && (!b || !valuesEqual(l, b))) result.push(l);
+    else if (r) result.push(r);
+  }
+  return result;
+}
+
 async function flushSnapshot(key: string, userId: string, table: 'zakat_settings' | 'festive_budgets'): Promise<boolean> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
   const supabase = getSupabaseClient();
