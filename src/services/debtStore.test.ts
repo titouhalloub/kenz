@@ -244,6 +244,23 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
     expect(allocations(mergeAB)).toEqual(allocations(mergeBA));
   });
 
+  it('deduplicates the same payment event synced from two devices', () => {
+    const base = sampleDebts[0];
+    const samePayment = {
+      id: 'shared_payment_id',
+      debtId: base.id,
+      amountMinor: 125000,
+      paymentDate: '2026-10-12',
+      createdAt: '2026-10-12T10:00:00Z',
+    };
+    const deviceA: DebtEntry = { ...base, payments: [samePayment] };
+    const deviceB: DebtEntry = { ...base, payments: [{ ...samePayment }] };
+
+    const merged = mergeDebtSnapshots([deviceA], [deviceB])[0];
+    expect(merged.payments).toHaveLength(1);
+    expect(merged.remainingAmountMinor).toBe(375000);
+  });
+
   it('uses the newest debt details while retaining payment events from both devices', () => {
     const base = sampleDebts[0];
     const local: DebtEntry = {
