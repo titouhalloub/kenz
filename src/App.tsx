@@ -95,6 +95,7 @@ import { loadCurrentUser, logoutUser, UserProfile } from './services/authStore';
 import { getSupabaseClient } from './services/supabase';
 import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
+import { kenzText } from './domain/i18n';
 
 type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
 
@@ -435,6 +436,7 @@ export default function App() {
   };
 
   const isRTL = budgetState.profile.locale === 'ar';
+  useEffect(() => { document.documentElement.lang = budgetState.profile.locale; document.documentElement.dir = isRTL ? 'rtl' : 'ltr'; }, [budgetState.profile.locale, isRTL]);
 
   return (
     <div
@@ -466,7 +468,7 @@ export default function App() {
               activeTab === 'home' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Tableau de bord
+            {kenzText(budgetState.profile.locale, 'dashboard', 'Tableau de bord')}
           </button>
           <button
             onClick={() => setActiveTab('transactions')}
@@ -474,7 +476,7 @@ export default function App() {
               activeTab === 'transactions' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Opérations
+            {kenzText(budgetState.profile.locale, 'transactions', 'Opérations')}
           </button>
           <button
             onClick={() => setActiveTab('reports')}
@@ -490,7 +492,7 @@ export default function App() {
               activeTab === 'plan' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Planification & Objectifs
+            {kenzText(budgetState.profile.locale, 'planning', 'Planification & Objectifs')}
           </button>
           <button
             onClick={() => setActiveTab('nearby')}
@@ -498,7 +500,7 @@ export default function App() {
               activeTab === 'nearby' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Quartier & Services
+            {kenzText(budgetState.profile.locale, 'neighborhood', 'Quartier & Services')}
           </button>
           <button
             onClick={() => setActiveTab('debts')}
@@ -506,7 +508,7 @@ export default function App() {
               activeTab === 'debts' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Carnet Kredy
+            {kenzText(budgetState.profile.locale, 'debts', 'Carnet Kredy')}
           </button>
           <button
             onClick={() => setActiveTab('zakat')}
@@ -514,7 +516,7 @@ export default function App() {
               activeTab === 'zakat' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Zakat & Fêtes
+            {kenzText(budgetState.profile.locale, 'zakat', 'Zakat & Fêtes')}
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -522,7 +524,7 @@ export default function App() {
               activeTab === 'settings' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
             }`}
           >
-            Paramètres
+            {kenzText(budgetState.profile.locale, 'settings', 'Paramètres')}
           </button>
         </nav>
 
@@ -534,7 +536,7 @@ export default function App() {
             title="Assistant IA et solde de crédits"
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">Coach IA</span>
+            <span className="hidden sm:inline">{kenzText(budgetState.profile.locale, 'aiCoach', 'Coach IA')}</span>
             <span className="font-mono-numbers text-[11px] bg-slate-950 px-1.5 py-0.5 rounded text-amber-300 border border-slate-800">
               {aiWallet.balanceCredits} cr.
             </span>
@@ -563,7 +565,7 @@ export default function App() {
             className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-emerald-950/40 cursor-pointer min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
-            <span>Opération</span>
+            <span>{kenzText(budgetState.profile.locale, 'addTransaction', 'Opération')}</span>
           </button>
         </div>
       </header>
@@ -730,7 +732,7 @@ export default function App() {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Accueil</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الرئيسية' : budgetState.profile.locale === 'en' ? 'Home' : 'Accueil'}</span>
           </button>
 
           {/* 2. Transactions Tab */}
@@ -741,7 +743,7 @@ export default function App() {
             }`}
           >
             <Receipt className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Opérations</span>
+            <span className="text-[9px] mt-1 tracking-tight">{kenzText(budgetState.profile.locale, 'transactions', 'Opérations')}</span>
           </button>
 
           {/* 3. Advanced reports */}
@@ -752,7 +754,7 @@ export default function App() {
             }`}
           >
             <BarChart3 className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'تقارير' : 'Rapports'}</span>
+            <span className="text-[9px] mt-1 tracking-tight">{kenzText(budgetState.profile.locale, 'reports', 'Rapports')}</span>
           </button>
 
           {/* 3. Nearby / Directory Tab */}
@@ -763,7 +765,7 @@ export default function App() {
             }`}
           >
             <Store className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Quartier</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الحي' : budgetState.profile.locale === 'en' ? 'Nearby' : 'Quartier'}</span>
           </button>
 
           {/* 4. Carnet Kredy Tab */}
@@ -774,7 +776,7 @@ export default function App() {
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Kredy</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الديون' : 'Kredy'}</span>
           </button>
 
           {/* 5. Zakat & Fêtes Tab */}
@@ -785,7 +787,7 @@ export default function App() {
             }`}
           >
             <Moon className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Zakat</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الزكاة' : 'Zakat'}</span>
           </button>
 
           {/* 6. Plan Tab */}
@@ -796,7 +798,7 @@ export default function App() {
             }`}
           >
             <CalendarDays className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Plan</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الخطة' : budgetState.profile.locale === 'en' ? 'Plan' : 'Plan'}</span>
           </button>
 
           {/* 7. Settings Tab */}
@@ -807,7 +809,7 @@ export default function App() {
             }`}
           >
             <SettingsIcon className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">Options</span>
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الإعدادات' : budgetState.profile.locale === 'en' ? 'Settings' : 'Options'}</span>
           </button>
         </div>
       </nav>

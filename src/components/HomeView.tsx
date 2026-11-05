@@ -77,12 +77,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 shadow-xl">
         <div className="flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <span>Reste à vivre disponible</span>
+            <span>{profile.locale === 'ar' ? 'المبلغ المتاح للإنفاق' : profile.locale === 'en' ? 'Available to spend' : 'Reste à vivre disponible'}</span>
             <span aria-hidden="true">·</span>
             <span className="text-slate-300 font-medium">
               {safeToSpend.isPaydayConfigured
-                ? `Paye dans ${safeToSpend.daysUntilPayday} jours`
-                : `Période 30 jours`}
+                ? (profile.locale === 'ar' ? `الراتب بعد ${safeToSpend.daysUntilPayday} يوم` : profile.locale === 'en' ? `Payday in ${safeToSpend.daysUntilPayday} days` : `Paye dans ${safeToSpend.daysUntilPayday} jours`)
+                : (profile.locale === 'ar' ? 'فترة 30 يوماً' : profile.locale === 'en' ? '30-day period' : 'Période 30 jours')}
             </span>
           </div>
           <span className="text-slate-400 font-mono-numbers text-[11px]">
@@ -101,15 +101,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
           <p className="mt-1 text-xs text-slate-400">
             {isShortfall
-              ? 'Déficit budgétaire détecté avant la prochaine paye.'
-              : 'Montant disponible en toute sécurité après déduction des factures et de l’épargne.'}
+              ? (profile.locale === 'ar' ? 'تم رصد عجز في الميزانية قبل موعد الراتب.' : profile.locale === 'en' ? 'Budget shortfall detected before your next payday.' : 'Déficit budgétaire détecté avant la prochaine paye.')
+              : (profile.locale === 'ar' ? 'المبلغ المتاح بأمان بعد خصم الفواتير والمدخرات.' : profile.locale === 'en' ? 'Safely available after bills and savings are accounted for.' : 'Montant disponible en toute sécurité après déduction des factures et de l’épargne.')}
           </p>
         </div>
 
         {/* Daily Spending Guideline */}
         <div className="mt-5 pt-4 border-t border-slate-800/80 grid grid-cols-2 gap-4">
           <div>
-            <span className="text-[11px] text-slate-500 block">Plafond quotidien conseillé</span>
+            <span className="text-[11px] text-slate-500 block">{profile.locale === 'ar' ? 'الحد اليومي المقترح' : profile.locale === 'en' ? 'Suggested daily limit' : 'Plafond quotidien conseillé'}</span>
             <span className="text-lg font-semibold font-mono-numbers text-slate-200">
               {formatMoney(safeToSpend.dailyGuidelineMinor, profile.preferredCurrency, profile.locale)}
               <span className="text-xs font-normal text-slate-400"> /jour</span>
@@ -117,7 +117,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-500 block">Trésorerie liquide totale</span>
+            <span className="text-[11px] text-slate-500 block">{profile.locale === 'ar' ? 'إجمالي السيولة' : profile.locale === 'en' ? 'Total liquid funds' : 'Trésorerie liquide totale'}</span>
             <span className="text-lg font-semibold font-mono-numbers text-slate-200">
               {formatMoney(safeToSpend.availableBalanceMinor, profile.preferredCurrency, profile.locale)}
             </span>
