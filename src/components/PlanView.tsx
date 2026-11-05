@@ -662,7 +662,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100" />
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500">Le défi reste modifiable et peut être mis en pause depuis la gestion des objectifs.</p>
+              <p className="text-[11px] text-slate-500">Tu peux mettre le défi en pause ou le reprendre à tout moment.</p>
               <div className="flex gap-2">
                 <button type="submit" className="flex-1 h-11 rounded-xl bg-emerald-600 text-white text-xs font-semibold">Créer le défi</button>
                 <button type="button" onClick={() => setShowAddChallenge(false)} className="px-4 h-11 rounded-xl border border-slate-800 text-slate-400 text-xs">Annuler</button>
