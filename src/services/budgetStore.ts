@@ -672,7 +672,7 @@ export function recordRecurringPayment(currentState: BudgetState, itemId: string
   const item = currentState.recurringItems.find((row) => row.id === itemId);
   if (!item || !item.isActive || !item.accountId) return currentState;
   const account = currentState.accounts.find((row) => row.id === item.accountId && !row.isArchived);
-  if (!account) return currentState;
+  if (!account || account.currency !== item.currency) return currentState;
   const paymentKey = `recurring-payment:${item.id}:${item.nextDueDate}`;
   const alreadyRecorded = currentState.transactions.some((tx) => tx.idempotencyKey === paymentKey);
   const localToday = (() => {
@@ -821,7 +821,7 @@ export function wipeAllLocalData(): void {
   const keys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key && (key.startsWith(STORAGE_KEY) || key.startsWith('kenz_budget_outbox_v1_') || key.startsWith('kenz_budget_outbox_v2_') || key.startsWith('kenz_savings_challenge_contributions_v1_'))) keys.push(key);
+    if (key && (key.startsWith(STORAGE_KEY) || key.startsWith('kenz_budget_outbox_v1_') || key.startsWith('kenz_budget_outbox_v2_') || key.startsWith('kenz_savings_challenge_contributions_v1_') || key.startsWith('kenz_bill_reminders_sent_v1_'))) keys.push(key);
   }
   keys.forEach((key) => localStorage.removeItem(key));
 }
