@@ -231,7 +231,7 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
     if (tombstoneError) throw tombstoneError;
     const cloudDeletedIds = (tombstoneRows || []).map((row) => row.debt_id as string);
     const deletedIds = [...new Set([...(pending?.deletedDebtIds || []), ...cloudDeletedIds])];
-    if (pending?.deletedDebtIds.length) {
+    if (pending && pending.deletedDebtIds.length > 0) {
       const { error } = await supabase.from('debt_sync_tombstones').upsert(
         pending.deletedDebtIds.map((debtId) => ({ debt_id: debtId, user_id: userId })),
         { onConflict: 'debt_id' },
