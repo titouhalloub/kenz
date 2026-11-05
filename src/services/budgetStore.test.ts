@@ -5,6 +5,7 @@ import {
   loadBudgetState,
   saveBudgetState,
   wipeAllLocalData,
+  mergeBudgetSnapshots,
 } from './budgetStore';
 
 const userA = '11111111-1111-4111-8111-111111111111';
@@ -49,6 +50,39 @@ describe('budget offline persistence', () => {
     expect(loadBudgetState(profile(userA)).profile.displayName).toBe('Account A');
     expect(loadBudgetState(profile(userB)).accounts).toEqual([]);
     expect(loadBudgetState(profile(userB)).transactions).toEqual([]);
+  });
+
+  it('merges independent edits to the same account from separate devices', () => {
+    const base = createEmptyBudgetState(profile(userA));
+    const account = {
+      id: '33333333-3333-4333-8333-333333333333', userId: userA,
+      name: 'Cash', type: 'cash' as const, currency: 'DZD',
+      initialBalanceMinor: 100000, isArchived: false,
+    };
+    base.accounts = [account];
+    const local = { ...base, accounts: [{ ...account, name: 'Cash phone' }] };
+    const remote = { ...base, accounts: [{ ...account, isArchived: true, syncUpdatedAt: '2026-11-05T11:00:00.000Z' }] };
+    const merged = mergeBudgetSnapshots(local, remote, base,
+      { transactions: [], recurringItems: [], budgets: [], savingsGoals: [], accounts: [] },
+      '2026-11-05T10:00:00.000Z');
+    expect(merged.accounts[0].name).toBe('Cash phone');
+    expect(merged.accounts[0].isArchived).toBe(true);
+  });
+
+  it('uses the newest device timestamp for a same-field conflict', () => {
+    const base = createEmptyBudgetState(profile(userA));
+    const account = {
+      id: '44444444-4444-4444-8444-444444444444', userId: userA,
+      name: 'Cash', type: 'cash' as const, currency: 'DZD',
+      initialBalanceMinor: 100000, isArchived: false,
+    };
+    base.accounts = [account];
+    const local = { ...base, accounts: [{ ...account, name: 'Phone name' }] };
+    const remote = { ...base, accounts: [{ ...account, name: 'Tablet name', syncUpdatedAt: '2026-11-05T11:00:00.000Z' }] };
+    const merged = mergeBudgetSnapshots(local, remote, base,
+      { transactions: [], recurringItems: [], budgets: [], savingsGoals: [], accounts: [] },
+      '2026-11-05T12:00:00.000Z');
+    expect(merged.accounts[0].name).toBe('Phone name');
   });
 
   it('keeps a durable snapshot queued while offline and clears it on local wipe', async () => {
