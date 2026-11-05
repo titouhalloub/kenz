@@ -99,7 +99,7 @@ async function recordMeteredAIUsage(
     return { ok: false, status: 503, error: 'La facturation IA sécurisée n’est pas configurée.' };
   }
 
-  const mode = req.body?.mode === 'byok' || Boolean(req.body?.byokKey) ? 'byok' : 'managed';
+  const mode = req.body?.mode === 'byok' || (!req.body?.mode && Boolean(req.body?.byokKey || (req.body?.byokProvider && req.body.byokProvider !== 'google'))) ? 'byok' : 'managed';
   const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose : 'general_query';
   const provider = typeof req.body?.byokProvider === 'string' ? req.body.byokProvider : 'google_gemini';
   const model = typeof req.body?.byokModel === 'string' ? req.body.byokModel : 'gemini-2.5-flash';
@@ -235,7 +235,7 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defa
 
 // Universal Server-Side AI Gateway supporting ANY provider
 app.post('/api/ai/advisor', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
-  const isBYOK = Boolean(req.body.byokKey || (req.body.byokProvider && req.body.byokProvider !== 'google'));
+  const isBYOK = req.body.mode === 'byok' || (!req.body.mode && Boolean(req.body.byokKey || (req.body.byokProvider && req.body.byokProvider !== 'google')));
 
   try {
     const {
