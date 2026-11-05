@@ -85,7 +85,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const [recType, setRecType] = useState<'income' | 'expense'>('expense');
   const [recAmountStr, setRecAmountStr] = useState('');
   const [recDueDate, setRecDueDate] = useState('');
-  const [recCategoryId, setRecCategoryId] = useState(categories[0]?.id || '');
+  const [recCategoryId, setRecCategoryId] = useState(categories.find((category) => !category.isIncome)?.id || '');
   const [recFrequency, setRecFrequency] = useState<CommitmentFrequency>('monthly');
   const [recAccountId, setRecAccountId] = useState(accounts.find((account) => !account.isArchived)?.id || '');
   const [recReminderEnabled, setRecReminderEnabled] = useState(true);
@@ -107,6 +107,13 @@ export const PlanView: React.FC<PlanViewProps> = ({
   // Editing budget inline state
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editBudgetAmount, setEditBudgetAmount] = useState('');
+
+  useEffect(() => {
+    const matchingCategory = categories.find((category) => category.isIncome === (recType === 'income'));
+    if (matchingCategory && !categories.some((category) => category.id === recCategoryId && category.isIncome === (recType === 'income'))) {
+      setRecCategoryId(matchingCategory.id);
+    }
+  }, [categories, recCategoryId, recType]);
 
   useEffect(() => {
     if (!accounts.some((account) => account.id === recAccountId && !account.isArchived && account.currency === profile.preferredCurrency)) {
@@ -471,6 +478,16 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Catégorie</label>
+                <select value={recCategoryId} onChange={(e) => setRecCategoryId(e.target.value)}
+                  className="w-full h-10 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100">
+                  {categories.filter((category) => category.isIncome === (recType === 'income')).map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-2">
