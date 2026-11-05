@@ -234,3 +234,68 @@ $$;
 
 REVOKE ALL ON FUNCTION public.sync_kenz_collection(text, jsonb, jsonb, jsonb, timestamptz) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.sync_kenz_collection(text, jsonb, jsonb, jsonb, timestamptz) TO authenticated;
+
+-- One atomic sync operation for profile, accounts, transactions, budgets,
+-- recurring items, savings goals, and festive budgets.
+CREATE OR REPLACE FUNCTION public.sync_kenz_financial_snapshot(
+  p_snapshot jsonb, p_base jsonb, p_deleted jsonb, p_updated_at timestamptz
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_remote_profile jsonb;
+  v_profile jsonb;
+BEGIN
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'AUTH_REQUIRED'; END IF;
+  SELECT to_jsonb(p) INTO v_remote_profile
+  FROM public.profiles p WHERE p.id = v_user_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'PROFILE_NOT_FOUND'; END IF;
+
+  v_profile := public.kenz_merge_jsonb(
+    p_base -> 'profile', p_snapshot -> 'profile', v_remote_profile,
+    p_updated_at, NULLIF(v_remote_profile ->> 'updated_at', '')::timestamptz
+  );
+  UPDATE public.profiles
+  SET display_name = v_profile ->> 'display_name',
+      preferred_currency = COALESCE(v_profile ->> 'preferred_currency', preferred_currency),
+      locale = COALESCE(v_profile ->> 'locale', locale),
+      payday_day_of_month = NULLIF(v_profile ->> 'payday_day_of_month', '')::smallint,
+      planning_period_days = COALESCE(NULLIF(v_profile ->> 'planning_period_days', '')::smallint, planning_period_days),
+      updated_at = now()
+  WHERE id = v_user_id;
+
+  PERFORM public.sync_kenz_collection('transactions',
+    COALESCE(p_snapshot -> 'transactions', '[]'::jsonb),
+    COALESCE(p_base -> 'transactions', '[]'::jsonb),
+    COALESCE(p_deleted -> 'transactions', '[]'::jsonb), p_updated_at);
+  PERFORM public.sync_kenz_collection('budgets',
+    COALESCE(p_snapshot -> 'budgets', '[]'::jsonb),
+    COALESCE(p_base -> 'budgets', '[]'::jsonb),
+    COALESCE(p_deleted -> 'budgets', '[]'::jsonb), p_updated_at);
+  PERFORM public.sync_kenz_collection('recurring_items',
+    COALESCE(p_snapshot -> 'recurring_items', '[]'::jsonb),
+    COALESCE(p_base -> 'recurring_items', '[]'::jsonb),
+    COALESCE(p_deleted -> 'recurring_items', '[]'::jsonb), p_updated_at);
+  PERFORM public.sync_kenz_collection('savings_goals',
+    COALESCE(p_snapshot -> 'savings_goals', '[]'::jsonb),
+    COALESCE(p_base -> 'savings_goals', '[]'::jsonb),
+    COALESCE(p_deleted -> 'savings_goals', '[]'::jsonb), p_updated_at);
+  PERFORM public.sync_kenz_collection('accounts',
+    COALESCE(p_snapshot -> 'accounts', '[]'::jsonb),
+    COALESCE(p_base -> 'accounts', '[]'::jsonb),
+    COALESCE(p_deleted -> 'accounts', '[]'::jsonb), p_updated_at);
+  PERFORM public.sync_kenz_collection('festive_budgets',
+    COALESCE(p_snapshot -> 'festive_budgets', '[]'::jsonb),
+    COALESCE(p_base -> 'festive_budgets', '[]'::jsonb),
+    COALESCE(p_deleted -> 'festive_budgets', '[]'::jsonb), p_updated_at);
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_kenz_financial_snapshot(jsonb, jsonb, jsonb, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sync_kenz_financial_snapshot(jsonb, jsonb, jsonb, timestamptz) TO authenticated;
