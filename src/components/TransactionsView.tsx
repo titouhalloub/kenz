@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   Trash2,
   PlusCircle,
+  ScanLine,
   Filter,
 } from 'lucide-react';
 import { Transaction, Account, Category, UserProfile, TransactionType } from '../domain/types';
@@ -18,6 +19,7 @@ interface TransactionsViewProps {
   categories: Category[];
   profile: UserProfile;
   onOpenAddModal: () => void;
+  onOpenReceiptScanner: () => void;
   onDeleteTransaction: (id: string) => void;
   onExportCSV: () => void;
 }
@@ -28,6 +30,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   categories,
   profile,
   onOpenAddModal,
+  onOpenReceiptScanner,
   onDeleteTransaction,
   onExportCSV,
 }) => {
@@ -70,6 +73,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={onOpenReceiptScanner}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-emerald-800/70 text-emerald-300 hover:bg-emerald-950/50 text-xs font-medium transition cursor-pointer min-h-[44px]"
+            title="Scanner un reçu"
+          >
+            <ScanLine className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Scanner</span>
+          </button>
           <button
             onClick={onExportCSV}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-slate-100 text-xs font-medium transition cursor-pointer min-h-[44px]"
