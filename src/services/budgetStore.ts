@@ -359,7 +359,7 @@ export function mergeBudgetSnapshots(
   deleted: Record<BudgetCollection, string[]>, localStamp: string,
 ): BudgetState {
   const mergeRows = <T extends { id: string }>(key: BudgetCollection): T[] => {
-    const left = local[key] as T[], right = remote[key] as T[], ancestor = base[key] as T[];
+    const left = local[key] as unknown as T[], right = remote[key] as unknown as T[], ancestor = base[key] as unknown as T[];
     const lm = new Map(left.map((row) => [row.id, row]));
     const rm = new Map(right.map((row) => [row.id, row]));
     const bm = new Map(ancestor.map((row) => [row.id, row]));
