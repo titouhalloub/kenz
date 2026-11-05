@@ -293,9 +293,9 @@ function saveBudgetStateLocally(state: BudgetState): void {
   catch (e) { console.error('Failed to save budget state to localStorage', e); }
 }
 
-const PENDING_BUDGET_SYNC_PREFIX = 'kenz_budget_outbox_v1_';
+const PENDING_BUDGET_SYNC_PREFIX = 'kenz_budget_outbox_v2_';
 type BudgetCollection = 'transactions' | 'recurringItems' | 'budgets' | 'savingsGoals' | 'accounts';
-interface PendingBudgetOutbox { state: BudgetState; deleted: Record<BudgetCollection, string[]>; }
+interface PendingBudgetOutbox { version: 2; state: BudgetState; baseState: BudgetState; deleted: Record<BudgetCollection, string[]>; updatedAt: string; }
 let cloudSyncQueue: Promise<boolean> = Promise.resolve(true);
 
 function pendingBudgetKey(userId: string): string {
@@ -309,11 +309,21 @@ function emptyDeletedIds(): PendingBudgetOutbox['deleted'] {
 function readPendingBudgetOutbox(userId: string): PendingBudgetOutbox | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(pendingBudgetKey(userId));
+    const key = pendingBudgetKey(userId);
+    const legacyKey = `kenz_budget_outbox_v1_${userId}`;
+    const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const outbox: PendingBudgetOutbox = parsed?.state ? parsed as PendingBudgetOutbox : { state: parsed as BudgetState, deleted: emptyDeletedIds() };
-    return outbox.state?.profile?.id === userId ? { ...outbox, deleted: { ...emptyDeletedIds(), ...outbox.deleted } } : null;
+    const state: BudgetState = parsed?.state || parsed as BudgetState;
+    if (state?.profile?.id !== userId) return null;
+    const outbox: PendingBudgetOutbox = {
+      version: 2, state,
+      baseState: parsed?.baseState || loadBudgetState(state.profile),
+      deleted: { ...emptyDeletedIds(), ...(parsed?.deleted || {}) },
+      updatedAt: parsed?.updatedAt || new Date(0).toISOString(),
+    };
+    if (!localStorage.getItem(key)) { localStorage.setItem(key, JSON.stringify(outbox)); localStorage.removeItem(legacyKey); }
+    return outbox;
   } catch { return null; }
 }
 
