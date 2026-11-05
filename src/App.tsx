@@ -150,6 +150,30 @@ export default function App() {
     return () => { active = false; };
   }, []);
 
+  // Keep Kredy views on other signed-in devices fresh. Each refresh first replays
+  // this device's pending outbox, then hydrates the conflict-merged cloud snapshot.
+  useEffect(() => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`kredy-live-${currentUser.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'debts',
+        filter: `user_id=eq.${currentUser.id}`,
+      }, async () => {
+        await flushPendingDebtSync(currentUser.id);
+        const latestDebts = await loadDebtStateFromSupabase(currentUser.id);
+        if (latestDebts) setDebts(latestDebts);
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser.id]);
+
   const handleUpdateZakat = (state: ZakatState) => {
     setZakatState(state);
     saveZakatState(state, currentUser.id);
