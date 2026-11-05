@@ -237,13 +237,26 @@ export async function flushPendingZakatFestiveSync(userId: string): Promise<bool
 }
 
 export function saveZakatState(state: ZakatState, userId?: string): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(scopedKey(ZAKAT_STORAGE_KEY, userId), JSON.stringify(state));
-  } catch (e) {
-    console.error('Failed to save zakat state', e);
+  if (!isUuid(userId)) {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(scopedKey(ZAKAT_STORAGE_KEY, userId), JSON.stringify(state)); }
+    catch (e) { console.error('Failed to save zakat state', e); }
+    return;
   }
-  if (!isUuid(userId)) return;
-  writePendingSnapshot(PENDING_ZAKAT_PREFIX + userId, state);
+  try {
+    const cacheKey = scopedKey(ZAKAT_STORAGE_KEY, userId);
+    const previous = typeof localStorage === 'undefined' ? EMPTY_ZAKAT_STATE :
+      JSON.parse(localStorage.getItem(cacheKey) || JSON.stringify(state)) as ZakatState;
+    const outboxKey = PENDING_ZAKAT_PREFIX + userId;
+    const pending = typeof localStorage === 'undefined' ? null : localStorage.getItem(outboxKey);
+    const prior = pending ? JSON.parse(pending) : null;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(cacheKey, JSON.stringify(state));
+      writePendingSnapshot(outboxKey, {
+        state, baseState: prior?.baseState || previous,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  } catch (e) { console.error('Failed to queue Zakat sync:', e); return; }
   void flushPendingZakatFestiveSync(userId);
 }
 
@@ -286,13 +299,30 @@ export function loadFestiveState(userId?: string): FestiveBudget[] {
 }
 
 export function saveFestiveState(budgets: FestiveBudget[], userId?: string): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(budgets));
-  } catch (e) {
-    console.error('Failed to save festive budgets', e);
+  if (!isUuid(userId)) {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(scopedKey(FESTIVE_STORAGE_KEY, userId), JSON.stringify(budgets)); }
+    catch (e) { console.error('Failed to save festive budgets', e); }
+    return;
   }
-  if (!isUuid(userId)) return;
-  writePendingSnapshot(PENDING_FESTIVE_PREFIX + userId, budgets);
+  try {
+    const cacheKey = scopedKey(FESTIVE_STORAGE_KEY, userId);
+    const previous = typeof localStorage === 'undefined' ? [] :
+      JSON.parse(localStorage.getItem(cacheKey) || '[]') as FestiveBudget[];
+    const outboxKey = PENDING_FESTIVE_PREFIX + userId;
+    const pending = typeof localStorage === 'undefined' ? null : localStorage.getItem(outboxKey);
+    const prior = pending ? JSON.parse(pending) : null;
+    const baseState: FestiveBudget[] = prior?.baseState || previous;
+    const deletedIds = [...new Set([
+      ...(prior?.deletedIds || []),
+      ...baseState.filter((item) => !budgets.some((next) => next.id === item.id)).map((item) => item.id),
+    ])];
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(cacheKey, JSON.stringify(budgets));
+      writePendingSnapshot(outboxKey, {
+        state: budgets, baseState, deletedIds, updatedAt: new Date().toISOString(),
+      });
+    }
+  } catch (e) { console.error('Failed to queue festive budget sync:', e); return; }
   void flushPendingZakatFestiveSync(userId);
 }
 
