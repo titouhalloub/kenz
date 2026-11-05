@@ -81,6 +81,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   onAddDebt,
   onSettleDebt,
   onDeleteDebt,
+  onReconcilePayment,
   onOpenAIModal,
 }) => {
   const [activeTab, setActiveTab] = useState<'kredy' | 'health' | 'analytics'>('kredy');
