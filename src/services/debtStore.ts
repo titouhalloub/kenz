@@ -17,6 +17,34 @@ import {
 import { getSupabaseClient } from './supabase';
 
 const STORAGE_KEY = 'kenz_debts_v1';
+const OUTBOX_VERSION = 1;
+
+interface DebtOutbox {
+  version: number;
+  debts: DebtEntry[];
+  deletedDebtIds: string[];
+  updatedAt: string;
+}
+
+function debtOutboxKey(userId: string): string {
+  return `kenz_debt_outbox_v${OUTBOX_VERSION}_${userId}`;
+}
+
+function readDebtOutbox(userId: string): DebtOutbox | null {
+  try {
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(debtOutboxKey(userId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as DebtOutbox;
+    return value && value.version === OUTBOX_VERSION && Array.isArray(value.debts) &&
+      Array.isArray(value.deletedDebtIds) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDebtOutbox(userId: string, outbox: DebtOutbox): void {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(debtOutboxKey(userId), JSON.stringify(outbox));
+}
 
 // Initial realistic baseline data for an Algerian user
 export const INITIAL_DEBTS: DebtEntry[] = [
@@ -111,6 +139,7 @@ export function loadDebtState(userId?: string): DebtEntry[] {
 export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEntry[] | null> {
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(userId)) return null;
+  await flushPendingDebtSync(userId);
   const { data: debtRows, error: debtError } = await supabase.from('debts').select('*')
     .eq('user_id', userId).order('created_at', { ascending: false });
   if (debtError) {
@@ -157,38 +186,137 @@ export async function loadDebtStateFromSupabase(userId: string): Promise<DebtEnt
 
 let debtCloudSyncQueue: Promise<void> = Promise.resolve();
 
-/** Persist locally first, then sync UUID-backed records through the user's RLS session. */
-export function saveDebtState(debts: DebtEntry[], ownerId?: string): void {
+function mergeDebtSnapshots(localDebts: DebtEntry[], remoteDebts: DebtEntry[], deletedIds: string[] = []): DebtEntry[] {
+  const deleted = new Set(deletedIds);
+  const merged = new Map<string, DebtEntry>();
+  for (const debt of remoteDebts) if (!deleted.has(debt.id)) merged.set(debt.id, debt);
+  for (const local of localDebts) {
+    if (deleted.has(local.id)) continue;
+    const remote = merged.get(local.id);
+    if (!remote) { merged.set(local.id, local); continue; }
+    const localIsNewer = Date.parse(local.updatedAt || local.createdAt) > Date.parse(remote.updatedAt || remote.createdAt);
+    const preferred = localIsNewer ? local : remote;
+    const payments = new Map<string, DebtPayment>();
+    for (const payment of [...(remote.payments || []), ...(local.payments || [])]) {
+      if (!payments.has(payment.id)) payments.set(payment.id, payment);
+    }
+    const allPayments = [...payments.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const paidMinor = allPayments.reduce((sum, payment) => sum + payment.amountMinor, 0);
+    const remainingAmountMinor = Math.max(0, preferred.totalAmountMinor - paidMinor);
+    merged.set(local.id, {
+      ...preferred,
+      payments: allPayments,
+      remainingAmountMinor,
+      status: remainingAmountMinor === 0 ? 'settled' : paidMinor > 0 ? 'partially_paid' : 'active',
+      updatedAt: localIsNewer ? local.updatedAt : remote.updatedAt,
+    });
+  }
+  return [...merged.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Replay durable Kredy edits before cloud hydration. Payment events are merged by ID;
+ * concurrent edits to debt details use updatedAt last-write-wins. */
+export async function flushPendingDebtSync(userId: string): Promise<void> {
+  if (!isUuid(userId)) return;
+  const outbox = readDebtOutbox(userId);
+  if (!outbox) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
+    const pending = readDebtOutbox(userId);
+    if (!pending) return;
+    const { data: debtRows, error: debtError } = await supabase.from('debts').select('*').eq('user_id', userId);
+    if (debtError) throw debtError;
+    const remoteIds = (debtRows || []).map((row) => row.id as string);
+    let paymentRows: Record<string, any>[] = [];
+    if (remoteIds.length) {
+      const { data, error } = await supabase.from('debt_payments').select('*').in('debt_id', remoteIds);
+      if (error) throw error;
+      paymentRows = (data || []) as Record<string, any>[];
+    }
+    const paymentsByDebt = new Map<string, DebtPayment[]>();
+    for (const row of paymentRows) {
+      const payment: DebtPayment = {
+        id: row.id, debtId: row.debt_id, amountMinor: Number(row.amount_minor),
+        paymentDate: row.payment_date, sourceAccountId: row.source_account_id || undefined,
+        notes: row.notes || undefined, createdAt: row.created_at,
+      };
+      paymentsByDebt.set(payment.debtId, [...(paymentsByDebt.get(payment.debtId) || []), payment]);
+    }
+    const remoteDebts: DebtEntry[] = (debtRows || []).map((row) => ({
+      id: row.id, userId: row.user_id, businessId: row.business_id || undefined,
+      counterpartyName: row.counterparty_name, counterpartyPhone: row.counterparty_phone || undefined,
+      type: row.type, totalAmountMinor: Number(row.total_amount_minor),
+      remainingAmountMinor: Number(row.remaining_amount_minor), currency: row.currency,
+      dueDate: row.due_date || undefined, notes: row.notes || undefined, status: row.status,
+      payments: paymentsByDebt.get(row.id) || [], createdAt: row.created_at, updatedAt: row.updated_at,
+    }));
+
+    if (pending.deletedDebtIds.length) {
+      const { error } = await supabase.from('debts').delete().eq('user_id', userId).in('id', pending.deletedDebtIds);
+      if (error) throw error;
+    }
+    const merged = mergeDebtSnapshots(pending.debts, remoteDebts, pending.deletedDebtIds);
+    const owned = merged.filter((debt) => debt.userId === userId && isUuid(debt.id));
+    if (owned.length) {
+      const { error } = await supabase.from('debts').upsert(owned.map((d) => ({
+        id: d.id, user_id: userId, business_id: d.businessId && isUuid(d.businessId) ? d.businessId : null,
+        counterparty_name: d.counterpartyName, counterparty_phone: d.counterpartyPhone || null,
+        type: d.type, total_amount_minor: d.totalAmountMinor,
+        remaining_amount_minor: d.remainingAmountMinor, currency: d.currency,
+        due_date: d.dueDate || null, notes: d.notes || null, status: d.status,
+        created_at: d.createdAt, updated_at: d.updatedAt,
+      })), { onConflict: 'id' });
+      if (error) throw error;
+    }
+    const mergedPayments = owned.flatMap((d) => d.payments.filter((p) => isUuid(p.id)).map((p) => ({
+      id: p.id, debt_id: d.id, amount_minor: p.amountMinor, payment_date: p.paymentDate,
+      source_account_id: p.sourceAccountId && isUuid(p.sourceAccountId) ? p.sourceAccountId : null,
+      notes: p.notes || null, created_at: p.createdAt,
+    })));
+    if (mergedPayments.length) {
+      const { error } = await supabase.from('debt_payments').upsert(mergedPayments, { onConflict: 'id' });
+      if (error) throw error;
+    }
+
+    if (typeof localStorage !== 'undefined') localStorage.setItem(localDebtKey(userId), JSON.stringify(merged));
+    const latest = readDebtOutbox(userId);
+    if (latest && JSON.stringify(latest) === JSON.stringify(pending)) {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(debtOutboxKey(userId));
+    } else if (latest) {
+      // Keep edits that arrived while this batch was syncing; the next online retry will replay them.
+      return;
+    }
+  }).catch((error) => {
+    console.error('Kredy outbox sync failed; edits remain queued:', error);
+  });
+  await debtCloudSyncQueue;
+}
+
+/** Persist locally first, then durably queue every authenticated user's change. */
+export function saveDebtState(debts: DebtEntry[], ownerId?: string, deletedDebtIds: string[] = []): void {
   const userId = ownerId || debts[0]?.userId;
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem(localDebtKey(userId), JSON.stringify(debts));
   } catch (err) {
     console.error('Failed to save debts to localStorage:', err);
   }
-  const supabase = getSupabaseClient();
-  if (!supabase || !userId || !isUuid(userId)) return;
-  const ownedDebts = debts.filter((debt) => debt.userId === userId && isUuid(debt.id));
-  debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
-    if (!ownedDebts.length) return;
-    const { error } = await supabase.from('debts').upsert(ownedDebts.map((d) => ({
-      id: d.id, user_id: userId, business_id: d.businessId && isUuid(d.businessId) ? d.businessId : null,
-      counterparty_name: d.counterpartyName, counterparty_phone: d.counterpartyPhone || null,
-      type: d.type, total_amount_minor: d.totalAmountMinor,
-      remaining_amount_minor: d.remainingAmountMinor, currency: d.currency,
-      due_date: d.dueDate || null, notes: d.notes || null, status: d.status,
-      created_at: d.createdAt, updated_at: d.updatedAt,
-    })), { onConflict: 'id' });
-    if (error) { console.error('Kredy debt sync failed:', error.message); return; }
-    const paymentRows = ownedDebts.flatMap((d) => d.payments.filter((p) => isUuid(p.id)).map((p) => ({
-      id: p.id, debt_id: d.id, amount_minor: p.amountMinor,
-      payment_date: p.paymentDate, source_account_id: p.sourceAccountId && isUuid(p.sourceAccountId) ? p.sourceAccountId : null,
-      notes: p.notes || null, created_at: p.createdAt,
-    })));
-    if (paymentRows.length) {
-      const result = await supabase.from('debt_payments').upsert(paymentRows, { onConflict: 'id' });
-      if (result.error) console.error('Kredy payment sync failed:', result.error.message);
-    }
-  }).catch((error) => console.error('Unexpected Kredy sync failure:', error));
+  if (!userId || !isUuid(userId)) return;
+  const previous = readDebtOutbox(userId);
+  const outbox: DebtOutbox = {
+    version: OUTBOX_VERSION,
+    debts: debts.filter((debt) => debt.userId === userId),
+    deletedDebtIds: [...new Set([...(previous?.deletedDebtIds || []), ...deletedDebtIds])],
+    updatedAt: new Date().toISOString(),
+  };
+  try {
+    writeDebtOutbox(userId, outbox);
+  } catch (error) {
+    console.error('Failed to persist Kredy outbox:', error);
+    return;
+  }
+  void flushPendingDebtSync(userId);
 }
 
 /**
@@ -211,7 +339,7 @@ export function addDebtEntry(
   };
 
   const next = [entry, ...debts];
-  saveDebtState(next);
+  saveDebtState(next, entry.userId);
   return next;
 }
 
@@ -259,7 +387,7 @@ export function recordDebtPayment(
 
   const nextDebts = [...debts];
   nextDebts[index] = updatedDebt;
-  saveDebtState(nextDebts);
+  saveDebtState(nextDebts, current.userId);
 
   return { nextDebts, payment };
 }
@@ -270,15 +398,7 @@ export function recordDebtPayment(
 export function deleteDebtEntry(debts: DebtEntry[], debtId: string): DebtEntry[] {
   const target = debts.find((d) => d.id === debtId);
   const next = debts.filter((d) => d.id !== debtId);
-  saveDebtState(next, target?.userId);
-  const supabase = getSupabaseClient();
-  if (supabase && target && isUuid(target.userId) && isUuid(debtId)) {
-    debtCloudSyncQueue = debtCloudSyncQueue.then(async () => {
-      const { error } = await supabase.from('debts').delete()
-        .eq('id', debtId).eq('user_id', target.userId);
-      if (error) console.error('Failed to delete cloud Kredy debt:', error.message);
-    }).catch((error) => console.error('Unexpected Kredy delete failure:', error));
-  }
+  saveDebtState(next, target?.userId, target ? [debtId] : []);
   return next;
 }
 
