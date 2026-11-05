@@ -258,6 +258,11 @@ export interface DebtPayment {
   /** Portion retained for manual reconciliation instead of reducing the debt twice. */
   unappliedAmountMinor?: number;
   reconciliationStatus?: 'applied' | 'partial' | 'pending';
+  /** Total amount returned to the payer; original payment amount remains immutable. */
+  refundedAmountMinor?: number;
+  /** Points to the original payment when this event is confirmed as a duplicate. */
+  duplicateOfPaymentId?: string;
+  resolutionStatus?: 'normal' | 'partially_refunded' | 'refunded' | 'duplicate';
   paymentDate: string;
   sourceAccountId?: string;
   notes?: string;
