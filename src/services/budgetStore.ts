@@ -294,27 +294,46 @@ function saveBudgetStateLocally(state: BudgetState): void {
 }
 
 const PENDING_BUDGET_SYNC_PREFIX = 'kenz_budget_outbox_v1_';
+type BudgetCollection = 'transactions' | 'recurringItems' | 'budgets' | 'savingsGoals' | 'accounts';
+interface PendingBudgetOutbox { state: BudgetState; deleted: Record<BudgetCollection, string[]>; }
 let cloudSyncQueue: Promise<boolean> = Promise.resolve(true);
 
 function pendingBudgetKey(userId: string): string {
-  return `${PENDING_BUDGET_SYNC_PREFIX}${userId}`;
+  return PENDING_BUDGET_SYNC_PREFIX + userId;
 }
 
-function readPendingBudgetState(userId: string): BudgetState | null {
+function emptyDeletedIds(): PendingBudgetOutbox['deleted'] {
+  return { transactions: [], recurringItems: [], budgets: [], savingsGoals: [], accounts: [] };
+}
+
+function readPendingBudgetOutbox(userId: string): PendingBudgetOutbox | null {
   if (typeof localStorage === 'undefined') return null;
   try {
     const raw = localStorage.getItem(pendingBudgetKey(userId));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as BudgetState;
-    return parsed?.profile?.id === userId ? parsed : null;
+    const parsed = JSON.parse(raw);
+    const outbox: PendingBudgetOutbox = parsed?.state ? parsed as PendingBudgetOutbox : { state: parsed as BudgetState, deleted: emptyDeletedIds() };
+    return outbox.state?.profile?.id === userId ? { ...outbox, deleted: { ...emptyDeletedIds(), ...outbox.deleted } } : null;
   } catch { return null; }
 }
 
-async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
+async function syncBudgetStateToSupabase(state: BudgetState, deleted = emptyDeletedIds()): Promise<boolean> {
   cloudSyncQueue = cloudSyncQueue.then(async () => {
     const supabase = getSupabaseClient();
     const userId = state.profile.id;
     if (!supabase || !isUuid(userId)) return false;
+
+    // Apply owner-scoped deletes before upserts; child rows are removed before parents.
+    const deleteSteps: Array<[BudgetCollection, string]> = [
+      ['transactions', 'transactions'], ['budgets', 'budgets'], ['recurringItems', 'recurring_items'],
+      ['savingsGoals', 'savings_goals'], ['accounts', 'accounts'],
+    ];
+    for (const [collection, table] of deleteSteps) {
+      const ids = deleted[collection].filter(isUuid);
+      if (!ids.length) continue;
+      const result = await supabase.from(table).delete().in('id', ids).eq('user_id', userId);
+      if (result.error) { console.error('Kenz ' + table + ' delete sync failed:', result.error.message); return false; }
+    }
 
     const profileResult = await supabase.from('profiles').update({
       display_name: state.profile.displayName,
@@ -391,9 +410,9 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
 /** Flushes a durable per-user snapshot after app restart or network recovery. */
 export async function flushPendingBudgetSync(userId: string): Promise<boolean> {
   if (!isUuid(userId) || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
-  const pending = readPendingBudgetState(userId);
+  const pending = readPendingBudgetOutbox(userId);
   if (!pending) return true;
-  const succeeded = await syncBudgetStateToSupabase(pending);
+  const succeeded = await syncBudgetStateToSupabase(pending.state, pending.deleted);
   if (!succeeded || typeof localStorage === 'undefined') return false;
   try {
     const key = pendingBudgetKey(userId);
@@ -406,16 +425,24 @@ export async function flushPendingBudgetSync(userId: string): Promise<boolean> {
 }
 
 export function saveBudgetState(state: BudgetState): void {
-  saveBudgetStateLocally(state);
   const userId = state.profile.id;
-  if (!isUuid(userId) || typeof localStorage === 'undefined') return;
+  if (!isUuid(userId) || typeof localStorage === 'undefined') { saveBudgetStateLocally(state); return; }
   try {
-    // One latest snapshot per user keeps retries bounded; all cloud writes are idempotent upserts.
-    localStorage.setItem(pendingBudgetKey(userId), JSON.stringify(state));
-  } catch (error) {
-    console.error('Unable to persist Kenz offline outbox:', error);
-    return;
-  }
+    const previousRaw = localStorage.getItem(budgetStorageKey(userId));
+    const previous = previousRaw ? JSON.parse(previousRaw) as BudgetState : state;
+    const pending = readPendingBudgetOutbox(userId);
+    const deleted = pending?.deleted ?? emptyDeletedIds();
+    const collections: BudgetCollection[] = ['transactions', 'recurringItems', 'budgets', 'savingsGoals', 'accounts'];
+    for (const collection of collections) {
+      const nextIds = new Set(state[collection].map((item) => item.id));
+      const tombstones = new Set(deleted[collection]);
+      for (const id of previous[collection].map((item) => item.id)) if (!nextIds.has(id) && isUuid(id)) tombstones.add(id);
+      for (const id of nextIds) tombstones.delete(id);
+      deleted[collection] = [...tombstones];
+    }
+    localStorage.setItem(pendingBudgetKey(userId), JSON.stringify({ state, deleted } satisfies PendingBudgetOutbox));
+    saveBudgetStateLocally(state);
+  } catch (error) { console.error('Unable to persist Kenz offline outbox:', error); saveBudgetStateLocally(state); return; }
   void flushPendingBudgetSync(userId);
 }
 
@@ -448,11 +475,6 @@ export function deleteTransaction(currentState: BudgetState, txId: string): Budg
     transactions: currentState.transactions.filter((tx) => !removedIds.includes(tx.id)),
   };
   saveBudgetState(nextState);
-  const supabase = getSupabaseClient();
-  if (supabase && isUuid(currentState.profile.id) && removedIds.every(isUuid) && removedIds.length) {
-    void supabase.from('transactions').delete().in('id', removedIds).eq('user_id', currentState.profile.id)
-      .then(({ error }) => { if (error) console.error('Failed to delete cloud transaction:', error.message); });
-  }
   return nextState;
 }
 
@@ -498,11 +520,6 @@ export function deleteRecurringItem(currentState: BudgetState, itemId: string): 
     recurringItems: currentState.recurringItems.filter((i) => i.id !== itemId),
   };
   saveBudgetState(nextState);
-  const supabase = getSupabaseClient();
-  if (supabase && isUuid(currentState.profile.id) && isUuid(itemId)) {
-    void supabase.from('recurring_items').delete().eq('id', itemId).eq('user_id', currentState.profile.id)
-      .then(({ error }) => { if (error) console.error('Failed to delete cloud recurring item:', error.message); });
-  }
   return nextState;
 }
 
