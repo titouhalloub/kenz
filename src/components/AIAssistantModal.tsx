@@ -233,11 +233,8 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
       const data = await res.json();
 
       if (data.success) {
-        setAiResponse(data.text);
-        setResponseSource(data.source);
-
-        // 3. Deduct Credits Atomically (0 credits debited if BYOK)
-        deductAICredits({
+        // The database is the source of truth for authenticated credit balances.
+        const debit = await deductAICredits({
           userId: profile.id,
           creditsToDebit: COST_PER_QUERY_CREDITS,
           purpose,
@@ -247,7 +244,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           provider: mode === 'byok' ? byokConfig.provider : 'google',
           model: mode === 'byok' ? byokConfig.model : 'gemini-2.5-flash',
         });
-
+        if (!debit.success) {
+          setError(debit.reason || 'Impossible d’enregistrer la consommation des crédits IA.');
+          onWalletUpdated();
+          return;
+        }
+        setAiResponse(data.text);
+        setResponseSource(data.source);
         onWalletUpdated();
         setLedgerEntries(loadCreditLedger());
       } else {
@@ -262,10 +265,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
   };
 
   const handlePurchase = (pkg: typeof CREDIT_PACKAGES[0]) => {
-    purchaseCredits(profile.id, pkg);
-    onWalletUpdated();
-    setLedgerEntries(loadCreditLedger());
-    setActiveTab('advisor');
+    try {
+      purchaseCredits(profile.id, pkg);
+      onWalletUpdated();
+      setLedgerEntries(loadCreditLedger());
+      setActiveTab('advisor');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Les recharges ne sont pas disponibles actuellement.');
+    }
   };
 
   return (
