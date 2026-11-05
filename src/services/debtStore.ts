@@ -364,11 +364,8 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
     if (tombstoneError) throw tombstoneError;
     const cloudDeletedIds = (tombstoneRows || []).map((row) => row.debt_id as string);
     const deletedIds = [...new Set([...(pending?.deletedDebtIds || []), ...cloudDeletedIds])];
-    if (pending && pending.deletedDebtIds.length > 0) {
-      const { error } = await supabase.from('debt_sync_tombstones').upsert(
-        pending.deletedDebtIds.map((debtId) => ({ debt_id: debtId, user_id: userId })),
-        { onConflict: 'debt_id' },
-      );
+    if (deletedIds.length) {
+      const { error } = await supabase.rpc('sync_kenz_delete_debts', { p_debt_ids: deletedIds });
       if (error) throw error;
     }
     const { data: debtRows, error: debtError } = await supabase.from('debts').select('*').eq('user_id', userId);
@@ -404,10 +401,7 @@ export async function flushPendingDebtSync(userId: string): Promise<void> {
       payments: paymentsByDebt.get(row.id) || [], createdAt: row.created_at, updatedAt: row.updated_at,
     }));
 
-    if (deletedIds.length) {
-      const { error } = await supabase.from('debts').delete().eq('user_id', userId).in('id', deletedIds);
-      if (error) throw error;
-    }
+
     // Even without a local outbox, enforce cloud tombstones to clean up a stale
     // row that raced with another device's delete operation.
     if (!pending) return;
