@@ -26,6 +26,7 @@ import {
 } from '../domain/types';
 import { parseToMinorUnits, formatMoney } from '../domain/financialCalculations';
 import { AdminDashboardModal } from './AdminDashboardModal';
+import { SharedWalletsView } from './SharedWalletsView';
 import {
   getAIMode,
   setAIMode,
@@ -171,6 +172,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           Gérez votre profil, vos comptes de trésorerie et la confidentialité de vos données.
         </p>
       </div>
+
+      <SharedWalletsView
+        userId={profile.id}
+        email={profile.email}
+        preferredCurrency={profile.preferredCurrency}
+        locale={profile.locale}
+      />
 
       {/* 1. User Profile & Planning Cadence */}
       <section className="rounded-2xl bg-slate-900 border border-slate-800 p-5 space-y-4 shadow-sm">
