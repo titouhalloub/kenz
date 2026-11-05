@@ -19,6 +19,10 @@ The AI gateway also reads the non-prefixed server aliases `SUPABASE_URL` and `SU
 
 ## Current cloud sync scope
 
-After a valid Supabase sign-in, the app hydrates and syncs the profile, accounts, system/custom categories, transactions, monthly budgets, recurring items, and savings goals. The browser keeps a local cache, but automatic retry/reconciliation of edits made while offline is not complete yet; do not treat this as full offline sync. Other areas (Kredy payments, neighborhood document storage, Zakat/festive budgets, and AI credit debits) still need dedicated authenticated cloud-sync workflows before they should be treated as fully cloud-backed.
+After a valid Supabase sign-in, the app hydrates and syncs the profile, accounts, system/custom categories, transactions, monthly budgets, recurring items, savings goals, Kredy debts, and Kredy payment history. Debt and payment writes use the signed-in user's RLS session; local demo records with non-UUID identifiers are not uploaded. The browser keeps a per-user local cache, but automatic retry/reconciliation of edits made while offline is not complete yet; do not treat this as full offline sync.
 
-The project database migrations are stored in `supabase/migrations`. The signup trigger lives in the non-exposed `private` schema; client roles cannot call it directly.
+The AI wallet, credit ledger, and usage history are loaded from Supabase. Authenticated AI responses are metered server-side through the `record_ai_usage` RPC, which derives the owner from `auth.uid()`, applies a row lock, and uses an idempotency key to prevent duplicate debits. Its privileged implementation is kept in the non-exposed `private` schema; the public RPC wrapper is security-invoker and executable only by authenticated users. The client cannot grant itself purchased credits: credit top-ups remain disabled until a trusted payment provider and verified payment webhook are implemented.
+
+Neighborhood document storage and Zakat/festive budgets are not yet cloud-backed. Offline retry/reconciliation and a real authenticated signup/data round-trip test are still required before production readiness.
+
+The project database migrations are stored in `supabase/migrations`. The signup trigger and privileged AI metering implementation live in the non-exposed `private` schema; client roles cannot call the signup trigger directly.
