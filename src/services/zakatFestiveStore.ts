@@ -141,7 +141,7 @@ export function mergeFestiveRows(
     if (l && r) {
       if (!b) { result.push((Date.parse(localStamp) > Date.parse(r.syncUpdatedAt || '') ? { ...r, ...l } : { ...l, ...r })); continue; }
       const merged = { ...r };
-      for (const key of Object.keys(b) as Array<keyof FestiveBudget>) {
+      for (const key of new Set([...Object.keys(b), ...Object.keys(l), ...Object.keys(r)]) as Set<keyof FestiveBudget>) {
         if (key === 'syncUpdatedAt') continue;
         const lc = !valuesEqual(l[key], b[key]), rc = !valuesEqual(r[key], b[key]);
         if (lc && !rc) (merged as any)[key] = l[key];
