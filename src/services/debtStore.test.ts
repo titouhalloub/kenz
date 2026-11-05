@@ -180,6 +180,70 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
     expect(merged.status).toBe('partially_paid');
   });
 
+  it('flags excess concurrent offline payments instead of applying more than the debt total', () => {
+    const base = sampleDebts[0];
+    const earlierPayment: DebtEntry = {
+      ...base,
+      updatedAt: '2026-10-12T10:00:00Z',
+      payments: [{
+        id: 'payment_earlier',
+        debtId: base.id,
+        amountMinor: 300000,
+        paymentDate: '2026-10-12',
+        createdAt: '2026-10-12T10:00:00Z',
+      }],
+    };
+    const laterPayment: DebtEntry = {
+      ...base,
+      updatedAt: '2026-10-12T11:00:00Z',
+      payments: [{
+        id: 'payment_later',
+        debtId: base.id,
+        amountMinor: 300000,
+        paymentDate: '2026-10-12',
+        createdAt: '2026-10-12T11:00:00Z',
+      }],
+    };
+
+    const merged = mergeDebtSnapshots([laterPayment], [earlierPayment])[0];
+    const earlier = merged.payments.find((payment) => payment.id === 'payment_earlier')!;
+    const later = merged.payments.find((payment) => payment.id === 'payment_later')!;
+
+    expect(merged.remainingAmountMinor).toBe(0);
+    expect(merged.status).toBe('settled');
+    expect(earlier.appliedAmountMinor).toBe(300000);
+    expect(earlier.unappliedAmountMinor).toBe(0);
+    expect(later.appliedAmountMinor).toBe(200000);
+    expect(later.unappliedAmountMinor).toBe(100000);
+    expect(later.reconciliationStatus).toBe('partial');
+  });
+
+  it('allocates concurrent payment events identically regardless of device merge order', () => {
+    const base = sampleDebts[0];
+    const first: DebtEntry = {
+      ...base,
+      payments: [{
+        id: 'payment_first', debtId: base.id, amountMinor: 300000,
+        paymentDate: '2026-10-12', createdAt: '2026-10-12T10:00:00Z',
+      }],
+    };
+    const second: DebtEntry = {
+      ...base,
+      payments: [{
+        id: 'payment_second', debtId: base.id, amountMinor: 300000,
+        paymentDate: '2026-10-12', createdAt: '2026-10-12T11:00:00Z',
+      }],
+    };
+
+    const mergeAB = mergeDebtSnapshots([first], [second])[0];
+    const mergeBA = mergeDebtSnapshots([second], [first])[0];
+    const allocations = (debt: DebtEntry) => debt.payments
+      .map((payment) => [payment.id, payment.appliedAmountMinor, payment.unappliedAmountMinor])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+    expect(allocations(mergeAB)).toEqual(allocations(mergeBA));
+  });
+
   it('uses the newest debt details while retaining payment events from both devices', () => {
     const base = sampleDebts[0];
     const local: DebtEntry = {
