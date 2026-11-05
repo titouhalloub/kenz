@@ -40,7 +40,7 @@ export async function loadSavingsChallengeContributionsFromSupabase(userId: stri
     console.error('Unable to load savings challenge contributions:', error.message);
     return null;
   }
-  const localPending = loadSavingsChallengeContributions(userId).filter((row) => row.syncStatus === 'pending');
+  const localRows = loadSavingsChallengeContributions(userId);
   const cloudRows: SavingsChallengeContribution[] = (data || []).map((row) => ({
     id: row.id,
     userId: row.user_id,
@@ -52,7 +52,7 @@ export async function loadSavingsChallengeContributionsFromSupabase(userId: stri
     syncStatus: 'synced',
   }));
   const byId = new Map(cloudRows.map((row) => [row.id, row]));
-  for (const row of localPending) if (!byId.has(row.id)) byId.set(row.id, row);
+  for (const row of localRows) if (!byId.has(row.id)) byId.set(row.id, row);
   const merged = [...byId.values()].sort((a, b) => b.contributionDate.localeCompare(a.contributionDate) || b.createdAt.localeCompare(a.createdAt));
   persist(userId, merged);
   return merged;
