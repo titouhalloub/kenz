@@ -5,6 +5,7 @@ import {
   calculateSafeToSpend,
   formatMoney,
   parseToMinorUnits,
+  generateDeterministicWeeklySummary,
 } from './financialCalculations';
 import { Account, Transaction, RecurringItem, SavingsGoal } from './types';
 
@@ -180,4 +181,64 @@ describe('Financial Calculations Engine', () => {
     expect(parseToMinorUnits('150.50')).toBe(15050);
     expect(parseToMinorUnits('15000')).toBe(1500000);
   });
+  it('does not reserve a recurring bill when an exact matching payment was posted near its due date', () => {
+    const today = new Date(2026, 9, 13);
+    const bill: RecurringItem = {
+      id: 'rec-internet', userId: 'user-1', name: 'Internet Bill', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', frequency: 'monthly',
+      nextDueDate: '2026-10-20', isActive: true,
+    };
+    const paidTransaction: Transaction = {
+      id: 'tx-internet', userId: 'user-1', accountId: 'acc-1', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', transactionDate: '2026-10-18',
+      description: '  internet   bill ', createdAt: '2026-10-18T10:00:00Z',
+    };
+    const result = calculateSafeToSpend({
+      accounts: [dummyAccount1], transactions: [paidTransaction], recurringItems: [bill],
+      savingsGoals: [], todayDate: today, paydayDayOfMonth: 28,
+    });
+    expect(result.unpaidReservedCommitmentsMinor).toBe(0);
+  });
+
+  it('does not treat a future-dated payment as already paid', () => {
+    const today = new Date(2026, 9, 13);
+    const bill: RecurringItem = {
+      id: 'rec-internet', userId: 'user-1', name: 'Internet Bill', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', frequency: 'monthly',
+      nextDueDate: '2026-10-20', isActive: true,
+    };
+    const futureTransaction: Transaction = {
+      id: 'tx-future', userId: 'user-1', accountId: 'acc-1', type: 'expense',
+      amountMinor: 250000, currency: 'DZD', transactionDate: '2026-10-20',
+      description: 'Internet Bill', createdAt: '2026-10-13T10:00:00Z',
+    };
+    const result = calculateSafeToSpend({
+      accounts: [dummyAccount1], transactions: [futureTransaction], recurringItems: [bill],
+      savingsGoals: [], todayDate: today, paydayDayOfMonth: 28,
+    });
+    expect(result.unpaidReservedCommitmentsMinor).toBe(250000);
+  });
+
+  it('limits weekly summaries to the last seven days and never includes future transactions', () => {
+    const today = new Date(2026, 9, 13);
+    const transactions: Transaction[] = [
+      { id: 'today', userId: 'user-1', accountId: 'acc-1', type: 'expense', amountMinor: 1000, currency: 'DZD', transactionDate: '2026-10-13', createdAt: '2026-10-13T10:00:00Z' },
+      { id: 'old', userId: 'user-1', accountId: 'acc-1', type: 'expense', amountMinor: 9000, currency: 'DZD', transactionDate: '2026-10-05', createdAt: '2026-10-05T10:00:00Z' },
+      { id: 'future', userId: 'user-1', accountId: 'acc-1', type: 'income', amountMinor: 7000, currency: 'DZD', transactionDate: '2026-10-14', createdAt: '2026-10-13T10:00:00Z' },
+    ];
+    const summary = generateDeterministicWeeklySummary({
+      transactions,
+      safeToSpend: {
+        availableBalanceMinor: 0, expectedIncomeMinor: 0, unpaidReservedCommitmentsMinor: 0,
+        plannedSavingsMinor: 0, otherReservedMinor: 0, safeToSpendMinor: 0,
+        daysUntilPayday: 1, dailyGuidelineMinor: 0, isPaydayConfigured: false,
+        planningEndDate: '2026-10-14',
+      },
+      todayDate: today,
+    });
+    expect(summary.transactionCount).toBe(1);
+    expect(summary.spentLast7DaysMinor).toBe(1000);
+    expect(summary.incomeLast7DaysMinor).toBe(0);
+  });
+
 });
