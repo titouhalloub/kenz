@@ -8,6 +8,7 @@ import {
   calculateDebtSummary,
   calculateFinancialHealthScore,
   mergeDebtSnapshots,
+  resolveUnappliedDebtPayment,
 } from './debtStore';
 import { DebtEntry, SafeToSpendBreakdown, Account, SavingsGoal } from '../domain/types';
 
@@ -242,6 +243,12 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
     expect(allocations(mergeAB)).toEqual(allocations(mergeBA));
+  });
+
+  it('rejects reconciliation when the debt is not in the authenticated snapshot', async () => {
+    await expect(
+      resolveUnappliedDebtPayment([], '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003')
+    ).rejects.toThrow('Debt or payment not found or access denied');
   });
 
   it('deduplicates the same payment event synced from two devices', () => {
