@@ -713,7 +713,7 @@ export function wipeAllLocalData(): void {
   const keys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (key && (key.startsWith(STORAGE_KEY) || key.startsWith('kenz_budget_outbox_v1_'))) keys.push(key);
+    if (key && (key.startsWith(STORAGE_KEY) || key.startsWith('kenz_budget_outbox_v1_') || key.startsWith('kenz_budget_outbox_v2_'))) keys.push(key);
   }
   keys.forEach((key) => localStorage.removeItem(key));
 }
