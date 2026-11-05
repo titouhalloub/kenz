@@ -41,6 +41,7 @@ import {
   testBYOKCredentials,
 } from '../services/aiCreditStore';
 import { formatMoney } from '../domain/financialCalculations';
+import { getSupabaseAccessToken } from '../services/supabase';
 import { calculateDebtSummary } from '../services/debtStore';
 
 interface AIAssistantModalProps {
@@ -183,10 +184,14 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({
           ? 'Analyse mon carnet de dettes et ardoises de commerçants (Kredy) et conseille-moi une stratégie de remboursement prioritaire.'
           : 'Comment optimiser mon épargne d’ici la prochaine paye ?');
 
-      // 2. Call Server-Side Universal AI Gateway
+      // 2. Forward the Supabase access token; the server verifies it with Auth.
+      const accessToken = await getSupabaseAccessToken();
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           purpose,
           userPrompt: queryPrompt,
