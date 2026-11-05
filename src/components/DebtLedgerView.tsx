@@ -923,7 +923,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
             {paymentIssueAction === 'refund' ? (
               <div className="space-y-2">
                 <label htmlFor="kredy-refund-amount" className="block text-xs text-slate-300">Montant réellement remboursé ({paymentIssueDebt?.currency || 'DZD'})</label>
-                <input id="kredy-refund-amount" type="text" inputMode="decimal" value={refundAmountInput} onChange={(event) => setRefundAmountInput(event.target.value)} className="w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-sm text-slate-100" placeholder={(refundableAmountMinor / 100).toFixed(2).replace(/\\.00$/, '')} />
+                <input id="kredy-refund-amount" type="text" inputMode="decimal" value={refundAmountInput} onChange={(event) => setRefundAmountInput(event.target.value)} className="w-full h-11 rounded-xl bg-slate-950 border border-slate-700 px-3 text-sm text-slate-100" placeholder={(refundableAmountMinor / 100).toFixed(2).replace(/\.00$/, '')} />
                 <p className="text-[11px] text-slate-400">Reste remboursable : {paymentIssueDebt ? formatMoney(refundableAmountMinor, paymentIssueDebt.currency) : '—'}. Le remboursement augmente à nouveau le solde dû. Vous pouvez enregistrer plusieurs remboursements partiels.</p>
               </div>
             ) : (
