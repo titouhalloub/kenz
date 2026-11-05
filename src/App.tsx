@@ -168,6 +168,16 @@ export default function App() {
         const latestDebts = await loadDebtStateFromSupabase(currentUser.id);
         if (latestDebts) setDebts(latestDebts);
       })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'debt_sync_tombstones',
+        filter: `user_id=eq.${currentUser.id}`,
+      }, async () => {
+        await flushPendingDebtSync(currentUser.id);
+        const latestDebts = await loadDebtStateFromSupabase(currentUser.id);
+        if (latestDebts) setDebts(latestDebts);
+      })
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
