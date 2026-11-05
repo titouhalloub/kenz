@@ -84,6 +84,8 @@ export interface RecurringItem {
   syncUpdatedAt?: string;
 }
 
+export type SavingsChallengeFrequency = 'daily' | 'weekly' | 'monthly';
+
 export interface SavingsGoal {
   id: string;
   userId: string;
@@ -94,7 +96,23 @@ export interface SavingsGoal {
   targetDate?: string; // YYYY-MM-DD
   plannedMonthlyContributionMinor: number;
   status: GoalStatus;
+  challengeFrequency?: SavingsChallengeFrequency;
+  challengePeriodAmountMinor?: number;
+  challengeStartDate?: string;
+  challengeEndDate?: string;
+  challengeStartingAmountMinor?: number;
   syncUpdatedAt?: string;
+}
+
+export interface SavingsChallengeContribution {
+  id: string;
+  userId: string;
+  savingsGoalId: string;
+  amountMinor: number;
+  contributionDate: string;
+  note?: string;
+  createdAt: string;
+  syncStatus?: 'pending' | 'synced';
 }
 
 export interface SafeToSpendBreakdown {
