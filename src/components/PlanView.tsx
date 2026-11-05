@@ -51,6 +51,7 @@ interface PlanViewProps {
   onDeleteRecurring: (id: string) => void;
   onMarkRecurringPaid: (id: string) => void;
   onToggleRecurring: (id: string, isActive: boolean) => void;
+  onUpdateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
   onAddSavingsGoal: (data: Omit<SavingsGoal, 'id'>) => void;
   onUpdateSavingsGoal: (goalId: string, updates: Partial<SavingsGoal>) => void;
   challengeContributions: SavingsChallengeContribution[];
@@ -70,6 +71,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onDeleteRecurring,
   onMarkRecurringPaid,
   onToggleRecurring,
+  onUpdateRecurring,
   onAddSavingsGoal,
   onUpdateSavingsGoal,
   challengeContributions,
@@ -572,6 +574,36 @@ export const PlanView: React.FC<PlanViewProps> = ({
                       <button onClick={() => onDeleteRecurring(item.id)} className="min-h-[40px] min-w-[36px] flex items-center justify-center text-slate-500 hover:text-rose-400" aria-label="Supprimer cet engagement">
                         <Trash2 className="w-4 h-4" />
                       </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1">Compte de paiement</label>
+                      <select value={item.accountId || ''} onChange={(e) => onUpdateRecurring(item.id, { accountId: e.target.value || undefined })}
+                        className="w-full h-9 px-2 bg-slate-950 border border-slate-800 rounded-lg text-[11px] text-slate-200">
+                        <option value="">Choisir un compte</option>
+                        {accounts.filter((row) => !row.isArchived && row.currency === item.currency).map((row) => (
+                          <option key={row.id} value={row.id}>{row.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="flex items-center gap-2 text-[11px] text-slate-400 h-5">
+                        <input type="checkbox" checked={item.reminderEnabled ?? false}
+                          onChange={(e) => onUpdateRecurring(item.id, { reminderEnabled: e.target.checked })}
+                          className="w-3.5 h-3.5 accent-emerald-500" />
+                        Activer le rappel
+                      </label>
+                      {item.reminderEnabled && (
+                        <select value={item.reminderDaysBefore ?? 1}
+                          onChange={(e) => onUpdateRecurring(item.id, { reminderDaysBefore: Number(e.target.value) })}
+                          className="w-full h-8 px-2 bg-slate-950 border border-slate-800 rounded-lg text-[10px] text-slate-300">
+                          <option value={0}>Le jour même</option>
+                          <option value={1}>1 jour avant</option>
+                          <option value={3}>3 jours avant</option>
+                          <option value={7}>7 jours avant</option>
+                        </select>
+                      )}
                     </div>
                   </div>
                   {dueNow && item.isActive && (
