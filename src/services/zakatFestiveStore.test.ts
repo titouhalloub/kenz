@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EMPTY_ZAKAT_STATE,
   INITIAL_FESTIVE_BUDGETS,
@@ -11,10 +11,17 @@ import {
 
 const userA = '11111111-1111-4111-8111-111111111111';
 const userB = '22222222-2222-4222-8222-222222222222';
+const storage = new Map<string, string>();
 
 describe('Zakat and festive budget persistence', () => {
   beforeEach(() => {
-    localStorage.clear();
+    storage.clear();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, String(value)); },
+      removeItem: (key: string) => { storage.delete(key); },
+      clear: () => storage.clear(),
+    });
   });
 
   it('does not seed authenticated users with demo Zakat assets', () => {
