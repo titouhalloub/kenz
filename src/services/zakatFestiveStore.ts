@@ -260,14 +260,17 @@ export function saveZakatState(state: ZakatState, userId?: string): void {
     const previousRaw = typeof localStorage === 'undefined' ? null : localStorage.getItem(cacheKey);
     const previous = previousRaw ? JSON.parse(previousRaw) as ZakatState : { ...EMPTY_ZAKAT_STATE };
     const outboxKey = PENDING_ZAKAT_PREFIX + userId;
-    const pending = typeof localStorage === 'undefined' ? null : localStorage.getItem(outboxKey);
+    const legacyKey = `kenz_zakat_outbox_v1_${userId}`;
+    const pending = typeof localStorage === 'undefined' ? null :
+      localStorage.getItem(outboxKey) || localStorage.getItem(legacyKey);
     const prior = pending ? JSON.parse(pending) : null;
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(cacheKey, JSON.stringify(state));
       writePendingSnapshot(outboxKey, {
-        state, baseState: prior?.baseState || previous,
+        state, baseState: prior?.baseState || (prior ? { ...EMPTY_ZAKAT_STATE } : previous),
         updatedAt: new Date().toISOString(),
       });
+      localStorage.removeItem(legacyKey);
     }
   } catch (e) { console.error('Failed to queue Zakat sync:', e); return; }
   void flushPendingZakatFestiveSync(userId);
@@ -323,9 +326,11 @@ export function saveFestiveState(budgets: FestiveBudget[], userId?: string): voi
     const previous = typeof localStorage === 'undefined' ? [] :
       JSON.parse(localStorage.getItem(cacheKey) || '[]') as FestiveBudget[];
     const outboxKey = PENDING_FESTIVE_PREFIX + userId;
-    const pending = typeof localStorage === 'undefined' ? null : localStorage.getItem(outboxKey);
+    const legacyKey = `kenz_festive_outbox_v1_${userId}`;
+    const pending = typeof localStorage === 'undefined' ? null :
+      localStorage.getItem(outboxKey) || localStorage.getItem(legacyKey);
     const prior = pending ? JSON.parse(pending) : null;
-    const baseState: FestiveBudget[] = prior?.baseState || previous;
+    const baseState: FestiveBudget[] = prior?.baseState || (prior ? [] : previous);
     const deletedIds = [...new Set([
       ...(prior?.deletedIds || []),
       ...baseState.filter((item) => !budgets.some((next) => next.id === item.id)).map((item) => item.id),
@@ -335,6 +340,7 @@ export function saveFestiveState(budgets: FestiveBudget[], userId?: string): voi
       writePendingSnapshot(outboxKey, {
         state: budgets, baseState, deletedIds, updatedAt: new Date().toISOString(),
       });
+      localStorage.removeItem(legacyKey);
     }
   } catch (e) { console.error('Failed to queue festive budget sync:', e); return; }
   void flushPendingZakatFestiveSync(userId);
