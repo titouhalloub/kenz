@@ -197,6 +197,54 @@ export default function App() {
     };
   }, [currentUser.id]);
 
+  // Refresh all cloud-backed financial domains when another device commits a change.
+  useEffect(() => {
+    const userId = currentUser.id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    let active = true;
+    let refreshQueue: Promise<void> = Promise.resolve();
+    const refresh = () => {
+      refreshQueue = refreshQueue.then(async () => {
+        await flushPendingBudgetSync(userId);
+        await flushPendingDebtSync(userId);
+        await flushPendingZakatFestiveSync(userId);
+        const [budget, zakat, festive, credits] = await Promise.all([
+          loadBudgetStateFromSupabase(budgetState.profile, false),
+          loadZakatStateFromSupabase(userId),
+          loadFestiveStateFromSupabase(userId),
+          loadAICreditStateFromSupabase(userId),
+        ]);
+        if (!active) return;
+        if (budget) setBudgetState(budget);
+        if (zakat) setZakatState(zakat);
+        if (festive) setFestiveBudgets(festive);
+        if (credits?.wallet) setAiWallet(credits.wallet);
+      }).catch((error) => console.error('Kenz cross-device refresh failed:', error));
+    };
+    const channel = supabase.channel(`kenz-financial-live-${userId}`);
+    const tables = [
+      ['profiles', `id=eq.${userId}`],
+      ['accounts', `user_id=eq.${userId}`],
+      ['transactions', `user_id=eq.${userId}`],
+      ['budgets', `user_id=eq.${userId}`],
+      ['recurring_items', `user_id=eq.${userId}`],
+      ['savings_goals', `user_id=eq.${userId}`],
+      ['zakat_settings', `user_id=eq.${userId}`],
+      ['festive_budgets', `user_id=eq.${userId}`],
+      ['ai_credit_wallets', `user_id=eq.${userId}`],
+    ] as const;
+    for (const [table, filter] of tables) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter }, refresh);
+    }
+    channel.subscribe();
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser.id]);
+
   const handleUpdateZakat = (state: ZakatState) => {
     setZakatState(state);
     saveZakatState(state, currentUser.id);
