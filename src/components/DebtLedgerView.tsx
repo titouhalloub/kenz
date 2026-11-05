@@ -917,7 +917,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
 
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => { setPaymentIssueAction('refund'); setPaymentIssueError(null); }} className={`min-h-[42px] rounded-xl text-xs font-semibold border ${paymentIssueAction === 'refund' ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>Remboursement</button>
-              <button type="button" onClick={() => { setPaymentIssueAction('duplicate'); setPaymentIssueError(null); }} className={`min-h-[42px] rounded-xl text-xs font-semibold border ${paymentIssueAction === 'duplicate' ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>Doublon</button>
+              <button type="button" disabled={paymentIssuePayment?.resolutionStatus === 'partially_refunded'} onClick={() => { setPaymentIssueAction('duplicate'); setPaymentIssueError(null); }} className={`min-h-[42px] rounded-xl text-xs font-semibold border ${paymentIssueAction === 'duplicate' ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>Doublon</button>
             </div>
 
             {paymentIssueAction === 'refund' ? (
