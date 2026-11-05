@@ -286,13 +286,28 @@ function saveBudgetStateLocally(state: BudgetState): void {
   catch (e) { console.error('Failed to save budget state to localStorage', e); }
 }
 
-let cloudSyncQueue: Promise<void> = Promise.resolve();
+const PENDING_BUDGET_SYNC_PREFIX = 'kenz_budget_outbox_v1_';
+let cloudSyncQueue: Promise<boolean> = Promise.resolve(true);
 
-async function syncBudgetStateToSupabase(state: BudgetState): Promise<void> {
+function pendingBudgetKey(userId: string): string {
+  return `${PENDING_BUDGET_SYNC_PREFIX}${userId}`;
+}
+
+function readPendingBudgetState(userId: string): BudgetState | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(pendingBudgetKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BudgetState;
+    return parsed?.profile?.id === userId ? parsed : null;
+  } catch { return null; }
+}
+
+async function syncBudgetStateToSupabase(state: BudgetState): Promise<boolean> {
   cloudSyncQueue = cloudSyncQueue.then(async () => {
     const supabase = getSupabaseClient();
     const userId = state.profile.id;
-    if (!supabase || !isUuid(userId)) return;
+    if (!supabase || !isUuid(userId)) return false;
 
     const profileResult = await supabase.from('profiles').update({
       display_name: state.profile.displayName,
@@ -304,7 +319,7 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<void> {
     }).eq('id', userId);
     if (profileResult.error) {
       console.error('Kenz profile sync failed:', profileResult.error.message);
-      return;
+      return false;
     }
 
     if (state.accounts.length) {
@@ -358,14 +373,43 @@ async function syncBudgetStateToSupabase(state: BudgetState): Promise<void> {
         }
       } catch { /* local cache remains usable if sync metadata cannot be updated */ }
     }
+    return true;
   }).catch((error) => {
     console.error('Unexpected Kenz cloud sync failure:', error);
+    return false;
   });
   return cloudSyncQueue;
 }
+
+/** Flushes a durable per-user snapshot after app restart or network recovery. */
+export async function flushPendingBudgetSync(userId: string): Promise<boolean> {
+  if (!isUuid(userId) || (typeof navigator !== 'undefined' && !navigator.onLine)) return false;
+  const pending = readPendingBudgetState(userId);
+  if (!pending) return true;
+  const succeeded = await syncBudgetStateToSupabase(pending);
+  if (!succeeded || typeof localStorage === 'undefined') return false;
+  try {
+    const key = pendingBudgetKey(userId);
+    if (localStorage.getItem(key) === JSON.stringify(pending)) localStorage.removeItem(key);
+  } catch (error) {
+    console.error('Unable to clear synced Kenz outbox snapshot:', error);
+    return false;
+  }
+  return true;
+}
+
 export function saveBudgetState(state: BudgetState): void {
   saveBudgetStateLocally(state);
-  void syncBudgetStateToSupabase(state);
+  const userId = state.profile.id;
+  if (!isUuid(userId) || typeof localStorage === 'undefined') return;
+  try {
+    // One latest snapshot per user keeps retries bounded; all cloud writes are idempotent upserts.
+    localStorage.setItem(pendingBudgetKey(userId), JSON.stringify(state));
+  } catch (error) {
+    console.error('Unable to persist Kenz offline outbox:', error);
+    return;
+  }
+  void flushPendingBudgetSync(userId);
 }
 
 export function addTransaction(
