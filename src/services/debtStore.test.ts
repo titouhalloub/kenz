@@ -287,6 +287,43 @@ describe('Phase 5 Debt Store & Financial Health Engine', () => {
     expect(merged.remainingAmountMinor).toBe(375000);
   });
 
+  it('preserves independent debt-field edits made offline on separate devices', () => {
+    const base = sampleDebts[0];
+    const local: DebtEntry = {
+      ...base,
+      notes: 'Updated notes from phone',
+      updatedAt: '2026-10-12T10:00:00Z',
+    };
+    const remote: DebtEntry = {
+      ...base,
+      counterpartyName: 'Updated name from tablet',
+      updatedAt: '2026-10-12T11:00:00Z',
+    };
+
+    const merged = mergeDebtSnapshots([local], [remote], [], [base])[0];
+    expect(merged.notes).toBe('Updated notes from phone');
+    expect(merged.counterpartyName).toBe('Updated name from tablet');
+  });
+
+  it('resolves same-field concurrent edits deterministically without depending on merge order', () => {
+    const base = sampleDebts[0];
+    const earlier: DebtEntry = {
+      ...base,
+      notes: 'Earlier offline note',
+      updatedAt: '2026-10-12T10:00:00Z',
+    };
+    const later: DebtEntry = {
+      ...base,
+      notes: 'Later offline note',
+      updatedAt: '2026-10-12T11:00:00Z',
+    };
+
+    const mergeAB = mergeDebtSnapshots([earlier], [later], [], [base])[0];
+    const mergeBA = mergeDebtSnapshots([later], [earlier], [], [base])[0];
+    expect(mergeAB.notes).toBe('Later offline note');
+    expect(mergeBA.notes).toBe('Later offline note');
+  });
+
   it('uses the newest debt details while retaining payment events from both devices', () => {
     const base = sampleDebts[0];
     const local: DebtEntry = {
