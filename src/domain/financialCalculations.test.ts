@@ -182,7 +182,7 @@ describe('Financial Calculations Engine', () => {
     expect(parseToMinorUnits('15000')).toBe(1500000);
   });
   it('does not reserve a recurring bill when an exact matching payment was posted near its due date', () => {
-    const today = new Date(2026, 9, 13);
+    const today = new Date(2026, 9, 20);
     const bill: RecurringItem = {
       id: 'rec-internet', userId: 'user-1', name: 'Internet Bill', type: 'expense',
       amountMinor: 250000, currency: 'DZD', frequency: 'monthly',
