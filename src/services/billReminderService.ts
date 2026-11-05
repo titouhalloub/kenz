@@ -12,7 +12,11 @@ export function getBillReminderPermission(): BillReminderPermission {
 
 export async function requestBillReminderPermission(): Promise<BillReminderPermission> {
   if (typeof Notification === 'undefined') return 'unsupported';
-  if (Notification.permission === 'default') await Notification.requestPermission();
+  try {
+    if (Notification.permission === 'default') await Notification.requestPermission();
+  } catch (error) {
+    console.warn('Unable to request bill notification permission:', error);
+  }
   return Notification.permission;
 }
 
