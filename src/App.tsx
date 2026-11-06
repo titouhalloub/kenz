@@ -11,6 +11,7 @@ import {
   Store,
   Settings as SettingsIcon,
   Plus,
+  Grid3X3,
   Sparkles,
   BookOpen,
   Moon,
@@ -733,7 +734,7 @@ export default function App() {
           <button type="button" onClick={() => {setActiveTab('home');setIsMoreMenuOpen(false);}} className={activeTab === 'home' ? 'kenz-nav-item active' : 'kenz-nav-item'}><LayoutDashboard /><span>{budgetState.profile.locale === 'en' ? 'Home' : budgetState.profile.locale === 'ar' ? 'الرئيسية' : 'Accueil'}</span></button>
           <button type="button" onClick={() => {setActiveTab('reports');setIsMoreMenuOpen(false);}} className={activeTab === 'reports' ? 'kenz-nav-item active' : 'kenz-nav-item'}><BarChart3 /><span>{kenzText(budgetState.profile.locale, 'reports', 'Rapports')}</span></button>
           <button type="button" onClick={() => {setActiveTab('plan');setIsMoreMenuOpen(false);}} className={activeTab === 'plan' ? 'kenz-nav-item active' : 'kenz-nav-item'}><CalendarDays /><span>{budgetState.profile.locale === 'en' ? 'Plan' : budgetState.profile.locale === 'ar' ? 'الخطة' : 'Budgets'}</span></button>
-          <button type="button" aria-haspopup="dialog" aria-expanded={isMoreMenuOpen} onClick={() => setIsMoreMenuOpen((open) => !open)} className={isMoreMenuOpen || (activeTab !== 'home' && activeTab !== 'reports' && activeTab !== 'plan') ? 'kenz-nav-item active' : 'kenz-nav-item'}><Plus /><span>{budgetState.profile.locale === 'en' ? 'More' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus'}</span></button>
+          <button type="button" aria-haspopup="dialog" aria-expanded={isMoreMenuOpen} onClick={() => setIsMoreMenuOpen((open) => !open)} className={isMoreMenuOpen || (activeTab !== 'home' && activeTab !== 'reports' && activeTab !== 'plan') ? 'kenz-nav-item active' : 'kenz-nav-item'}><Grid3X3 /><span>{budgetState.profile.locale === 'en' ? 'More' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus'}</span></button>
         </div>
       </nav>
       {isMoreMenuOpen && (
