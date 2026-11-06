@@ -2,6 +2,23 @@ import React, { useEffect, useState } from 'react';
 import {
   PieChart,
   Calendar,
+  ShoppingBag,
+  Home,
+  Zap,
+  Car,
+  Heart,
+  Users,
+  Briefcase,
+  TrendingUp,
+  Utensils,
+  Gamepad2,
+  GraduationCap,
+  Shirt,
+  Plane,
+  Coffee,
+  PawPrint,
+  Fuel,
+  CircleHelp,
   PiggyBank,
   PlusCircle,
   CheckCircle2,
@@ -34,6 +51,15 @@ import {
   calculateCategoryBudgets,
   parseToMinorUnits,
 } from '../domain/financialCalculations';
+
+
+const getBudgetCategoryIcon = (name?: string) => {
+  const icons: Record<string, React.ElementType> = {
+    ShoppingBag, Home, Zap, Car, Heart, Users, Briefcase, TrendingUp,
+    Utensils, Gamepad2, GraduationCap, Shirt, Plane, Coffee, PawPrint, Fuel,
+  };
+  return icons[name || ''] || CircleHelp;
+};
 
 const getLocalDateString = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -276,14 +302,19 @@ export const PlanView: React.FC<PlanViewProps> = ({
           <div className="space-y-3">
             {categoryBudgets.map((item) => {
               const isEditing = editingCatId === item.categoryId;
+              const category = categories.find((entry) => entry.id === item.categoryId);
+              const BudgetIcon = getBudgetCategoryIcon(category?.icon);
+              const accentColor = category?.color || '#7950cf';
 
               return (
                 <div
                   key={item.categoryId}
                   className="kenz-challenge-card rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="kenz-budget-category-icon" style={{ color: accentColor, backgroundColor: `${accentColor}18` }}><BudgetIcon /></span>
+                      <div className="min-w-0">
                       <span className="text-xs font-semibold text-slate-200 block">
                         {item.categoryName}
                       </span>
@@ -295,6 +326,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                             ? `Budget: ${formatMoney(item.budgetMinor, profile.preferredCurrency, profile.locale)}`
                             : 'Sans plafond'}
                         </span>
+                      </div>
                       </div>
                     </div>
 
