@@ -123,4 +123,5 @@ export const AdvancedReportsView: React.FC<Props> = ({ transactions, categories,
         <section className="kenz-report-footer"><article><span>{t.average}</span><strong>{money(average,currency,locale)}</strong></article><article><span>{t.top}</span><strong>{topCategory?.name || '—'}</strong><small>{topCategory ? money(topCategory.amount,currency,locale) : '—'}</small></article></section>
       </>}
     </div>
-  };
+  );
+};
