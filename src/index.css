@@ -43,11 +43,9 @@
 [class~="text-slate-100"], [class~="text-slate-200"] { color: var(--kenz-ink) !important; }
 [class~="text-slate-300"] { color: #514b70 !important; }
 [class~="text-slate-400"], [class~="text-slate-500"] { color: var(--kenz-muted) !important; }
-[class~="text-emerald-300"], [class~="text-emerald-400"] { color: var(--kenz-purple) !important; }
-[class~="text-emerald-500"] { color: var(--kenz-purple-dark) !important; }
-[class~="bg-emerald-600"], [class~="bg-emerald-500"] { background-color: var(--kenz-purple) !important; }
-[class~="hover:bg-emerald-500"]:hover, [class~="hover:bg-emerald-500"]:active { background-color: var(--kenz-purple-dark) !important; }
-[class~="border-emerald-500"], [class~="border-emerald-800/70"] { border-color: #cbb9f5 !important; }
+#root button[class~="bg-emerald-600"], #root button[class~="bg-emerald-500"] { background-color: var(--kenz-purple) !important; }
+#root button[class~="hover:bg-emerald-500"]:hover, #root button[class~="hover:bg-emerald-500"]:active { background-color: var(--kenz-purple-dark) !important; }
+#root button[class~="border-emerald-500"], #root button[class~="border-emerald-800/70"] { border-color: #cbb9f5 !important; }
 [class~="focus:border-emerald-500"]:focus { border-color: #8a63e8 !important; }
 [class~="selection:bg-emerald-500"] { --tw-selection-bg: var(--kenz-purple); }
 
@@ -86,7 +84,9 @@
 #root nav[aria-label="Navigation principale"] svg { width: 19px; height: 19px; }
 #root nav[aria-label="Navigation principale"] span { font-size: 9px; }
 
-/* Primary actions use the reference purple; semantic income/success colors remain green. */
+/* Primary actions use the reference purple; semantic income and success colors stay green. */
+#root header nav [class~="text-emerald-400"],
+#root nav[aria-label="Navigation principale"] [class~="text-emerald-400"] { color: var(--kenz-purple) !important; }
 #root button[class*="bg-emerald-600"],
 #root button[class*="bg-emerald-500"] {
   background: linear-gradient(135deg, #6334d2, #4b1bb5) !important;
