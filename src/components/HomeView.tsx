@@ -5,12 +5,12 @@ import {
   AlertTriangle,
   PiggyBank,
   ArrowRight,
-  TrendingUp,
   ShieldCheck,
   PlusCircle,
   Sparkles,
   BookOpen,
-  Activity,
+  ScanLine,
+  BarChart3,
 } from 'lucide-react';
 import {
   Account,
@@ -39,7 +39,8 @@ interface HomeViewProps {
   debts?: DebtEntry[];
   onOpenAddModal: () => void;
   onOpenAIModal?: () => void;
-  onNavigate: (tab: 'transactions' | 'plan' | 'settings' | 'nearby' | 'debts') => void;
+  onNavigate: (tab: 'transactions' | 'plan' | 'settings' | 'nearby' | 'debts' | 'reports') => void;
+  onOpenReceiptScanner: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -53,6 +54,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenAddModal,
   onOpenAIModal,
   onNavigate,
+  onOpenReceiptScanner,
 }) => {
   const weeklySummary = generateDeterministicWeeklySummary({
     transactions,
@@ -72,329 +74,36 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const activeGoals = savingsGoals.filter((g) => g.status === 'active');
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* 1. Main Safe to Spend Hero Card */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 shadow-xl">
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <div className="flex items-center gap-2">
-            <span>{profile.locale === 'ar' ? 'المبلغ المتاح للإنفاق' : profile.locale === 'en' ? 'Available to spend' : 'Reste à vivre disponible'}</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-slate-300 font-medium">
-              {safeToSpend.isPaydayConfigured
-                ? (profile.locale === 'ar' ? `الراتب بعد ${safeToSpend.daysUntilPayday} يوم` : profile.locale === 'en' ? `Payday in ${safeToSpend.daysUntilPayday} days` : `Paye dans ${safeToSpend.daysUntilPayday} jours`)
-                : (profile.locale === 'ar' ? 'فترة 30 يوماً' : profile.locale === 'en' ? '30-day period' : 'Période 30 jours')}
-            </span>
-          </div>
-          <span className="text-slate-400 font-mono-numbers text-[11px]">
-            {profile.preferredCurrency}
-          </span>
-        </div>
+    <div className="kenz-page kenz-home-page space-y-6 pb-24">
+      <header className="kenz-home-greeting">
+        <div><span className="kenz-eyebrow">KENZ FINANCE</span><h1>{profile.locale === 'ar' ? 'أهلاً' : profile.locale === 'en' ? 'Hello' : 'Bonjour'}, {profile.displayName || 'Titou'} <span aria-hidden="true">👋</span></h1><p>{profile.locale === 'ar' ? 'إليك ملخص أموالك اليوم' : profile.locale === 'en' ? 'Here’s your money at a glance.' : 'Voici votre situation financière aujourd’hui.'}</p></div>
+        <button type="button" className="kenz-avatar-button" onClick={() => onNavigate('settings')} aria-label="Ouvrir les paramètres">{(profile.displayName || 'K').slice(0, 1).toUpperCase()}</button>
+      </header>
 
-        {/* Big Safe-To-Spend Figure */}
-        <div className="mt-3">
-          <div
-            className={`text-3xl sm:text-4xl font-bold font-mono-numbers tracking-tight ${
-              isShortfall ? 'text-rose-400' : 'text-emerald-400'
-            }`}
-          >
-            {formatMoney(safeToSpend.safeToSpendMinor, profile.preferredCurrency, profile.locale)}
-          </div>
-          <p className="mt-1 text-xs text-slate-400">
-            {isShortfall
-              ? (profile.locale === 'ar' ? 'تم رصد عجز في الميزانية قبل موعد الراتب.' : profile.locale === 'en' ? 'Budget shortfall detected before your next payday.' : 'Déficit budgétaire détecté avant la prochaine paye.')
-              : (profile.locale === 'ar' ? 'المبلغ المتاح بأمان بعد خصم الفواتير والمدخرات.' : profile.locale === 'en' ? 'Safely available after bills and savings are accounted for.' : 'Montant disponible en toute sécurité après déduction des factures et de l’épargne.')}
-          </p>
-        </div>
-
-        {/* Daily Spending Guideline */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80 grid grid-cols-2 gap-4">
-          <div>
-            <span className="text-[11px] text-slate-500 block">{profile.locale === 'ar' ? 'الحد اليومي المقترح' : profile.locale === 'en' ? 'Suggested daily limit' : 'Plafond quotidien conseillé'}</span>
-            <span className="text-lg font-semibold font-mono-numbers text-slate-200">
-              {formatMoney(safeToSpend.dailyGuidelineMinor, profile.preferredCurrency, profile.locale)}
-              <span className="text-xs font-normal text-slate-400"> /jour</span>
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[11px] text-slate-500 block">{profile.locale === 'ar' ? 'إجمالي السيولة' : profile.locale === 'en' ? 'Total liquid funds' : 'Trésorerie liquide totale'}</span>
-            <span className="text-lg font-semibold font-mono-numbers text-slate-200">
-              {formatMoney(safeToSpend.availableBalanceMinor, profile.preferredCurrency, profile.locale)}
-            </span>
-          </div>
-        </div>
-
-        {/* Action Button Row */}
-        <div className="mt-5 flex gap-2">
-          <button
-            onClick={onOpenAddModal}
-            className="flex-1 h-11 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors shadow-lg shadow-emerald-950/40 cursor-pointer min-h-[44px]"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Enregistrer dépense</span>
-          </button>
-
-          {onOpenAIModal && (
-            <button
-              onClick={onOpenAIModal}
-              className="px-3.5 h-11 flex items-center justify-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-medium text-xs border border-slate-700/80 transition-colors cursor-pointer min-h-[44px]"
-            >
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Coach IA</span>
-            </button>
-          )}
-        </div>
+      <section className="kenz-balance-card">
+        <div className="kenz-balance-top"><span>{profile.locale === 'ar' ? 'المتاح للإنفاق' : profile.locale === 'en' ? 'Safe to spend' : 'Reste à vivre disponible'}</span><span className="kenz-balance-currency">{profile.preferredCurrency}</span></div>
+        <div className="kenz-balance-amount">{formatMoney(safeToSpend.safeToSpendMinor, profile.preferredCurrency, profile.locale)}</div>
+        <p className="kenz-balance-caption">{isShortfall ? (profile.locale === 'ar' ? 'هناك عجز قبل موعد الراتب القادم.' : profile.locale === 'en' ? 'A shortfall is projected before payday.' : 'Un déficit est prévu avant la prochaine paye.') : (profile.locale === 'ar' ? 'بعد احتساب الفواتير والمدخرات.' : profile.locale === 'en' ? 'After upcoming bills and savings.' : 'Après prise en compte des factures et de l’épargne.')}</p>
+        <div className="kenz-balance-details"><div><span>{profile.locale === 'ar' ? 'الحد اليومي' : profile.locale === 'en' ? 'Daily guideline' : 'Repère quotidien'}</span><strong>{formatMoney(safeToSpend.dailyGuidelineMinor, profile.preferredCurrency, profile.locale)}</strong></div><div><span>{profile.locale === 'ar' ? 'السيولة الإجمالية' : profile.locale === 'en' ? 'Liquid funds' : 'Trésorerie totale'}</span><strong>{formatMoney(safeToSpend.availableBalanceMinor, profile.preferredCurrency, profile.locale)}</strong></div><div><span>{profile.locale === 'ar' ? 'موعد الراتب' : profile.locale === 'en' ? 'Payday' : 'Prochaine paye'}</span><strong>{safeToSpend.isPaydayConfigured ? (profile.locale === 'en' ? 'In ' + safeToSpend.daysUntilPayday + ' days' : profile.locale === 'ar' ? 'بعد ' + safeToSpend.daysUntilPayday + ' يوم' : 'Dans ' + safeToSpend.daysUntilPayday + ' j') : (profile.locale === 'en' ? '30-day period' : profile.locale === 'ar' ? 'فترة 30 يوماً' : 'Période 30 jours')}</strong></div></div>
       </section>
 
-      {/* 2. Actionable Observation (Deterministic) */}
-      <section className="rounded-2xl bg-slate-900/60 border border-slate-800 p-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-xl bg-slate-800 text-emerald-400 shrink-0">
-            {isShortfall ? (
-              <AlertTriangle className="w-4 h-4 text-rose-400" />
-            ) : (
-              <ShieldCheck className="w-4 h-4" />
-            )}
-          </div>
-          <div>
-            <h3 className="text-xs font-semibold text-slate-200">Conseil de gestion de trésorerie</h3>
-            <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-              {weeklySummary.actionableObservation}
-            </p>
-          </div>
-        </div>
+      <section className="kenz-quick-actions" aria-label="Actions rapides">
+        <button type="button" onClick={onOpenAddModal}><span className="kenz-action-icon kenz-action-purple"><PlusCircle /></span><span>{profile.locale === 'en' ? 'Add expense' : profile.locale === 'ar' ? 'إضافة مصروف' : 'Ajouter une dépense'}</span></button>
+        <button type="button" onClick={onOpenReceiptScanner}><span className="kenz-action-icon kenz-action-green"><ScanLine /></span><span>{profile.locale === 'en' ? 'Scan receipt' : profile.locale === 'ar' ? 'مسح إيصال' : 'Scanner un reçu'}</span></button>
+        <button type="button" onClick={() => onNavigate('plan')}><span className="kenz-action-icon kenz-action-amber"><PiggyBank /></span><span>{profile.locale === 'en' ? 'My budgets' : profile.locale === 'ar' ? 'ميزانياتي' : 'Mes budgets'}</span></button>
+        <button type="button" onClick={() => onNavigate('reports')}><span className="kenz-action-icon kenz-action-blue"><BarChart3 /></span><span>{profile.locale === 'en' ? 'Reports' : profile.locale === 'ar' ? 'التقارير' : 'Rapports'}</span></button>
       </section>
 
-      {/* 2b. Phase 5: Carnet Kredy & Santé Financière */}
-      {(() => {
-        const debtSummary = calculateDebtSummary(debts);
-        const health = calculateFinancialHealthScore({
-          safeToSpend,
-          accounts,
-          transactions,
-          savingsGoals,
-          debts,
-        });
-        return (
-          <section className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-                  <BookOpen className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-200">
-                    Carnet Kredy & Santé Financière
-                  </h3>
-                  <span className="text-[10px] text-slate-400">
-                    Phase 5 · Score {health.score}/100 ({health.grade})
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => onNavigate('debts')}
-                className="text-xs font-semibold text-amber-400 hover:text-amber-300 min-h-[44px] flex items-center gap-1 cursor-pointer"
-              >
-                <span>Voir le carnet</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+      <section className="kenz-insight-card"><div className="kenz-insight-icon">{isShortfall ? <AlertTriangle /> : <ShieldCheck />}</div><div><span className="kenz-card-kicker">{profile.locale === 'en' ? 'YOUR WEEKLY INSIGHT' : profile.locale === 'ar' ? 'ملخص الأسبوع' : 'VOTRE POINT DE LA SEMAINE'}</span><p>{weeklySummary.actionableObservation}</p></div>{onOpenAIModal && <button type="button" onClick={onOpenAIModal} className="kenz-ai-button"><Sparkles /> <span>Coach IA</span></button>}</section>
 
-            <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 block">Je dois (Ardoises)</span>
-                <span className="font-mono-numbers font-bold text-rose-300 text-xs">
-                  {formatMoney(debtSummary.totalPayableMinor, profile.preferredCurrency)}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                <span className="text-[10px] text-slate-400 block">On me doit (Créances)</span>
-                <span className="font-mono-numbers font-bold text-emerald-300 text-xs">
-                  {formatMoney(debtSummary.totalReceivableMinor, profile.preferredCurrency)}
-                </span>
-              </div>
-            </div>
-          </section>
-        );
-      })()}
+      {activeGoals.length > 0 && <section className="kenz-section"><div className="kenz-section-heading"><div><span className="kenz-card-kicker">{profile.locale === 'en' ? 'SAVINGS' : profile.locale === 'ar' ? 'الادخار' : 'ÉPARGNE'}</span><h2>{profile.locale === 'en' ? 'Your goals' : profile.locale === 'ar' ? 'أهدافك' : 'Vos objectifs'}</h2></div><button type="button" onClick={() => onNavigate('plan')}>{profile.locale === 'en' ? 'See all' : profile.locale === 'ar' ? 'عرض الكل' : 'Tout voir'} <ArrowRight /></button></div><div className="kenz-goal-list">{activeGoals.slice(0, 2).map((goal) => {const progressPct = Math.min(100, Math.round((goal.currentAmountMinor / goal.targetAmountMinor) * 100));return <article className="kenz-goal-card" key={goal.id}><div className="kenz-goal-title"><span className="kenz-goal-icon"><PiggyBank /></span><div><strong>{goal.name}</strong><small>{formatMoney(goal.currentAmountMinor, goal.currency, profile.locale)} / {formatMoney(goal.targetAmountMinor, goal.currency, profile.locale)}</small></div><b>{progressPct}%</b></div><div className="kenz-progress-track"><span style={{width: progressPct + '%'}} /></div></article>})}</div></section>}
 
-      {/* 3. Breakdown of Deductions */}
-      <section className="rounded-2xl bg-slate-900/40 border border-slate-800 p-5 space-y-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Calcul transparent du reste à vivre
-        </h3>
+      <section className="kenz-section"><div className="kenz-section-heading"><div><span className="kenz-card-kicker">{profile.locale === 'en' ? 'COMING UP' : profile.locale === 'ar' ? 'قريباً' : 'À VENIR'}</span><h2>{profile.locale === 'en' ? 'Upcoming bills' : profile.locale === 'ar' ? 'الفواتير القادمة' : 'Prochaines factures'}</h2></div><button type="button" onClick={() => onNavigate('plan')}>{profile.locale === 'en' ? 'See all' : profile.locale === 'ar' ? 'عرض الكل' : 'Tout voir'} <ArrowRight /></button></div>{upcomingBills.length === 0 ? <div className="kenz-empty-card">{profile.locale === 'en' ? 'No upcoming bills in this period.' : profile.locale === 'ar' ? 'لا توجد فواتير قادمة في هذه الفترة.' : 'Aucune facture prévue pour le moment.'}</div> : <div className="kenz-list-card">{upcomingBills.map((bill) => <article key={bill.id} className="kenz-list-row"><span className="kenz-row-icon kenz-action-amber"><Calendar /></span><div className="kenz-row-copy"><strong>{bill.name}</strong><small>{formatBillDueLabel(bill.nextDueDate, profile.locale)} · {bill.nextDueDate}</small></div><b>{formatMoney(bill.amountMinor, bill.currency, profile.locale)}</b></article>)}</div>}</section>
 
-        <div className="space-y-2.5 text-xs">
-          <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-            <span className="text-slate-400">Solde bancaire & espèces disponible</span>
-            <span className="font-mono-numbers font-medium text-slate-200">
-              {formatMoney(safeToSpend.availableBalanceMinor, profile.preferredCurrency, profile.locale)}
-            </span>
-          </div>
+      <section className="kenz-section"><div className="kenz-section-heading"><div><span className="kenz-card-kicker">{profile.locale === 'en' ? 'YOUR ACCOUNTS' : profile.locale === 'ar' ? 'حساباتك' : 'VOS COMPTES'}</span><h2>{profile.locale === 'en' ? 'Tracked accounts' : profile.locale === 'ar' ? 'الحسابات المتابعة' : 'Comptes suivis'} <span className="kenz-count">{accounts.length}</span></h2></div><button type="button" onClick={() => onNavigate('settings')}>{profile.locale === 'en' ? 'Manage' : profile.locale === 'ar' ? 'إدارة' : 'Gérer'} <ArrowRight /></button></div><div className="kenz-account-grid">{accounts.map((acc) => {const bal = calculateAccountBalance(acc, transactions);return <article key={acc.id} className="kenz-account-card"><span className="kenz-account-icon"><Wallet /></span><div className="kenz-row-copy"><strong>{acc.name}</strong><small>{acc.type}</small></div><b>{formatMoney(bal, acc.currency, profile.locale)}</b></article>})}</div></section>
 
-          <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-            <span className="text-slate-400">+ Revenus attendus avant la paye</span>
-            <span className="font-mono-numbers font-medium text-emerald-400">
-              +{formatMoney(safeToSpend.expectedIncomeMinor, profile.preferredCurrency, profile.locale)}
-            </span>
-          </div>
+      {(() => {const debtSummary = calculateDebtSummary(debts);const health = calculateFinancialHealthScore({safeToSpend,accounts,transactions,savingsGoals,debts});return <section className="kenz-financial-health" onClick={() => onNavigate('debts')} role="button" tabIndex={0} onKeyDown={(event) => {if (event.key === 'Enter' || event.key === ' ') onNavigate('debts');}}><div className="kenz-health-heading"><span className="kenz-health-icon"><BookOpen /></span><div className="kenz-row-copy"><strong>{profile.locale === 'en' ? 'Kredy & financial health' : profile.locale === 'ar' ? 'دفتر الديون والصحة المالية' : 'Carnet Kredy & santé financière'}</strong><small>{profile.locale === 'en' ? 'Your financial health score' : profile.locale === 'ar' ? 'مؤشر صحتك المالية' : 'Votre indice de santé financière'}</small></div><span className="kenz-health-score">{health.score}<small>/100</small></span><ArrowRight /></div><div className="kenz-debt-stats"><div><small>{profile.locale === 'en' ? 'You owe' : profile.locale === 'ar' ? 'عليك' : 'Je dois'}</small><b className="kenz-negative">{formatMoney(debtSummary.totalPayableMinor, profile.preferredCurrency, profile.locale)}</b></div><div><small>{profile.locale === 'en' ? 'Owed to you' : profile.locale === 'ar' ? 'مستحق لك' : 'On me doit'}</small><b className="kenz-positive">{formatMoney(debtSummary.totalReceivableMinor, profile.preferredCurrency, profile.locale)}</b></div></div></section>})()}
 
-          <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-            <span className="text-slate-400">- Factures et charges réservées à payer</span>
-            <span className="font-mono-numbers font-medium text-amber-400">
-              -{formatMoney(safeToSpend.unpaidReservedCommitmentsMinor, profile.preferredCurrency, profile.locale)}
-            </span>
-          </div>
-
-          <div className="flex justify-between py-1.5">
-            <span className="text-slate-400">- Épargne sanctuarisée</span>
-            <span className="font-mono-numbers font-medium text-blue-400">
-              -{formatMoney(safeToSpend.plannedSavingsMinor, profile.preferredCurrency, profile.locale)}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Tracked Accounts */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Comptes suivis ({accounts.length})
-          </h3>
-          <button
-            onClick={() => onNavigate('settings')}
-            className="text-xs text-slate-400 hover:text-slate-200 min-h-[44px] flex items-center"
-          >
-            Gérer
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {accounts.map((acc) => {
-            const bal = calculateAccountBalance(acc, transactions);
-            return (
-              <div
-                key={acc.id}
-                className="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300">
-                    <Wallet className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold text-slate-200 block">{acc.name}</span>
-                    <span className="text-[11px] text-slate-500 uppercase">{acc.type}</span>
-                  </div>
-                </div>
-                <span className="text-sm font-bold font-mono-numbers text-slate-100">
-                  {formatMoney(bal, acc.currency, profile.locale)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 5. Upcoming Commitments (Bills) */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Prochaines factures réservées
-          </h3>
-          <button
-            onClick={() => onNavigate('plan')}
-            className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 min-h-[44px]"
-          >
-            <span>Voir tout</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {upcomingBills.length === 0 ? (
-          <div className="rounded-2xl bg-slate-900/30 border border-slate-800/60 p-4 text-center text-xs text-slate-500">
-            Aucune facture en attente dans la période.
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-800/80 rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
-            {upcomingBills.map((bill) => (
-              <div key={bill.id} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-slate-800/80 flex items-center justify-center text-amber-400">
-                    <Calendar className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold text-slate-200 block">{bill.name}</span>
-                    <span className={`text-[11px] ${daysUntilBill(bill.nextDueDate) < 0 ? 'text-rose-400' : daysUntilBill(bill.nextDueDate) === 0 ? 'text-amber-300' : 'text-slate-500'}`}>
-                      {formatBillDueLabel(bill.nextDueDate, profile.locale)} · {bill.nextDueDate}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-xs font-bold font-mono-numbers text-amber-400">
-                  {formatMoney(bill.amountMinor, bill.currency, profile.locale)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 6. Savings Goals Progress */}
-      {activeGoals.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Objectifs d'épargne
-            </h3>
-            <button
-              onClick={() => onNavigate('plan')}
-              className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 min-h-[44px]"
-            >
-              <span>Objectifs</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {activeGoals.map((goal) => {
-              const progressPct = Math.min(
-                100,
-                Math.round((goal.currentAmountMinor / goal.targetAmountMinor) * 100)
-              );
-              return (
-                <div
-                  key={goal.id}
-                  className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-2.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-blue-950/60 text-blue-400">
-                        <PiggyBank className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-semibold text-slate-200">{goal.name}</span>
-                    </div>
-                    <span className="text-xs font-mono-numbers text-slate-300">
-                      {progressPct}%
-                    </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                      style={{ width: `${progressPct}%` }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between text-[11px] text-slate-400 font-mono-numbers">
-                    <span>{formatMoney(goal.currentAmountMinor, goal.currency, profile.locale)}</span>
-                    <span>Cible: {formatMoney(goal.targetAmountMinor, goal.currency, profile.locale)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      <details className="kenz-breakdown"><summary>{profile.locale === 'en' ? 'How your available amount is calculated' : profile.locale === 'ar' ? 'كيف تم حساب المبلغ المتاح' : 'Comment est calculé votre reste à vivre'}</summary><div className="kenz-breakdown-rows"><div><span>{profile.locale === 'en' ? 'Available bank and cash balance' : profile.locale === 'ar' ? 'الأرصدة المتاحة' : 'Soldes bancaires et espèces'}</span><b>{formatMoney(safeToSpend.availableBalanceMinor, profile.preferredCurrency, profile.locale)}</b></div><div><span>{profile.locale === 'en' ? 'Expected income before payday' : profile.locale === 'ar' ? 'الدخل المتوقع' : 'Revenus attendus avant la paye'}</span><b className="kenz-positive">+{formatMoney(safeToSpend.expectedIncomeMinor, profile.preferredCurrency, profile.locale)}</b></div><div><span>{profile.locale === 'en' ? 'Reserved bills and commitments' : profile.locale === 'ar' ? 'الفواتير والالتزامات' : 'Factures et charges réservées'}</span><b className="kenz-warning">−{formatMoney(safeToSpend.unpaidReservedCommitmentsMinor, profile.preferredCurrency, profile.locale)}</b></div><div><span>{profile.locale === 'en' ? 'Planned savings' : profile.locale === 'ar' ? 'الادخار المخطط' : 'Épargne prévue'}</span><b className="kenz-warning">−{formatMoney(safeToSpend.plannedSavingsMinor, profile.preferredCurrency, profile.locale)}</b></div></div></details>
     </div>
   );
-};

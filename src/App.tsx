@@ -110,6 +110,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => loadCurrentUser());
   const [challengeContributions, setChallengeContributions] = useState<SavingsChallengeContribution[]>(() => loadSavingsChallengeContributions(loadCurrentUser().id));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReceiptScannerOpen, setIsReceiptScannerOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -589,6 +590,7 @@ export default function App() {
             savingsGoals={budgetState.savingsGoals}
             safeToSpend={safeToSpend}
             onOpenAddModal={() => setIsAddModalOpen(true)}
+            onOpenReceiptScanner={() => setIsReceiptScannerOpen(true)}
             onOpenAIModal={() => setIsAIModalOpen(true)}
             onNavigate={(tab) => setActiveTab(tab)}
           />
@@ -726,99 +728,14 @@ export default function App() {
       </main>
 
       {/* Mobile Fixed Bottom Navigation Bar (7 destinations + Thumb Ergonomics) */}
-      <nav
-        aria-label="Navigation principale"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 px-1 py-1"
-      >
-        <div className="grid grid-cols-8 items-center h-16 max-w-xl mx-auto">
-          {/* 1. Home Tab */}
-          <button
-            onClick={() => setActiveTab('home')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'home' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الرئيسية' : budgetState.profile.locale === 'en' ? 'Home' : 'Accueil'}</span>
-          </button>
-
-          {/* 2. Transactions Tab */}
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'transactions' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Receipt className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{kenzText(budgetState.profile.locale, 'transactions', 'Opérations')}</span>
-          </button>
-
-          {/* 3. Advanced reports */}
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'reports' ? 'text-violet-300 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{kenzText(budgetState.profile.locale, 'reports', 'Rapports')}</span>
-          </button>
-
-          {/* 3. Nearby / Directory Tab */}
-          <button
-            onClick={() => setActiveTab('nearby')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'nearby' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Store className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الحي' : budgetState.profile.locale === 'en' ? 'Nearby' : 'Quartier'}</span>
-          </button>
-
-          {/* 4. Carnet Kredy Tab */}
-          <button
-            onClick={() => setActiveTab('debts')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'debts' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الديون' : 'Kredy'}</span>
-          </button>
-
-          {/* 5. Zakat & Fêtes Tab */}
-          <button
-            onClick={() => setActiveTab('zakat')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'zakat' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Moon className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الزكاة' : 'Zakat'}</span>
-          </button>
-
-          {/* 6. Plan Tab */}
-          <button
-            onClick={() => setActiveTab('plan')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'plan' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <CalendarDays className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الخطة' : budgetState.profile.locale === 'en' ? 'Plan' : 'Plan'}</span>
-          </button>
-
-          {/* 7. Settings Tab */}
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
-              activeTab === 'settings' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <SettingsIcon className="w-4 h-4" />
-            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الإعدادات' : budgetState.profile.locale === 'en' ? 'Settings' : 'Options'}</span>
-          </button>
+      <nav aria-label="Navigation principale" className="kenz-mobile-nav md:hidden">
+        <div className="kenz-mobile-nav-inner">
+          <button type="button" onClick={() => {setActiveTab('home');setIsMoreMenuOpen(false);}} className={activeTab === 'home' ? 'kenz-nav-item active' : 'kenz-nav-item'}><LayoutDashboard /><span>{budgetState.profile.locale === 'en' ? 'Home' : budgetState.profile.locale === 'ar' ? 'الرئيسية' : 'Accueil'}</span></button>
+          <button type="button" onClick={() => {setActiveTab('reports');setIsMoreMenuOpen(false);}} className={activeTab === 'reports' ? 'kenz-nav-item active' : 'kenz-nav-item'}><BarChart3 /><span>{kenzText(budgetState.profile.locale, 'reports', 'Rapports')}</span></button>
+          <button type="button" onClick={() => {setActiveTab('plan');setIsMoreMenuOpen(false);}} className={activeTab === 'plan' ? 'kenz-nav-item active' : 'kenz-nav-item'}><CalendarDays /><span>{budgetState.profile.locale === 'en' ? 'Plan' : budgetState.profile.locale === 'ar' ? 'الخطة' : 'Budgets'}</span></button>
+          <button type="button" aria-haspopup="dialog" aria-expanded={isMoreMenuOpen} onClick={() => setIsMoreMenuOpen((open) => !open)} className={isMoreMenuOpen || (activeTab !== 'home' && activeTab !== 'reports' && activeTab !== 'plan') ? 'kenz-nav-item active' : 'kenz-nav-item'}><Plus /><span>{budgetState.profile.locale === 'en' ? 'More' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus'}</span></button>
         </div>
+        {isMoreMenuOpen && <div className="kenz-more-overlay" role="presentation" onClick={() => setIsMoreMenuOpen(false)}><section className="kenz-more-sheet" role="dialog" aria-modal="true" aria-label={budgetState.profile.locale === 'en' ? 'More destinations' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus de destinations'} onClick={(event) => event.stopPropagation()}><div className="kenz-sheet-handle"/><div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{budgetState.profile.locale === 'en' ? 'Explore' : budgetState.profile.locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div><button type="button" aria-label="Fermer" onClick={() => setIsMoreMenuOpen(false)}>×</button></div><div className="kenz-more-grid">{([['transactions',budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations',Receipt],['nearby',budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité',Store],['debts','Kredy',BookOpen],['zakat','Zakat',Moon],['settings',budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres',SettingsIcon],['profile',budgetState.profile.locale === 'en' ? 'Profile' : budgetState.profile.locale === 'ar' ? 'الملف الشخصي' : 'Profil',Sparkles]] as const).map(([tab,label,Icon]) => <button type="button" key={tab} onClick={() => {setActiveTab(tab);setIsMoreMenuOpen(false);}} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}><span><Icon /></span><b>{label}</b></button>)}</div></section></div>}
       </nav>
 
       {/* Add Transaction Modal */}

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Camera, ImagePlus, Loader2, ScanLine, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, ScanLine, X, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
 import { Account, Category, TransactionType, UserProfile } from '../domain/types';
 import { parseToMinorUnits } from '../domain/financialCalculations';
 import { getSupabaseAccessToken } from '../services/supabase';
@@ -169,8 +169,8 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4">
-      <div className="w-full max-w-xl max-h-[94vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-2xl">
+    <div className="kenz-scanner-backdrop fixed inset-0 z-[55] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4">
+      <div className="kenz-scanner-panel w-full max-w-xl max-h-[94vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>
             <h2 className="text-base font-bold text-slate-100 flex items-center gap-2"><ScanLine className="w-5 h-5 text-emerald-400" /> Scanner un reçu</h2>
@@ -182,13 +182,14 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
         <input ref={fileInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void handleFile(event.target.files?.[0])} />
 
         {!preview ? (
-          <div className="grid grid-cols-2 gap-3 py-6">
-            <button onClick={() => { if (fileInput.current) { fileInput.current.setAttribute('capture', 'environment'); fileInput.current.click(); } }} className="min-h-32 rounded-2xl border border-emerald-700/70 bg-emerald-950/30 flex flex-col items-center justify-center gap-2 text-emerald-300 hover:bg-emerald-950/60">
-              <Camera className="w-7 h-7" /><span className="text-sm font-semibold">Prendre une photo</span>
-            </button>
-            <button onClick={() => { if (fileInput.current) { fileInput.current.removeAttribute('capture'); fileInput.current.click(); } }} className="min-h-32 rounded-2xl border border-slate-700 bg-slate-950/60 flex flex-col items-center justify-center gap-2 text-slate-200 hover:bg-slate-800">
-              <ImagePlus className="w-7 h-7" /><span className="text-sm font-semibold">Choisir une image</span>
-            </button>
+          <div className="kenz-scan-empty">
+            <p className="kenz-scan-intro">Prenez une photo de votre reçu ou choisissez une image pour commencer.</p>
+            <div className="kenz-scan-illustration"><span className="kenz-scan-corner top-left"/><span className="kenz-scan-corner top-right"/><span className="kenz-scan-corner bottom-left"/><span className="kenz-scan-corner bottom-right"/><div className="kenz-scan-paper"><ScanLine /><i/><i/><i/></div></div>
+            <div className="kenz-scan-actions">
+              <button onClick={() => { if (fileInput.current) { fileInput.current.setAttribute('capture', 'environment'); fileInput.current.click(); } }} className="kenz-scan-camera"><Camera /><span>Prendre une photo</span></button>
+              <button onClick={() => { if (fileInput.current) { fileInput.current.removeAttribute('capture'); fileInput.current.click(); } }} className="kenz-scan-library"><ImagePlus /><span>Choisir une image</span></button>
+            </div>
+            <div className="kenz-scan-hint"><Sparkles /><span>L’IA extraira automatiquement les informations du reçu. Vous pourrez tout vérifier avant de créer la dépense.</span></div>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
