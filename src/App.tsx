@@ -735,8 +735,31 @@ export default function App() {
           <button type="button" onClick={() => {setActiveTab('plan');setIsMoreMenuOpen(false);}} className={activeTab === 'plan' ? 'kenz-nav-item active' : 'kenz-nav-item'}><CalendarDays /><span>{budgetState.profile.locale === 'en' ? 'Plan' : budgetState.profile.locale === 'ar' ? 'الخطة' : 'Budgets'}</span></button>
           <button type="button" aria-haspopup="dialog" aria-expanded={isMoreMenuOpen} onClick={() => setIsMoreMenuOpen((open) => !open)} className={isMoreMenuOpen || (activeTab !== 'home' && activeTab !== 'reports' && activeTab !== 'plan') ? 'kenz-nav-item active' : 'kenz-nav-item'}><Plus /><span>{budgetState.profile.locale === 'en' ? 'More' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus'}</span></button>
         </div>
-        {isMoreMenuOpen && <div className="kenz-more-overlay" role="presentation" onClick={() => setIsMoreMenuOpen(false)}><section className="kenz-more-sheet" role="dialog" aria-modal="true" aria-label={budgetState.profile.locale === 'en' ? 'More destinations' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus de destinations'} onClick={(event) => event.stopPropagation()}><div className="kenz-sheet-handle"/><div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{budgetState.profile.locale === 'en' ? 'Explore' : budgetState.profile.locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div><button type="button" aria-label="Fermer" onClick={() => setIsMoreMenuOpen(false)}>×</button></div><div className="kenz-more-grid">{([['transactions',budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations',Receipt],['nearby',budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité',Store],['debts','Kredy',BookOpen],['zakat','Zakat',Moon],['settings',budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres',SettingsIcon],['profile',budgetState.profile.locale === 'en' ? 'Profile' : budgetState.profile.locale === 'ar' ? 'الملف الشخصي' : 'Profil',Sparkles]] as const).map(([tab,label,Icon]) => <button type="button" key={tab} onClick={() => {setActiveTab(tab);setIsMoreMenuOpen(false);}} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}><span><Icon /></span><b>{label}</b></button>)}</div></section></div>}
       </nav>
+      {isMoreMenuOpen && (
+        <div className="kenz-more-overlay" role="presentation" onClick={() => setIsMoreMenuOpen(false)}>
+          <section className="kenz-more-sheet" role="dialog" aria-modal="true" aria-label={budgetState.profile.locale === 'en' ? 'More destinations' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus de destinations'} onClick={(event) => event.stopPropagation()}>
+            <div className="kenz-sheet-handle" />
+            <div className="kenz-section-heading">
+              <div><span className="kenz-card-kicker">KENZ</span><h2>{budgetState.profile.locale === 'en' ? 'Explore' : budgetState.profile.locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div>
+              <button type="button" aria-label="Fermer" onClick={() => setIsMoreMenuOpen(false)}>×</button>
+            </div>
+            <div className="kenz-more-grid">
+              {([
+                ['transactions', budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
+                ['nearby', budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
+                ['debts', 'Kredy', BookOpen], ['zakat', 'Zakat', Moon],
+                ['settings', budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],
+                ['profile', budgetState.profile.locale === 'en' ? 'Profile' : budgetState.profile.locale === 'ar' ? 'الملف الشخصي' : 'Profil', Sparkles],
+              ] as const).map(([tab, label, Icon]) => (
+                <button type="button" key={tab} onClick={() => { setActiveTab(tab); setIsMoreMenuOpen(false); }} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}>
+                  <span><Icon /></span><b>{label}</b>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Add Transaction Modal */}
       <AddTransactionModal
