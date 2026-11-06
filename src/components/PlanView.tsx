@@ -19,7 +19,7 @@ import {
   PawPrint,
   Fuel,
   CircleHelp,
-  PiggyBank,
+  Landmark,
   PlusCircle,
   CheckCircle2,
   AlertCircle,
