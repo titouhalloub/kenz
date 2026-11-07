@@ -26,6 +26,10 @@ values
   ('dcw-tizi-ouzou-daily', 'Directorate of Commerce — Tizi Ouzou daily price statement', 'official',
    'https://www.dcwtiziouzou.dz/fr/index.php?Itemid=77&id=76&option=com_content&view=article',
    'Public daily price statement page. The collector checks robots.txt at runtime, uses only the published retail-price table, and stages rows as pending for review.',
+   85, false, false, 'daily'),
+  ('dcw-jijel-daily', 'Directorate of Commerce — Jijel daily price statement', 'official',
+   'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ',
+   'Public daily price statement page. The collector checks robots.txt at runtime, parses the published retail-price column, and excludes observations older than 14 days.',
    85, false, false, 'daily')
 on conflict (slug) do update set
   name = excluded.name,
