@@ -191,8 +191,9 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   if (!value || typeof value !== 'object') return null;
   const row = value as Partial<FamilyLivingPlan>;
   if (row.version !== 1 || row.userId !== userId || row.month !== month || !validMonth(row.month) ||
-      !Array.isArray(row.meals) || !Array.isArray(row.pantry) || !Array.isArray(row.needs) || !Array.isArray(row.recipes) ||
-      row.meals.length > 400 || row.pantry.length > 500 || row.needs.length > 1000 || row.recipes.length > 500) return null;
+      !Array.isArray(row.meals) || !Array.isArray(row.pantry) || (row.needs !== undefined && !Array.isArray(row.needs)) || !Array.isArray(row.recipes) ||
+      row.meals.length > 400 || row.pantry.length > 500 || (Array.isArray(row.needs) && row.needs.length > 1000) || row.recipes.length > 500) return null;
+  const needs = Array.isArray(row.needs) ? row.needs : [];
 
   const mealsValid = row.meals.every((meal) => meal && validText(meal.id, 120) &&
     validDate(meal.date) && meal.date.slice(0, 7) === month &&
@@ -200,7 +201,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     validText(meal.recipeId, 120) && Number.isInteger(meal.servings) && meal.servings >= 1 && meal.servings <= 40);
   const pantryValid = row.pantry.every((item) => item && validText(item.id, 120) &&
     validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli));
-  const needsValid = row.needs.every((need) => need && validText(need.id, 120) &&
+  const needsValid = needs.every((need) => need && validText(need.id, 120) &&
     (need.category === 'clothing' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'school' ||
       need.category === 'transport' || need.category === 'health' || need.category === 'home' || need.category === 'other') &&
     validText(need.name, 100) && (need.member === undefined || validText(need.member, 80)) &&
@@ -220,16 +221,16 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
 
   if (!mealsValid || !pantryValid || !needsValid || !recipesValid) return null;
   const recipeIds = new Set([...BUILTIN_FAMILY_RECIPES, ...row.recipes].map((recipe) => recipe.id));
-  if (new Set(row.needs.map((need) => need.id)).size !== row.needs.length ||
-      !Number.isSafeInteger(row.needs.reduce((sum, need) => sum + need.plannedMinor, 0)) ||
-      !Number.isSafeInteger(row.needs.reduce((sum, need) => sum + need.actualMinor, 0)) ||
+  if (new Set(needs.map((need) => need.id)).size !== needs.length ||
+      !Number.isSafeInteger(needs.reduce((sum, need) => sum + need.plannedMinor, 0)) ||
+      !Number.isSafeInteger(needs.reduce((sum, need) => sum + need.actualMinor, 0)) ||
       new Set(row.meals.map((meal) => meal.id)).size !== row.meals.length ||
       new Set(row.meals.map((meal) => meal.date + '::' + meal.slot)).size !== row.meals.length ||
       row.meals.some((meal) => !recipeIds.has(meal.recipeId)) ||
       new Set(row.recipes.map((recipe) => recipe.id)).size !== row.recipes.length ||
       row.recipes.some((recipe) => BUILTIN_FAMILY_RECIPES.some((builtin) => builtin.id === recipe.id)) ||
       new Set(row.pantry.map((item) => ingredientKey(item.name, item.unit))).size !== row.pantry.length) return null;
-  return row as FamilyLivingPlan;
+  return { ...row, needs } as FamilyLivingPlan;
 }
 
 export function familyLivingStorageKey(userId: string, month: string): string {
