@@ -280,7 +280,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               {recipeIngredients.map((item, index) => {
                 const product = PRODUCT_CATALOG.find((row) => row.slug === item.productSlug);
                 return <div key={index} className="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 text-[11px] text-slate-300">
-                  <span>{product ? productName(product, 'fr') : item.productSlug} · {item.quantityMilliUnits} {item.baseUnit}</span>
+                  <span>{product ? productName(product, 'fr') : item.productSlug} · {item.quantityMilliUnits} {item.baseUnit === 'kg' ? 'g' : item.baseUnit === 'l' ? 'ml' : 'pcs'}</span>
                   <button type="button" onClick={() => setRecipeIngredients((current) => current.filter((_, i) => i !== index))} className="text-rose-300">Retirer</button>
                 </div>;
               })}
@@ -384,7 +384,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               {post.body && <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-300">{post.body}</p>}
               {post.kind === 'recipe' && <div className="rounded-xl bg-slate-950 p-3 space-y-2">
                 <p className="text-[11px] text-slate-400">{post.servings} portions · {post.steps}</p>
-                {post.ingredients.map((ingredient, index) => <p key={index} className="text-[11px] text-slate-300">{ingredient.productSlug || ingredient.freeText} · {ingredient.quantityMilliUnits} {ingredient.baseUnit}</p>)}
+                {post.ingredients.map((ingredient, index) => <p key={index} className="text-[11px] text-slate-300">{ingredient.productSlug || ingredient.freeText} · {ingredient.quantityMilliUnits} {ingredient.baseUnit === 'kg' ? 'g' : ingredient.baseUnit === 'l' ? 'ml' : 'pcs'}</p>)}
                 {typeof totalCost === 'number' ? <p className="text-xs font-semibold text-emerald-300">Coût estimé : {formatMoney(totalCost, 'DZD', locale)} · {perServing ? formatMoney(perServing, 'DZD', locale) + ' / portion' : ''}</p> : <p className="text-[10px] text-slate-500">Prix public insuffisant pour chiffrer cette recette.</p>}
               </div>}
               {post.kind === 'shopping_list' && <div className="space-y-1">{post.ingredients.map((item, index) => <p key={index} className="text-xs text-slate-300">• {item.freeText || item.productSlug} — {item.quantityMilliUnits} {item.baseUnit}</p>)}</div>}
