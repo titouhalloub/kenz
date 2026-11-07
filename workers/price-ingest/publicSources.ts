@@ -345,7 +345,7 @@ export function extractPdfLinks(html: string, listingUrl: URL): URL[] {
     if (value) candidates.add(decodeEntities(value));
   }
   // Some CMS PDF viewers place the embedded file URL in inline scripts or JSON rather than an href.
-  const rawPdfUrls = /(?:https?:[/]{2}[^"'<>\\s]+|[/][^"'<>\\s]+)prix_\d{2}_[a-z]{3}_\d{4}_madrp\.pdf(?:\?[^"'<>\\s]*)?/gi;
+  const rawPdfUrls = /(?:https?:[/]{2}[^"'<>\s]+|[/][^"'<>\s]+)prix_\d{2}_[a-z]{3}_\d{4}_madrp\.pdf(?:\?[^"'<>\s]*)?/gi;
   for (const match of normalizedHtml.matchAll(rawPdfUrls)) candidates.add(match[0]);
 
   const links: URL[] = [];
