@@ -51,7 +51,7 @@ export async function saveSimulatorScenario(input: {
   basket: SimulatorScenarioOverride[];
 }): Promise<ScenarioStoreResult<SimulatorScenario>> {
   const auth = await authenticatedClient(input.userId);
-  if ('error' in auth) return { success: false, reason: auth.error, message: 'Sign in to sync your scenarios.' };
+  if ('error' in auth) return { success: false, reason: auth.error || 'not_authenticated', message: 'Sign in to sync your scenarios.' };
   const { data, error } = await auth.supabase
     .from('simulator_scenarios')
     .insert({
@@ -71,7 +71,7 @@ export async function saveSimulatorScenario(input: {
 
 export async function deleteSimulatorScenario(userId: string, scenarioId: string): Promise<ScenarioStoreResult<boolean>> {
   const auth = await authenticatedClient(userId);
-  if ('error' in auth) return { success: false, reason: auth.error, message: 'Sign in to sync your scenarios.' };
+  if ('error' in auth) return { success: false, reason: auth.error || 'not_authenticated', message: 'Sign in to sync your scenarios.' };
   const { error } = await auth.supabase
     .from('simulator_scenarios')
     .delete()
