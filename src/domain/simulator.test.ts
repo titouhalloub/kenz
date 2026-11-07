@@ -56,7 +56,7 @@ describe('simulateMonthlyBudget', () => {
 
   it('rejects mixed currencies and malformed month values', () => {
     expect(() => simulateMonthlyBudget(fixture('2026-11', {
-      items: [{ ...fixture('2026-11').items[0], price: { ...price, currency: 'EUR' as 'DZD' } }],
+      items: [{ ...fixture('2026-11').items[0], price: { ...price, currency: 'EUR' } }],
     }))).toThrow('Mixed currencies');
     expect(() => simulateMonthlyBudget(fixture('2026-13'))).toThrow('Invalid month');
   });
