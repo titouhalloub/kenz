@@ -176,6 +176,43 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const slotLabel = (slot: MealSlot) => slot === 'breakfast'
     ? tr(profile, 'Petit-déjeuner', 'الفطور', 'Breakfast')
     : slot === 'lunch' ? tr(profile, 'Déjeuner', 'الغداء', 'Lunch') : tr(profile, 'Dîner', 'العشاء', 'Dinner');
+  const ingredientCopy: Record<string, { fr: string; en: string }> = {
+    tomato: { fr: 'Tomate', en: 'Tomato' }, onion: { fr: 'Oignon', en: 'Onion' },
+    carrot: { fr: 'Carotte', en: 'Carrot' }, garlic: { fr: 'Ail', en: 'Garlic' },
+    oil: { fr: 'Huile', en: 'Oil' }, lentils: { fr: 'Lentilles', en: 'Lentils' },
+    couscous: { fr: 'Couscous', en: 'Couscous' }, turnip: { fr: 'Navet', en: 'Turnip' },
+    zucchini: { fr: 'Courgette', en: 'Zucchini' }, chickpeas: { fr: 'Pois chiches', en: 'Chickpeas' },
+    'cooked chickpeas': { fr: 'Pois chiches cuits', en: 'Cooked chickpeas' },
+    eggs: { fr: 'Œufs', en: 'Eggs' }, pasta: { fr: 'Pâtes', en: 'Pasta' }, cucumber: { fr: 'Concombre', en: 'Cucumber' },
+  };
+  const ingredientLabel = (name: string) => {
+    if (profile.locale === 'ar') return name;
+    const key = ingredientKey(name, 'piece').split('::')[0];
+    return ingredientCopy[key]?.[profile.locale] || name;
+  };
+  const translatedSteps: Record<string, { fr: string[]; en: string[] }> = {
+    'dz-lentil-soup': {
+      fr: ['Rincez les lentilles et coupez les légumes.', 'Faites revenir l’oignon, la carotte et l’ail avec un peu d’huile.', 'Ajoutez les lentilles, les tomates, l’eau et les épices. Laissez cuire.', 'Mixez une partie de la soupe si vous le souhaitez, puis servez chaud.'],
+      en: ['Rinse the lentils and chop the vegetables.', 'Soften the onion, carrot and garlic in a little oil.', 'Add lentils, tomatoes, water and spices; simmer until tender.', 'Blend part of the soup if you like, then serve hot.'],
+    },
+    'dz-couscous-vegetables': {
+      fr: ['Faites cuire le bouillon avec les pois chiches et les légumes les plus fermes.', 'Faites cuire le couscous à la vapeur selon les instructions du paquet.', 'Ajoutez la courgette et poursuivez la cuisson jusqu’à ce que les légumes soient tendres.', 'Servez le couscous avec le bouillon et les légumes.'],
+      en: ['Simmer the broth with chickpeas and the firmer vegetables.', 'Steam the couscous according to the package instructions.', 'Add zucchini and cook until the vegetables are tender.', 'Serve the couscous with the broth and vegetables.'],
+    },
+    'dz-omelette': {
+      fr: ['Coupez l’oignon et la tomate.', 'Faites-les revenir brièvement dans une poêle.', 'Ajoutez les œufs battus et faites cuire jusqu’à ce qu’ils soient pris.'],
+      en: ['Chop the onion and tomato.', 'Cook them briefly in a pan.', 'Add the beaten eggs and cook until set.'],
+    },
+    'dz-tomato-pasta': {
+      fr: ['Faites cuire les pâtes dans l’eau.', 'Préparez une sauce avec les tomates, l’oignon, l’ail et l’huile.', 'Mélangez les pâtes avec la sauce et servez.'],
+      en: ['Boil the pasta in water.', 'Make a sauce with tomatoes, onion, garlic and oil.', 'Toss the pasta with the sauce and serve.'],
+    },
+    'dz-chickpea-salad': {
+      fr: ['Coupez les légumes en petits dés.', 'Ajoutez les pois chiches cuits.', 'Assaisonnez avec de l’huile, du sel et du citron selon votre goût.'],
+      en: ['Dice the vegetables.', 'Add the cooked chickpeas.', 'Season with oil, salt and lemon to taste.'],
+    },
+  };
+  const recipeSteps = (recipe: FamilyRecipe) => profile.locale === 'ar' ? recipe.steps : translatedSteps[recipe.id]?.[profile.locale] || recipe.steps;
   const recipeCopy: Record<string, { fr: string; en: string; descriptionFr: string; descriptionEn: string }> = {
     'dz-lentil-soup': { fr: 'Soupe de lentilles', en: 'Lentil soup', descriptionFr: 'Soupe chaude et économique pour le déjeuner ou le dîner', descriptionEn: 'A warm, budget-friendly lunch or dinner soup' },
     'dz-couscous-vegetables': { fr: 'Couscous aux légumes', en: 'Vegetable couscous', descriptionFr: 'Plat familial aux légumes de saison', descriptionEn: 'Family couscous with seasonal vegetables' },
@@ -222,8 +259,8 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <strong className="text-sm text-violet-950">{recipeTitle(selectedRecipe)}</strong>
           <p className="mt-1 text-xs text-violet-800">{recipeDescription(selectedRecipe)} · {selectedRecipe.prepMinutes} {tr(profile, 'min', 'د', 'min')}</p>
           <p className="mt-2 text-xs font-semibold text-violet-900">{tr(profile, 'Ingrédients pour', 'المكونات لـ', 'Ingredients for')} {servings || householdSize} {tr(profile, 'personnes', 'أشخاص', 'people')}</p>
-          <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-violet-900">{selectedRecipe.ingredients.map((ingredient) => <li key={ingredient.name + ingredient.unit}>• {ingredient.name}: {formatQuantity(Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings), ingredient.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</li>)}</ul>
-          <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{selectedRecipe.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
+          <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-violet-900">{selectedRecipe.ingredients.map((ingredient) => <li key={ingredient.name + ingredient.unit}>• {ingredientLabel(ingredient.name)}: {formatQuantity(Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings), ingredient.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</li>)}</ul>
+          <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{recipeSteps(selectedRecipe).map((step, index) => <li key={index}>{step}</li>)}</ol>
         </div>}
         <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>
         <button onClick={suggestWeek} className="w-full min-h-10 rounded-xl border border-violet-200 px-4 text-xs font-bold text-violet-700">{tr(profile, 'Suggérer les repas de 7 jours', 'اقترح وجبات 7 أيام', 'Suggest 7 days of meals')}</button>
@@ -243,7 +280,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'LISTE AUTOMATIQUE', 'قائمة تلقائية', 'AUTO LIST')}</span><h3>{tr(profile, 'À acheter', 'قائمة المشتريات', 'Shopping list')}</h3></div><span className="text-xs text-slate-500">{requirements.filter((row) => row.toBuyMilli > 0).length} {tr(profile, 'articles', 'مواد', 'items')}</span></div>
         <p className="text-xs text-slate-500">{tr(profile, 'Les ingrédients des repas sont regroupés. Le stock enregistré est déduit automatiquement. Les quantités restent modifiables dans les réserves.', 'تُجمع مكونات الوجبات ويُخصم المخزون المسجل تلقائياً. يمكن تعديل الكميات من قسم المخزون.', 'Meal ingredients are combined and saved pantry stock is deducted automatically. Adjust stock in the pantry section.')}</p>
         {requirements.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Planifiez d’abord quelques repas pour générer votre liste.', 'برمج بعض الوجبات أولاً لإنشاء القائمة.', 'Plan a few meals first to generate your list.')}</p> : <div className="space-y-2">{requirements.map((item) => <article key={item.key} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
-          <div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, 'Nécessaire', 'المطلوب', 'Needed')}: {formatQuantity(item.requiredMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {tr(profile, 'Stock', 'المخزون', 'Stock')}: {formatQuantity(item.inPantryMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div>
+          <div className="min-w-0 flex-1"><strong className="block text-xs">{ingredientLabel(item.name)}</strong><span className="text-[10px] text-slate-500">{tr(profile, 'Nécessaire', 'المطلوب', 'Needed')}: {formatQuantity(item.requiredMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {tr(profile, 'Stock', 'المخزون', 'Stock')}: {formatQuantity(item.inPantryMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div>
           <strong className="text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>
         </article>)}</div>}
         <p className="text-[10px] text-slate-500">{tr(profile, 'Les prix ne sont pas inventés : les estimations seront ajoutées avec leur source et leur date.', 'لا يتم اختلاق الأسعار؛ ستضاف التقديرات مع مصدرها وتاريخها.', 'Prices are not fabricated; estimates will be added with their source and date.')}</p>
