@@ -66,7 +66,24 @@ as $$
   );
 $$;
 revoke all on function public.is_community_moderator() from public, anon;
-grant execute on function public.is_community_moderator() to authenticated;
+grant execute on function public.is_community_moderator() to anon, authenticated;
+
+
+create or replace function public.community_can_view_author(p_author_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select (select auth.uid()) is null or not exists (
+    select 1 from public.community_user_blocks b
+    where (b.blocker_id = (select auth.uid()) and b.blocked_id = p_author_id)
+       or (b.blocker_id = p_author_id and b.blocked_id = (select auth.uid()))
+  );
+$;
+revoke all on function public.community_can_view_author(uuid) from public;
+grant execute on function public.community_can_view_author(uuid) to anon, authenticated;
 
 create or replace function public.community_text_is_safe(p_text text)
 returns boolean
@@ -92,11 +109,7 @@ with check (user_id = (select auth.uid()));
 
 create policy "Published posts visible unless blocked" on public.community_posts
 for select to anon, authenticated using (
-  (status = 'published' and not exists (
-    select 1 from public.community_user_blocks b
-    where (b.blocker_id = (select auth.uid()) and b.blocked_id = author_id)
-       or (b.blocker_id = author_id and b.blocked_id = (select auth.uid()))
-  ))
+  (status = 'published' and public.community_can_view_author(author_id))
   or author_id = (select auth.uid())
   or public.is_community_moderator()
 );
@@ -312,3 +325,67 @@ end;
 $$;
 revoke all on function public.resolve_community_report(uuid,text,text) from public, anon;
 grant execute on function public.resolve_community_report(uuid,text,text) to authenticated;
+
+
+create or replace function public.guard_community_comment_update()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.author_id <> old.author_id or new.post_id <> old.post_id then
+    raise exception 'Comment author and post are immutable';
+  end if;
+  if new.status <> old.status and not public.is_community_moderator() then
+    raise exception 'Only moderators can change comment status';
+  end if;
+  if not public.community_text_is_safe(trim(coalesce(new.body,''))) then
+    raise exception 'Remove links, email addresses and phone numbers from public comments';
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+revoke all on function public.guard_community_comment_update() from public, anon, authenticated;
+create trigger guard_community_comment_update
+before update on public.community_comments
+for each row execute function public.guard_community_comment_update();
+
+create or replace function public.moderate_community_comment(p_comment_id uuid, p_status text, p_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare v_user uuid := (select auth.uid());
+begin
+  if v_user is null or not public.is_community_moderator() then raise exception 'Moderator access required'; end if;
+  if p_status not in ('published','hidden') then raise exception 'Invalid moderation status'; end if;
+  if length(trim(coalesce(p_reason,''))) not between 1 and 1000 then raise exception 'A moderation reason is required'; end if;
+  update public.community_comments set status=p_status where id=p_comment_id;
+  if not found then raise exception 'Comment not found'; end if;
+  insert into public.community_moderation_actions(moderator_id,target_type,target_id,action,reason)
+  values (v_user,'comment',p_comment_id,case p_status when 'published' then 'restore' else 'hide' end,trim(p_reason));
+end;
+$$;
+revoke all on function public.moderate_community_comment(uuid,text,text) from public, anon;
+grant execute on function public.moderate_community_comment(uuid,text,text) to authenticated;
+
+create or replace function public.validate_community_report_target()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.target_type = 'post' and not exists (select 1 from public.community_posts where id = new.target_id) then
+    raise exception 'Post not found';
+  elsif new.target_type = 'comment' and not exists (select 1 from public.community_comments where id = new.target_id) then
+    raise exception 'Comment not found';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.validate_community_report_target() from public, anon, authenticated;
+create trigger validate_community_report_target
+before insert on public.community_reports
+for each row execute function public.validate_community_report_target();
