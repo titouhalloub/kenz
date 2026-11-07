@@ -11,7 +11,7 @@ create table public.price_observations (
   wilaya_code text check (wilaya_code is null or wilaya_code ~ '^[0-9]{2,3}$'),
   commune_id uuid references public.communes(id),
   geo_cell text,
-  business_id uuid,
+  business_id uuid references public.businesses(id) on delete set null,
   contributor_id uuid references auth.users(id) on delete set null,
   status text not null default 'pending' check (status in ('pending','accepted','rejected')),
   quality_flags text[] not null default '{}',
@@ -23,6 +23,7 @@ create index price_observations_product_area_time_idx
   on public.price_observations(product_id, wilaya_code, commune_id, observed_at desc);
 create index price_observations_source_status_time_idx
   on public.price_observations(source_id, status, observed_at desc);
+create index price_observations_business_idx on public.price_observations(business_id) where business_id is not null;
 
 create table public.price_stats (
   id uuid primary key default gen_random_uuid(),
