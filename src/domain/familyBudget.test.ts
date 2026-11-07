@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
+  applyFamilyBudgetSources, createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
   validateFamilyBudgetPlan, FAMILY_BUDGET_DEFAULTS, suggestFamilyBudgetAllocations,
 } from './familyBudget';
 
