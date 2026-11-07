@@ -1,7 +1,7 @@
 import type { BaseUnit } from './units';
 
 export interface SimulatorPrice {
-  currency: 'DZD';
+  currency: string;
   p25UnitPriceMinor: number;
   medianUnitPriceMinor: number;
   p75UnitPriceMinor: number;
