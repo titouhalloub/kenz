@@ -35,6 +35,14 @@ describe('family budget foundation', () => {
     expect(next.categories.find((row) => row.id === 'food')?.actualMinor).toBe(0);
   });
 
+  it('rejects unsafe aggregate totals and invalid calendar months', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.categories[0].plannedMinor = Number.MAX_SAFE_INTEGER;
+    plan.categories[1].plannedMinor = 1;
+    expect(validateFamilyBudgetPlan(plan, 'user-a')).toBeNull();
+    expect(validateFamilyBudgetPlan({ ...createFamilyBudgetPlan('user-a', '2026-99') }, 'user-a')).toBeNull();
+  });
+
   it('rejects malformed, cross-user, negative, duplicate or incomplete stored data', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     expect(validateFamilyBudgetPlan(plan, 'user-b')).toBeNull();
