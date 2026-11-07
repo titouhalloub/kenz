@@ -55,6 +55,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
   }, [profile.id]);
 
   useEffect(() => {
+    if (plan.userId !== profile.id) return;
     try {
       localStorage.setItem(familyBudgetStorageKey(profile.id), JSON.stringify(plan));
       setSaveState('saved');
@@ -115,11 +116,11 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
           {plan.categories.map((row) => {
             const item = labels[row.id]; const Icon = item.icon;
             const remaining = row.plannedMinor - row.actualMinor;
-            return <article className="kenz-family-category" key={row.id}>
+            return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
               <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small></div>
               <div className="grid grid-cols-2 gap-2">
-                <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input inputMode="decimal" value={moneyInput(row.plannedMinor)} onChange={(e) => updatePlan('plannedMinor', row.id, Math.max(0, parseToMinorUnits(e.target.value)))} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
-                <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input inputMode="decimal" value={moneyInput(row.actualMinor)} onChange={(e) => updatePlan('actualMinor', row.id, Math.max(0, parseToMinorUnits(e.target.value)))} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => updatePlan('plannedMinor', row.id, Math.max(0, parseToMinorUnits(e.target.value)))} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input inputMode="decimal" defaultValue={moneyInput(row.actualMinor)} onBlur={(e) => updatePlan('actualMinor', row.id, Math.max(0, parseToMinorUnits(e.target.value)))} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
               </div>
             </article>;
           })}
