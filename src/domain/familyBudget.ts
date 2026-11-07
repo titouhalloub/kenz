@@ -107,6 +107,6 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   return { ...candidate, categories } as FamilyBudgetPlan;
 }
 
-export function familyBudgetStorageKey(userId: string): string {
-  return `kenz_family_budget_v1_${encodeURIComponent(userId)}`;
+export function familyBudgetStorageKey(userId: string, month: string): string {
+  return `kenz_family_budget_v1_${encodeURIComponent(userId)}_${month}`;
 }
