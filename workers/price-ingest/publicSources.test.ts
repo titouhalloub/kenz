@@ -11,19 +11,19 @@ describe('public price source adapters', () => {
   });
 
   it('obeys robots disallow rules for the matching user-agent group', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
       'User-agent: *\nDisallow: /private\nAllow: /private/public\n',
       { status: 200 },
-    )));
+    ))));
     await expect(robotsAllows(new URL('https://example.org/private/prices'))).resolves.toBe(false);
     await expect(robotsAllows(new URL('https://example.org/private/public/prices'))).resolves.toBe(true);
   });
 
   it('uses the Kenz-specific robots group when one is published', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
       'User-agent: *\nDisallow: /\n\nUser-agent: KenzPriceBot\nAllow: /prices\n',
       { status: 200 },
-    )));
+    ))));
     await expect(robotsAllows(new URL('https://example.org/prices/today'))).resolves.toBe(true);
     await expect(robotsAllows(new URL('https://example.org/private'))).resolves.toBe(true);
   });
