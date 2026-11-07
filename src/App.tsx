@@ -677,7 +677,7 @@ export default function App() {
           <CommunityView
             user={currentUser}
             locale={budgetState.profile.locale}
-            availableBudgetMinor={safeToSpend}
+            availableBudgetMinor={safeToSpend.safeToSpendMinor}
           />
         )}
 
