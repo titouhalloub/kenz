@@ -16,7 +16,7 @@ export interface SimulatorBasketItem {
   name: string;
   category: string;
   baseUnit: BaseUnit;
-  quantityPerPersonPerDayMilliUnitsMilliUnits: number;
+  quantityPerPersonPerDayMilliUnits: number;
   price?: SimulatorPrice;
 }
 
