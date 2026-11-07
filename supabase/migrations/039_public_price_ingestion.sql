@@ -8,8 +8,7 @@ alter table public.price_observations
   add column if not exists reviewed_by uuid references auth.users(id) on delete set null;
 
 create unique index if not exists price_observations_source_record_key_uidx
-  on public.price_observations(source_record_key)
-  where source_record_key is not null;
+  on public.price_observations(source_record_key);
 create index if not exists price_observations_pending_review_idx
   on public.price_observations(created_at desc, source_id)
   where status = 'pending';
