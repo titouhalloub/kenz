@@ -1,4 +1,4 @@
-import type { BaseUnit } from './units';
+import type { BaseUnit } from './productCatalog';
 
 export interface SimulatorPrice {
   currency: string;
@@ -16,7 +16,7 @@ export interface SimulatorBasketItem {
   name: string;
   category: string;
   baseUnit: BaseUnit;
-  quantityPerPersonPerDay: number;
+  quantityPerPersonPerDayMilliUnitsMilliUnits: number;
   price?: SimulatorPrice;
 }
 
@@ -42,7 +42,7 @@ export interface SimulatorLine {
   productId: string;
   name: string;
   category: string;
-  quantityBaseUnits: number;
+  quantityMilliUnits: number;
   baseUnit: BaseUnit;
   cost: SimulatorCostBand | null;
   data: {
@@ -90,6 +90,12 @@ function safeNumber(value: bigint): number {
   const result = Number(value);
   if (!Number.isSafeInteger(result) || result < 0) throw new Error('Simulator amount exceeds safe integer range.');
   return result;
+}
+
+function costForQuantity(quantityMilliUnits: number, pricePerBaseUnitMinor: number, baseUnit: BaseUnit): number {
+  const scale = baseUnit === 'unit' ? 1n : 1000n;
+  const amount = BigInt(quantityMilliUnits) * BigInt(pricePerBaseUnitMinor);
+  return safeNumber((amount + scale / 2n) / scale);
 }
 
 function allocateBand(total: SimulatorCostBand, daysInMonth: number): SimulatorResult['weeklyTotals'] {
@@ -142,17 +148,17 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
   const categories = new Map<string, SimulatorCostBand>();
 
   for (const item of input.items) {
-    if (!item.productId || !item.name || !item.category || !isSafeNonNegativeInteger(item.quantityPerPersonPerDay)) {
+    if (!item.productId || !item.name || !item.category || !isSafeNonNegativeInteger(item.quantityPerPersonPerDayMilliUnits)) {
       throw new Error('Invalid basket item.');
     }
 
     const quantity = safeNumber(ceilDiv(
-      BigInt(item.quantityPerPersonPerDay) * householdPermille * BigInt(daysInMonth),
+      BigInt(item.quantityPerPersonPerDayMilliUnits) * householdPermille * BigInt(daysInMonth),
       1000n,
     ));
     if (!item.price) {
       missingProductIds.push(item.productId);
-      lines.push({ productId: item.productId, name: item.name, category: item.category, quantityBaseUnits: quantity, baseUnit: item.baseUnit, cost: null, data: null });
+      lines.push({ productId: item.productId, name: item.name, category: item.category, quantityMilliUnits: quantity, baseUnit: item.baseUnit, cost: null, data: null });
       continue;
     }
 
@@ -167,9 +173,9 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
     }
 
     const cost: SimulatorCostBand = {
-      lowMinor: safeNumber(BigInt(quantity) * BigInt(price.p25UnitPriceMinor)),
-      expectedMinor: safeNumber(BigInt(quantity) * BigInt(price.medianUnitPriceMinor)),
-      highMinor: safeNumber(BigInt(quantity) * BigInt(price.p75UnitPriceMinor)),
+      lowMinor: costForQuantity(quantity, price.p25UnitPriceMinor, item.baseUnit),
+      expectedMinor: costForQuantity(quantity, price.medianUnitPriceMinor, item.baseUnit),
+      highMinor: costForQuantity(quantity, price.p75UnitPriceMinor, item.baseUnit),
     };
     lowTotal += BigInt(cost.lowMinor);
     expectedTotal += BigInt(cost.expectedMinor);
@@ -231,7 +237,7 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
 function buildCheapestSubstitutes(items: SimulatorBasketItem[], householdPermille: bigint, daysInMonth: number): SimulatorResult['cheapestSubstitutes'] {
   const suggestions: SimulatorResult['cheapestSubstitutes'] = [];
   for (const item of items) {
-    if (!item.price || item.quantityPerPersonPerDay <= 0) continue;
+    if (!item.price || item.quantityPerPersonPerDayMilliUnits <= 0) continue;
     const alternatives = items.filter((candidate) =>
       candidate.productId !== item.productId &&
       candidate.category === item.category &&
@@ -244,11 +250,12 @@ function buildCheapestSubstitutes(items: SimulatorBasketItem[], householdPermill
     )[0];
     if (!cheapest) continue;
     const savingPerBaseUnit = BigInt(item.price.medianUnitPriceMinor - cheapest.price!.medianUnitPriceMinor);
-    const monthlyQuantity = ceilDiv(BigInt(item.quantityPerPersonPerDay) * householdPermille * BigInt(daysInMonth), 1000n);
+    const monthlyQuantity = ceilDiv(BigInt(item.quantityPerPersonPerDayMilliUnits) * householdPermille * BigInt(daysInMonth), 1000n);
+    const unitScale = item.baseUnit === 'unit' ? 1n : 1000n;
     suggestions.push({
       fromProductId: item.productId,
       toProductId: cheapest.productId,
-      estimatedSavingMinor: safeNumber(savingPerBaseUnit * monthlyQuantity),
+      estimatedSavingMinor: safeNumber((savingPerBaseUnit * monthlyQuantity + unitScale / 2n) / unitScale),
     });
   }
   return suggestions;
