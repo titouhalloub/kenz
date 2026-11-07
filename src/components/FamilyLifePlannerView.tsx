@@ -119,7 +119,13 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const hasIncomeSource = monthTransactions.some((tx) => tx.type === 'income') ||
     recurringItems.some((item) => item.userId === profile.id && item.isActive && item.type === 'income' &&
       item.currency === profile.preferredCurrency && item.nextDueDate.slice(0, 7) === selectedMonth);
-  const monthlyIncomeMinor = hasIncomeSource ? incomeSourceMinor : plan.monthlyIncomeMinor;
+  const monthlyIncomeMinor = plan.monthlyIncomeOverrideMinor != null
+    ? plan.monthlyIncomeOverrideMinor
+    : hasIncomeSource ? incomeSourceMinor : plan.monthlyIncomeMinor;
+
+  useEffect(() => {
+    setIncomeInput(moneyInput(monthlyIncomeMinor));
+  }, [selectedMonth, monthlyIncomeMinor]);
 
   const actualByCategory = useMemo(() => {
     const totals = new Map<FamilyBudgetCategoryId, number>();
@@ -194,11 +200,25 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   };
 
   const setIncome = () => {
-    if (hasIncomeSource) return;
     const amount = parseBudgetInput(incomeInput);
-    if (amount === null) { setIncomeInput(moneyInput(plan.monthlyIncomeMinor)); return; }
+    if (amount === null) { setIncomeInput(moneyInput(monthlyIncomeMinor)); return; }
     setSuggestedPlan(null);
-    setPlan((current) => ({ ...current, monthlyIncomeMinor: amount, updatedAt: new Date().toISOString() }));
+    setPlan((current) => ({
+      ...current,
+      ...(hasIncomeSource ? { monthlyIncomeOverrideMinor: amount } : { monthlyIncomeMinor: amount, monthlyIncomeOverrideMinor: null }),
+      updatedAt: new Date().toISOString(),
+    }));
+    setBudgetMessage(t(profile,
+      'Revenu utilisé mis à jour pour ce mois. Vos opérations Kenz restent inchangées.',
+      'تم تحديث الدخل المستخدم لهذا الشهر. لم تتغير عمليات كنز الأصلية.',
+      'Income used for this month updated. Your original Kenz transactions are unchanged.'));
+  };
+
+  const resetIncomeToKenz = () => {
+    setPlan((current) => ({ ...current, monthlyIncomeOverrideMinor: null, updatedAt: new Date().toISOString() }));
+    setIncomeInput(moneyInput(incomeSourceMinor));
+    setSuggestedPlan(null);
+    setBudgetMessage(t(profile, 'Revenu Kenz automatique rétabli.', 'تمت استعادة دخل كنز التلقائي.', 'Automatic Kenz income restored.'));
   };
 
   const setHousehold = () => {
@@ -238,9 +258,11 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
             <article className="rounded-xl border p-3"><span className="block text-[11px] text-slate-500">{t(profile, 'Dépensé', 'المصروف', 'Spent')}</span><strong className="text-base text-rose-600">{formatMoney(summary.actualMinor, profile.preferredCurrency, profile.locale)}</strong></article>
             <article className="rounded-xl border p-3"><span className="block text-[11px] text-slate-500">{t(profile, 'Disponible', 'المتبقي', 'Available')}</span><strong className={summary.incomeMinor - summary.actualMinor < 0 ? 'text-base text-rose-600' : 'text-base text-emerald-600'}>{formatMoney(summary.incomeMinor - summary.actualMinor, profile.preferredCurrency, profile.locale)}</strong></article>
           </div>
-          <p className="text-[11px] text-slate-500">{hasIncomeSource
-            ? t(profile, 'Revenus calculés depuis vos opérations et revenus récurrents Kenz.', 'تم احتساب الدخل من عملياتك ومداخيلك الدورية في كنز.', 'Income is calculated from your Kenz transactions and recurring income.')
-            : t(profile, 'Aucun revenu Kenz enregistré pour ce mois : vous pouvez saisir une estimation provisoire.', 'لا يوجد دخل مسجل في كنز لهذا الشهر: يمكنك إدخال تقدير مؤقت.', 'No Kenz income is recorded for this month; you can enter a temporary estimate.')}</p>
+          <p className="text-[11px] text-slate-500">{plan.monthlyIncomeOverrideMinor != null
+            ? t(profile, 'Vous utilisez un montant personnalisé pour ce budget. Les opérations Kenz ne sont pas modifiées.', 'تستخدم مبلغاً مخصصاً لهذه الميزانية. لم يتم تعديل عمليات كنز.', 'A custom amount is being used for this budget. Kenz transactions are unchanged.')
+            : hasIncomeSource
+              ? t(profile, 'Revenu détecté automatiquement depuis Kenz. Vous pouvez le modifier ici sans changer vos opérations.', 'تم اكتشاف الدخل تلقائياً من كنز. يمكنك تعديله هنا دون تغيير عملياتك.', 'Income detected automatically from Kenz. You can edit it here without changing your transactions.')
+              : t(profile, 'Aucun revenu Kenz enregistré pour ce mois : saisissez votre estimation.', 'لا يوجد دخل مسجل في كنز لهذا الشهر: أدخل تقديرك.', 'No Kenz income is recorded for this month; enter your estimate.')}</p>
         </div>
 
         <div className="kenz-family-panel space-y-3">
@@ -248,7 +270,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <div className="grid grid-cols-3 gap-2">
             <label className="text-xs text-slate-500">{t(profile, 'Adultes', 'البالغون', 'Adults')}<input type="number" min="0" max="30" value={adultsInput} onChange={(e) => setAdultsInput(e.target.value)} onBlur={setHousehold} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
             <label className="text-xs text-slate-500">{t(profile, 'Enfants', 'الأطفال', 'Children')}<input type="number" min="0" max="30" value={childrenInput} onChange={(e) => setChildrenInput(e.target.value)} onBlur={setHousehold} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
-            <label className="text-xs text-slate-500">{t(profile, 'Revenu estimé (DA)', 'الدخل التقديري (دج)', 'Estimated income')}<input inputMode="decimal" value={hasIncomeSource ? moneyInput(incomeSourceMinor) : incomeInput} onChange={(e) => setIncomeInput(e.target.value)} onBlur={setIncome} disabled={hasIncomeSource} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm font-mono-numbers disabled:bg-slate-100 disabled:text-slate-500" /></label>
+            <label className="text-xs text-slate-500">{t(profile, 'Revenu utilisé (DA)', 'الدخل المعتمد (دج)', 'Income used (DA)')}<input inputMode="decimal" value={incomeInput} onChange={(e) => setIncomeInput(e.target.value)} onBlur={setIncome} onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm font-mono-numbers focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />{hasIncomeSource && <button type="button" onClick={resetIncomeToKenz} className="mt-1 text-[10px] font-semibold text-violet-700 underline">{t(profile, 'Rétablir le revenu Kenz', 'استعادة دخل كنز', 'Reset to Kenz income')}</button>}</label>
           </div>
         </div>
 
