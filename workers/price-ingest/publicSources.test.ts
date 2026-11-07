@@ -130,6 +130,16 @@ describe('public price source adapters', () => {
     expect(rows[5].normalized.unitPriceMinor).toBe(1700);
   });
 
+  it('matches official PDF labels that contain extraction-inserted spaces', () => {
+    const text = [
+      'C a rotte 121 132 110',
+      'Pomme locale 422 522 321',
+      'Viande bovine locale 2224 2346 2101',
+    ].join('\\n');
+    const rows = parseMadrpText(text, 'https://madr.gov.dz/prix_04_Nov_2026_MADRP.pdf', '2026-11-04T00:00:00.000Z');
+    expect(rows.map((row) => row.productSlug)).toEqual(['carotte', 'pomme', 'viande-bovine-locale']);
+  });
+
   it('parses official MADRP bulletin text as national average observations', () => {
     const text = [
       'Pomme de terre 95 101 89 البطاطا',
