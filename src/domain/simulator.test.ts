@@ -3,9 +3,9 @@ import { simulateMonthlyBudget, type SimulatorInput } from './simulator';
 
 const price = {
   currency: 'DZD' as const,
-  p25UnitPriceMinor: 2,
-  medianUnitPriceMinor: 3,
-  p75UnitPriceMinor: 4,
+  p25UnitPriceMinor: 2000,
+  medianUnitPriceMinor: 3000,
+  p75UnitPriceMinor: 4000,
   nObservations: 8,
   nContributors: 4,
   lastObserved: '2026-11-06T10:00:00Z',
@@ -20,7 +20,7 @@ function fixture(month: string, overrides: Partial<SimulatorInput> = {}): Simula
     now: '2026-11-07T10:00:00Z',
     items: [{
       productId: 'rice', name: 'Rice', category: 'grains',
-      baseUnit: 'g', quantityPerPersonPerDay: 10, price,
+      baseUnit: 'kg', quantityPerPersonPerDayMilliUnits: 10, price,
     }],
     ...overrides,
   };
@@ -35,7 +35,7 @@ describe('simulateMonthlyBudget', () => {
 
   it('uses integer household quantities and returns low/expected/high totals', () => {
     const result = simulateMonthlyBudget(fixture('2026-11'));
-    expect(result.lines[0].quantityBaseUnits).toBe(750);
+    expect(result.lines[0].quantityMilliUnits).toBe(750);
     expect(result.pricedSubtotal).toEqual({ lowMinor: 1500, expectedMinor: 2250, highMinor: 3000 });
     expect(result.weeklyTotals.reduce((sum, week) => sum + week.cost.expectedMinor, 0)).toBe(2250);
   });
@@ -47,7 +47,7 @@ describe('simulateMonthlyBudget', () => {
 
   it('does not guess missing prices or present an incomplete total as a final projection', () => {
     const result = simulateMonthlyBudget(fixture('2026-11', {
-      items: [{ productId: 'oil', name: 'Oil', category: 'oils', baseUnit: 'ml', quantityPerPersonPerDay: 10 }],
+      items: [{ productId: 'oil', name: 'Oil', category: 'oils', baseUnit: 'l', quantityPerPersonPerDayMilliUnits: 10 }],
     }));
     expect(result.complete).toBe(false);
     expect(result.missingProductIds).toEqual(['oil']);
@@ -72,7 +72,7 @@ describe('simulateMonthlyBudget', () => {
     const result = simulateMonthlyBudget(fixture('2026-11', {
       items: [
         { ...fixture('2026-11').items[0], productId: 'rice-premium', price },
-        { ...fixture('2026-11').items[0], productId: 'rice-basic', price: { ...price, medianUnitPriceMinor: 2, p25UnitPriceMinor: 1, p75UnitPriceMinor: 3 } },
+        { ...fixture('2026-11').items[0], productId: 'rice-basic', price: { ...price, medianUnitPriceMinor: 2, p25UnitPriceMinor: 1000, p75UnitPriceMinor: 3000 } },
       ],
     }));
     expect(result.cheapestSubstitutes).toContainEqual({
