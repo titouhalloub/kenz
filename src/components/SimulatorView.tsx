@@ -181,7 +181,12 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         setLowPrice((found.p25UnitPriceMinor / 100).toFixed(2));
         setExpectedPrice((found.medianUnitPriceMinor / 100).toFixed(2));
         setHighPrice((found.p75UnitPriceMinor / 100).toFixed(2));
-        setMarketStatus('Prix agrégé disponible · source et fraîcheur affichées après ajout.');
+        const fetchedLabel = result.fetchedAt
+          ? new Date(result.fetchedAt).toLocaleString(profile.locale)
+          : '';
+        setMarketStatus(result.source === 'cache'
+          ? `Prix public en cache hors ligne · copie récupérée le ${fetchedLabel}. La date réelle du relevé reste affichée dans le panier.`
+          : `Prix public actualisé · source et fraîcheur affichées après ajout. ${fetchedLabel}`);
       } else {
         setMarketStatus(result.unavailableReason === 'schema_not_deployed'
           ? 'Le catalogue de prix n’est pas encore déployé ; tu peux saisir tes propres prix.'
@@ -191,7 +196,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       if (active) setMarketStatus('Prix publics indisponibles pour le moment ; la saisie manuelle reste possible.');
     });
     return () => { active = false; };
-  }, [selectedSlug, wilayaCode]);
+  }, [selectedSlug, wilayaCode, profile.locale]);
 
   const addProduct = () => {
     setError('');
