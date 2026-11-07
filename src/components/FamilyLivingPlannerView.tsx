@@ -90,9 +90,13 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   useEffect(() => {
     setPlan(readLivingPlan(profile.id, month));
     setMealDate(monthFirstDay(month));
-    setServings(String(Math.max(1, householdSize)));
+    setNeedDate('');
     setStatus('');
-  }, [profile.id, month, householdSize]);
+  }, [profile.id, month]);
+
+  useEffect(() => {
+    setServings(String(Math.max(1, householdSize)));
+  }, [householdSize]);
 
   useEffect(() => {
     if (plan.userId !== profile.id || plan.month !== month) return;
