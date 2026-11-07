@@ -218,6 +218,43 @@ function toScraped(
 }
 
 /** A 404 robots.txt means no published rules; network/5xx failures fail closed. */
+
+async function readLimitedBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`Source response exceeds the ${maxBytes}-byte safety limit`);
+  }
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxBytes) throw new Error('Source response exceeded the safety limit');
+    return bytes;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error('Source response exceeded the safety limit');
+    }
+    chunks.push(value);
+  }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
+
+async function readLimitedText(response: Response, maxBytes: number): Promise<string> {
+  return new TextDecoder('utf-8').decode(await readLimitedBytes(response, maxBytes));
+}
+
 export async function robotsAllows(url: URL): Promise<boolean> {
   let response: Response;
   try {
@@ -230,7 +267,9 @@ export async function robotsAllows(url: URL): Promise<boolean> {
   }
   if (response.status === 404) return true;
   if (!response.ok) return false;
-  const lines = (await response.text()).split(/\r?\n/);
+  let robotsText: string;
+  try { robotsText = await readLimitedText(response, 512 * 1024); } catch { return false; }
+  const lines = robotsText.split(/\r?\n/);
   const groups: Array<{ agents: string[]; rules: Array<{ allow: boolean; path: string }> }> = [];
   let current: { agents: string[]; rules: Array<{ allow: boolean; path: string }> } | null = null;
   for (const raw of lines) {
@@ -428,12 +467,12 @@ export async function scrapePublicSource(source: PublicSourceConfig): Promise<Sc
   const sourceUrl = new URL(source.url);
   const response = await fetchPublic(sourceUrl);
   if (source.kind === 'dcw-html') {
-    const html = await response.text();
+    const html = await readLimitedText(response, 2 * 1024 * 1024);
     const tableRows = parseDcwHtml(html, source);
     return tableRows.length > 0 ? tableRows : parseDcwPlainHtml(html, source);
   }
 
-  const listing = await response.text();
+  const listing = await readLimitedText(response, 2 * 1024 * 1024);
   const pdfs = extractPdfLinks(listing, sourceUrl)
     .map((url) => ({ url, date: dateFromMadrpFilename(url) }))
     .filter((entry): entry is { url: URL; date: string } => Boolean(entry.date))
@@ -441,7 +480,7 @@ export async function scrapePublicSource(source: PublicSourceConfig): Promise<Sc
   const latest = pdfs[0];
   if (!latest) throw new Error('No dated MADRP bulletin PDF link was found');
   const pdfResponse = await fetchPublic(latest.url);
-  const bytes = new Uint8Array(await pdfResponse.arrayBuffer());
+  const bytes = await readLimitedBytes(pdfResponse, 15 * 1024 * 1024);
   const text = pdfToText(bytes);
   return parseMadrpText(text, latest.url.href, latest.date);
 }
