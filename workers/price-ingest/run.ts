@@ -8,8 +8,7 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!dryRun && (!supabaseUrl || !serviceRoleKey)) {
-  console.warn('Price ingestion skipped: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the workflow secrets.');
-  process.exit(0);
+  throw new Error('Price ingestion requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY; configure the free GitHub Actions secret before enabling scheduled writes.');
 }
 
 const supabase = !dryRun && supabaseUrl && serviceRoleKey
@@ -32,8 +31,7 @@ async function main() {
       .in('slug', PUBLIC_PRICE_SOURCES.map((source) => source.slug));
     if (sourceError) {
       if (/does not exist|schema cache|could not find the table/i.test(sourceError.message)) {
-        console.warn('Price ingestion is ready, but migration 039 and the price catalog have not been deployed. No data was written.');
-        return;
+        throw new Error('Price ingestion is ready, but migrations 036–040 are not deployed. No data was written.');
       }
       throw new Error(`Cannot read price source registry: ${sourceError.message}`);
     }
@@ -72,6 +70,7 @@ async function main() {
       }
 
       const scraped = await scrapePublicSource(source);
+      if (scraped.length === 0) throw new Error('The source returned no matched product rows; review the parser before trusting this run.');
       const freshCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
       const freshScraped = scraped.filter((row) => {
         const observed = Date.parse(row.normalized.observedAt);
@@ -170,8 +169,10 @@ async function main() {
 
   if (dryRun) {
     console.log('Dry run complete. No database credentials were used and no data was written.');
-  } else if (failures > 0) {
-    console.warn(`Price ingestion completed with ${failures} source issue(s).`);
+  }
+  if (failures > 0) {
+    console.error(`Price ingestion completed with ${failures} source issue(s).`);
+    process.exitCode = 1;
   }
 }
 
