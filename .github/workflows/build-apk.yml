@@ -2,8 +2,7 @@ name: Build Android APK (Capacitor)
 
 on:
   push:
-    branches:
-      - feat/price-simulator-community
+    branches: [ main, feat/price-simulator-community ]
   pull_request:
     branches:
       - main
