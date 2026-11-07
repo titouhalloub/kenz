@@ -153,3 +153,29 @@ For offline-first behavior, persist local edits immediately, queue sync operatio
 - No public exposure of private family finances.
 - No forced budget percentages or prescriptive lifestyle rules.
 - No automatic purchases or external sharing without explicit user action.
+
+
+## Implementation progress — 2026-11-07
+
+### Delivered to the main branch (implementation stage; runtime verification pending)
+
+- Added the family budget foundation to Kenz Planning, with monthly household income, adult/child counts, 13 editable envelopes, planned-versus-actual amounts, and surplus/shortfall calculations.
+- Added month-specific offline storage, user scoping, strict amount validation, and safe-integer overflow checks.
+- Added a family meal calendar with five starter recipes, recipe instructions, serving scaling, and an optional seven-day lunch/dinner suggestion action that does not overwrite existing meals.
+- Added a consolidated grocery list that merges repeated ingredients and subtracts pantry stock.
+- Added Arabic/French/English ingredient aliases for common starter ingredients so pantry entries can match recipe ingredients across those languages.
+- Added pantry stock entry and removal.
+- Added a detailed monthly needs list for clothing, cleaning, hygiene, school, transport, health, home maintenance, and custom needs, including optional family-member assignment, due date, planned amount, and actual amount.
+- Added manual recipe JSON import/export. Imported recipes are private and saved in a user-level local library so they remain available across planning months.
+- Added domain tests for calculations, recipe scaling, shopping aggregation, pantry deductions, validation, legacy-plan migration, and overflow cases.
+- Added a GitHub Actions quality workflow to run tests, TypeScript checks, and the web build on relevant changes.
+
+### Remaining before calling the family planner complete
+
+- Confirm the new CI workflow passes; no successful run has yet been verified in this delivery.
+- Build and install-test the Android APK, including Arabic RTL and small-screen layouts.
+- Implement a moderated, online community recipe feed; current share/import is manual JSON and does not publish household data.
+- Add price-backed recipe costing only when a dated, trustworthy price observation exists; do not invent live prices.
+- Add richer clothing season/size/replacement planning and recurring cleaning/hygiene replenishment.
+- Connect detailed purchase lines to budget envelopes with a clear single-counting model.
+- Complete privacy, offline, and multi-device synchronization tests before enabling family-data sync.
