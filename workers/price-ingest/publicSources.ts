@@ -197,10 +197,8 @@ export async function robotsAllows(url: URL): Promise<boolean> {
   if (response.status === 404) return true;
   if (!response.ok) return false;
   const lines = (await response.text()).split(/\r?\n/);
-  let applies = false;
-  let hasSpecific = false;
-  let currentAgents: string[] = [];
-  const rules: Array<{ allow: boolean; path: string }> = [];
+  const groups: Array<{ agents: string[]; rules: Array<{ allow: boolean; path: string }> }> = [];
+  let current: { agents: string[]; rules: Array<{ allow: boolean; path: string }> } | null = null;
   for (const raw of lines) {
     const line = raw.split('#')[0].trim();
     if (!line) continue;
@@ -209,17 +207,18 @@ export async function robotsAllows(url: URL): Promise<boolean> {
     const name = line.slice(0, separator).trim().toLowerCase();
     const value = line.slice(separator + 1).trim();
     if (name === 'user-agent') {
-      if (currentAgents.length && rules.length) {
-        applies = false;
-        currentAgents = [];
+      if (!current || current.rules.length > 0) {
+        current = { agents: [], rules: [] };
+        groups.push(current);
       }
-      currentAgents.push(value.toLowerCase());
-      if (value.toLowerCase().includes('kenzpricebot')) hasSpecific = true;
-    } else if ((name === 'allow' || name === 'disallow') && currentAgents.length && value) {
-      rules.push({ allow: name === 'allow', path: value });
+      current.agents.push(value.toLowerCase());
+    } else if ((name === 'allow' || name === 'disallow') && current && value) {
+      current.rules.push({ allow: name === 'allow', path: value });
     }
   }
-  const selected = rules.filter((rule) => applies || true);
+  const specific = groups.filter((group) => group.agents.some((agent) => agent === 'kenzpricebot'));
+  const selectedGroups = specific.length ? specific : groups.filter((group) => group.agents.includes('*'));
+  const selected = selectedGroups.flatMap((group) => group.rules);
   const path = `${url.pathname}${url.search}`;
   const matching = selected.filter((rule) => path.startsWith(rule.path));
   if (!matching.length) return true;
@@ -272,7 +271,7 @@ function pdfToText(bytes: Uint8Array): string {
   }
 }
 
-function parseMadrpText(text: string, sourceUrl: string, observedAt: string): ScrapedPrice[] {
+export function parseMadrpText(text: string, sourceUrl: string, observedAt: string): ScrapedPrice[] {
   const output: ScrapedPrice[] = [];
   for (const line of text.split(/\r?\n/)) {
     const tokens = line.trim().split(/\s+/);
@@ -297,7 +296,7 @@ function parseMadrpText(text: string, sourceUrl: string, observedAt: string): Sc
   return output;
 }
 
-function parseDcwHtml(html: string, source: PublicSourceConfig): ScrapedPrice[] {
+export function parseDcwHtml(html: string, source: PublicSourceConfig): ScrapedPrice[] {
   const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
   const pageText = htmlCellText(html);
   const observedAt = dateFromText(pageText);
