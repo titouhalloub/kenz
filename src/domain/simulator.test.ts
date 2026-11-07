@@ -72,7 +72,7 @@ describe('simulateMonthlyBudget', () => {
     const result = simulateMonthlyBudget(fixture('2026-11', {
       items: [
         { ...fixture('2026-11').items[0], productId: 'rice-premium', price },
-        { ...fixture('2026-11').items[0], productId: 'rice-basic', price: { ...price, medianUnitPriceMinor: 2, p25UnitPriceMinor: 1000, p75UnitPriceMinor: 3000 } },
+        { ...fixture('2026-11').items[0], productId: 'rice-basic', price: { ...price, medianUnitPriceMinor: 2000, p25UnitPriceMinor: 1000, p75UnitPriceMinor: 3000 } },
       ],
     }));
     expect(result.cheapestSubstitutes).toContainEqual({
