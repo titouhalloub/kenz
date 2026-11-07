@@ -50,8 +50,11 @@ export function parsePackQuantity(label: string, baseUnit: BaseUnit): number | n
     if (hasMl) return Math.round(amount);
     return null;
   }
+  if (multiPack) return null;
   const countMatch = text.match(/(\\d+)\\s*[x×*]\\s*1(?:\\s*(?:unit|piece|pc|unité|حبة|قطعة))?/);
   if (countMatch) return Number(countMatch[1]);
+  const packCount = text.match(/[x×*]\\s*(\\d+)/);
+  if (packCount) return Number(packCount[1]);
   if (hasCount) return Math.round(amount);
   if (/^(?:1\\s*)?(?:unit|piece|pc|unité|حبة|قطعة)$/.test(text)) return 1;
   return null;
