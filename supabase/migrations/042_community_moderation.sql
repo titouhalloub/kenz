@@ -212,6 +212,9 @@ begin
   if new.status <> old.status and not public.is_community_moderator() then
     raise exception 'Only moderators can change post status';
   end if;
+  if not public.community_text_is_safe(trim(coalesce(new.title,'')) || ' ' || coalesce(new.body,'')) then
+    raise exception 'Remove links, email addresses and phone numbers from public posts';
+  end if;
   new.updated_at := now();
   return new;
 end;
@@ -250,6 +253,10 @@ begin
   insert into public.community_posts(author_id,kind,title,body,locale,wilaya_code,status)
   values (v_user,p_kind,trim(p_title),coalesce(p_body,''),p_locale,p_wilaya_code,'published')
   returning id into v_id;
+  insert into public.community_profiles(user_id,handle,locale,wilaya_code,is_public)
+  values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,true)
+  on conflict (user_id) do update set is_public=true,locale=excluded.locale,
+    wilaya_code=coalesce(excluded.wilaya_code,public.community_profiles.wilaya_code),updated_at=now();
   return v_id;
 end;
 $$;
@@ -389,3 +396,46 @@ revoke all on function public.validate_community_report_target() from public, an
 create trigger validate_community_report_target
 before insert on public.community_reports
 for each row execute function public.validate_community_report_target();
+
+
+create or replace function public.guard_community_profile_update()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.user_id <> old.user_id then raise exception 'Profile owner is immutable'; end if;
+  if not public.community_text_is_safe(trim(coalesce(new.handle,''))) then
+    raise exception 'Public handle cannot contain contact details or links';
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+revoke all on function public.guard_community_profile_update() from public, anon, authenticated;
+create trigger guard_community_profile_update
+before update on public.community_profiles
+for each row execute function public.guard_community_profile_update();
+
+create or replace function public.limit_community_reports()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  perform pg_advisory_xact_lock(hashtextextended(new.reporter_id::text, 0));
+  if (select count(*) from public.community_reports
+      where reporter_id=new.reporter_id and created_at > now() - interval '24 hours') >= 10 then
+    raise exception 'Daily report limit reached';
+  end if;
+  if exists (select 1 from public.community_reports
+      where reporter_id=new.reporter_id and target_type=new.target_type and target_id=new.target_id) then
+    raise exception 'You have already reported this content';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.limit_community_reports() from public, anon, authenticated;
+create trigger limit_community_reports
+before insert on public.community_reports
+for each row execute function public.limit_community_reports();
