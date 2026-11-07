@@ -117,8 +117,23 @@ const validUnit = (value: unknown): value is IngredientUnit => value === 'g' || 
 const validQuantity = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const validText = (value: unknown, max = 100): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 
-export const ingredientKey = (name: string, unit: IngredientUnit) =>
-  name.trim().toLocaleLowerCase().replace(/\s+/g, ' ') + '::' + unit;
+const ingredientAliases: Record<string, string> = {
+  'طماطم': 'tomato', tomate: 'tomato', tomates: 'tomato', tomatoes: 'tomato',
+  'بصل': 'onion', oignon: 'onion', onions: 'onion',
+  'جزر': 'carrot', carotte: 'carrot', carrots: 'carrot',
+  'ثوم': 'garlic', ail: 'garlic', 'زيت': 'oil', huile: 'oil',
+  'عدس': 'lentils', lentille: 'lentils', lentilles: 'lentils', 'كسكس': 'couscous',
+  'لفت': 'turnip', navet: 'turnip', 'كوسة': 'zucchini', courgette: 'zucchini', courgettes: 'zucchini',
+  'حمص': 'chickpeas', 'pois chiche': 'chickpeas', 'pois chiches': 'chickpeas',
+  'حمص مطبوخ': 'cooked chickpeas', 'pois chiches cuits': 'cooked chickpeas',
+  'بيض': 'eggs', oeuf: 'eggs', oeufs: 'eggs', 'معكرونة': 'pasta', 'pâtes': 'pasta', pate: 'pasta',
+  'خيار': 'cucumber', concombre: 'cucumber',
+};
+
+export const ingredientKey = (name: string, unit: IngredientUnit) => {
+  const normalized = name.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+  return (ingredientAliases[normalized] || normalized) + '::' + unit;
+};
 
 export function createFamilyLivingPlan(userId: string, month: string): FamilyLivingPlan {
   return { version: 1, userId, month, meals: [], pantry: [], recipes: [], updatedAt: new Date().toISOString() };
@@ -187,6 +202,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   if (!mealsValid || !pantryValid || !recipesValid) return null;
   const recipeIds = new Set([...BUILTIN_FAMILY_RECIPES, ...row.recipes].map((recipe) => recipe.id));
   if (new Set(row.meals.map((meal) => meal.id)).size !== row.meals.length ||
+      new Set(row.meals.map((meal) => meal.date + '::' + meal.slot)).size !== row.meals.length ||
       row.meals.some((meal) => !recipeIds.has(meal.recipeId)) ||
       new Set(row.recipes.map((recipe) => recipe.id)).size !== row.recipes.length ||
       row.recipes.some((recipe) => BUILTIN_FAMILY_RECIPES.some((builtin) => builtin.id === recipe.id)) ||
@@ -207,8 +223,8 @@ export function parseCommunityRecipe(value: unknown, id: string): FamilyRecipe |
       (candidate.prepMinutes ?? -1) < 0 || (candidate.prepMinutes ?? 9999) > 600 ||
       !Array.isArray(candidate.ingredients) || candidate.ingredients.length < 1 ||
       candidate.ingredients.length > 100 || !candidate.ingredients.every((item) => item &&
-        validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli)) ||
-      !Array.isArray(candidate.steps) || candidate.steps.length > 30 ||
+        validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli) && item.quantityMilli > 0) ||
+      !Array.isArray(candidate.steps) || candidate.steps.length < 1 || candidate.steps.length > 30 ||
       !candidate.steps.every((step) => validText(step, 500))) return null;
   return {
     id, title: candidate.title.trim(), description: candidate.description.trim(),
