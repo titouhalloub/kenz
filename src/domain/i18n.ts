@@ -287,6 +287,14 @@ const uiCopy: Record<string, { ar: string; en: string }> = {
   "Répartition par semaine": { ar: "التوزيع الأسبوعي", en: "Weekly breakdown" },
   "Alternatives moins chères dans ton panier": { ar: "بدائل أرخص في سلتك", en: "Cheaper alternatives in your basket" },
   "économie estimée": { ar: "التوفير التقديري", en: "estimated saving" },
+
+  "Quantité par personne et par jour": { ar: "الكمية لكل شخص يومياً", en: "Quantity per person per day" },
+  "Détail et fraîcheur des prix": { ar: "تفاصيل الأسعار وحداثتها", en: "Price details and freshness" },
+  "Certaines lignes ont moins de trois relevés ou utilisent des prix saisis manuellement. La projection reste indicative.": { ar: "بعض البنود لديها أقل من ثلاثة سجلات أو تستخدم أسعاراً مدخلة يدوياً. يظل التوقع إرشادياً.", en: "Some items have fewer than three observations or use manually entered prices. The projection remains indicative." },
+  "Certains relevés datent de plus de 14 jours ou leur date est inconnue.": { ar: "بعض السجلات أقدم من 14 يوماً أو تاريخها غير معروف.", en: "Some observations are older than 14 days or their date is unknown." },
+  "Sans prix": { ar: "دون سعر", en: "No price" },
+  "Saisie manuelle": { ar: "إدخال يدوي", en: "Manual entry" },
+  "Total par catégorie": { ar: "الإجمالي حسب الفئة", en: "Total by category" },
   "Migrations SQL Versionnées": { ar: "ترحيلات SQL ذات إصدارات", en: "Versioned SQL migrations" },
 };
 
