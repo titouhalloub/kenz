@@ -962,9 +962,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
           </div>
         </div>
       )}
-      {activeTab === 'simulator' && (
+      <div className={activeTab === 'simulator' ? '' : 'hidden'}>
         <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />
-      )}
+      </div>
 
     </div>
   );
