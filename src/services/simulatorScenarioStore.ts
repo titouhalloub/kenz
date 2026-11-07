@@ -31,7 +31,7 @@ async function authenticatedClient(userId: string) {
 /** Scenarios contain only household assumptions and product quantities, never budgets or account data. */
 export async function listSimulatorScenarios(userId: string): Promise<ScenarioStoreResult<SimulatorScenario[]>> {
   const auth = await authenticatedClient(userId);
-  if ('error' in auth) return { success: false, reason: auth.error, message: 'Sign in to sync your scenarios.' };
+  if ('error' in auth) return { success: false, reason: auth.error || 'not_authenticated', message: 'Sign in to sync your scenarios.' };
   const { data, error } = await auth.supabase
     .from('simulator_scenarios')
     .select('id,title,month,adults,children,child_consumption_permille,basket_overrides,updated_at')
