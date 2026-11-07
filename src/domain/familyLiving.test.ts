@@ -44,6 +44,24 @@ describe('family living planner', () => {
     expect(parseCommunityRecipe({ title: 'Soup', description: 'Good', baseServings: 2, prepMinutes: 10, ingredients: [{ name: 'water', quantityMilli: 1000, unit: 'ml' }], steps: [] }, 'community-x')).toBeNull();
   });
 
+  it('accepts legacy monthly plans without the optional needs list', () => {
+    const plan = createFamilyLivingPlan('u1', '2026-11');
+    const { needs: _needs, ...legacy } = plan;
+    const restored = validateFamilyLivingPlan(legacy, 'u1', '2026-11');
+    expect(restored?.needs).toEqual([]);
+  });
+
+  it('validates clothing and cleaning line items and rejects unsafe totals', () => {
+    const plan = createFamilyLivingPlan('u1', '2026-11');
+    plan.needs = [
+      { id: 'n1', category: 'clothing', name: 'Winter coat', member: 'Member A', plannedMinor: 120000, actualMinor: 0, dueDate: '2026-11-10' },
+      { id: 'n2', category: 'cleaning', name: 'Laundry detergent', plannedMinor: 25000, actualMinor: 5000 },
+    ];
+    expect(validateFamilyLivingPlan(plan, 'u1', '2026-11')?.needs).toHaveLength(2);
+    plan.needs[1].plannedMinor = Number.MAX_SAFE_INTEGER;
+    expect(validateFamilyLivingPlan(plan, 'u1', '2026-11')).toBeNull();
+  });
+
   it('rejects cross-user, cross-month, duplicate and malformed data', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
     expect(validateFamilyLivingPlan(plan, 'u2', '2026-11')).toBeNull();
