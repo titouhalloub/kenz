@@ -163,7 +163,7 @@ export function scaleIngredient(quantityMilli: number, baseServings: number, ser
 }
 
 export function buildShoppingRequirements(plan: FamilyLivingPlan): ShoppingRequirement[] {
-  const recipes = new Map([...BUILTIN_FAMILY_RECIPES, ...plan.recipes].map((recipe) => [recipe.id, recipe]));
+  const recipes = new Map<string, FamilyRecipe>([...BUILTIN_FAMILY_RECIPES, ...plan.recipes].map((recipe) => [recipe.id, recipe] as const));
   const totals = new Map<string, ShoppingRequirement>();
   for (const meal of plan.meals) {
     const recipe = recipes.get(meal.recipeId);
