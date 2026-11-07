@@ -90,7 +90,7 @@ describe('family budget foundation', () => {
 });\n
   it('counts weekly and biweekly recurring items within a selected month', () => {
     expect(countRecurringOccurrencesInMonth('weekly', '2026-11-02', '2026-11')).toBe(5);
-    expect(countRecurringOccurrencesInMonth('biweekly', '2026-11-02', '2026-11')).toBe(2);
+    expect(countRecurringOccurrencesInMonth('biweekly', '2026-11-02', '2026-11')).toBe(3);
     expect(countRecurringOccurrencesInMonth('weekly', '2026-12-01', '2026-11')).toBe(0);
   });
 
@@ -107,6 +107,15 @@ describe('family budget foundation', () => {
     const positive = updateFamilyCategory(base, 'food', 'plannedMinor', 10_000);
     expect(zero.categories.find((row) => row.id === 'housing')?.plannedOverride).toBe(true);
     expect(positive.categories.find((row) => row.id === 'food')?.plannedOverride).toBe(true);
+  });
+
+  it('does not auto-allocate a category the user explicitly set to zero', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100_000;
+    const withZeroHousing = updateFamilyCategory(plan, 'housing', 'plannedMinor', 0);
+    const suggested = suggestFamilyBudgetAllocations(withZeroHousing);
+    expect(suggested.categories.find((row) => row.id === 'housing')?.plannedMinor).toBe(0);
+    expect(suggested.categories.find((row) => row.id === 'housing')?.plannedOverride).toBe(true);
   });
 
   it('marks generated allocations as explicit once the user applies the draft', () => {
