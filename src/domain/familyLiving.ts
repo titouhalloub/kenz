@@ -60,8 +60,8 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     baseServings: 4, prepMinutes: 35, origin: 'builtin',
     ingredients: [
       { name: 'عدس', quantityMilli: 300000, unit: 'g' }, { name: 'بصل', quantityMilli: 2000, unit: 'piece' },
-      { name: 'جزر', quantityMilli: 2, unit: 'piece' }, { name: 'ثوم', quantityMilli: 2, unit: 'piece' },
-      { name: 'زيت', quantityMilli: 30000, unit: 'ml' }, { name: 'طماطم', quantityMilli: 2, unit: 'piece' },
+      { name: 'جزر', quantityMilli: 2000, unit: 'piece' }, { name: 'ثوم', quantityMilli: 2000, unit: 'piece' },
+      { name: 'زيت', quantityMilli: 30000, unit: 'ml' }, { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
     ],
     steps: ['اغسل العدس وقطّع الخضروات.', 'شوّح البصل والجزر والثوم بقليل من الزيت.', 'أضف العدس والطماطم والماء والتوابل واتركه حتى ينضج.', 'اخلط جزءاً من الشوربة إذا رغبت وقدّمها ساخنة.'],
   },
@@ -69,10 +69,10 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-couscous-vegetables', title: 'كسكس بالخضار', description: 'طبق عائلي بالخضروات الموسمية',
     baseServings: 4, prepMinutes: 60, origin: 'builtin',
     ingredients: [
-      { name: 'كسكس', quantityMilli: 500000, unit: 'g' }, { name: 'جزر', quantityMilli: 3, unit: 'piece' },
-      { name: 'لفت', quantityMilli: 2, unit: 'piece' }, { name: 'كوسة', quantityMilli: 2, unit: 'piece' },
-      { name: 'حمص', quantityMilli: 150000, unit: 'g' }, { name: 'بصل', quantityMilli: 1, unit: 'piece' },
-      { name: 'طماطم', quantityMilli: 2, unit: 'piece' },
+      { name: 'كسكس', quantityMilli: 500000, unit: 'g' }, { name: 'جزر', quantityMilli: 3000, unit: 'piece' },
+      { name: 'لفت', quantityMilli: 2000, unit: 'piece' }, { name: 'كوسة', quantityMilli: 2000, unit: 'piece' },
+      { name: 'حمص', quantityMilli: 150000, unit: 'g' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
+      { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
     ],
     steps: ['حضّر مرق الخضار والحمص حتى يقترب من النضج.', 'فَوّر الكسكس حسب تعليمات العبوة.', 'أضف الكوسة واترك الخضار حتى تنضج.', 'قدّم الكسكس مع المرق والخضار.'],
   },
@@ -80,8 +80,8 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-omelette', title: 'عجة البيض بالخضار', description: 'وجبة سريعة للفطور أو العشاء',
     baseServings: 2, prepMinutes: 15, origin: 'builtin',
     ingredients: [
-      { name: 'بيض', quantityMilli: 4, unit: 'piece' }, { name: 'بصل', quantityMilli: 1, unit: 'piece' },
-      { name: 'طماطم', quantityMilli: 1, unit: 'piece' }, { name: 'زيت', quantityMilli: 15000, unit: 'ml' },
+      { name: 'بيض', quantityMilli: 4000, unit: 'piece' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
+      { name: 'طماطم', quantityMilli: 1000, unit: 'piece' }, { name: 'زيت', quantityMilli: 15000, unit: 'ml' },
     ],
     steps: ['قطّع البصل والطماطم.', 'اطههما قليلاً في مقلاة.', 'أضف البيض المخفوق واتركه حتى ينضج.'],
   },
@@ -89,9 +89,9 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-tomato-pasta', title: 'معكرونة بصلصة الطماطم', description: 'طبق بسيط بمكونات متوفرة غالباً',
     baseServings: 4, prepMinutes: 25, origin: 'builtin',
     ingredients: [
-      { name: 'معكرونة', quantityMilli: 400000, unit: 'g' }, { name: 'طماطم', quantityMilli: 4, unit: 'piece' },
-      { name: 'ثوم', quantityMilli: 2, unit: 'piece' }, { name: 'زيت', quantityMilli: 30000, unit: 'ml' },
-      { name: 'بصل', quantityMilli: 1, unit: 'piece' },
+      { name: 'معكرونة', quantityMilli: 400000, unit: 'g' }, { name: 'طماطم', quantityMilli: 4000, unit: 'piece' },
+      { name: 'ثوم', quantityMilli: 2000, unit: 'piece' }, { name: 'زيت', quantityMilli: 30000, unit: 'ml' },
+      { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
     ],
     steps: ['اسلق المعكرونة في الماء.', 'حضّر صلصة الطماطم مع البصل والثوم والزيت.', 'اخلط المعكرونة مع الصلصة وقدّمها.'],
   },
@@ -99,8 +99,8 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-chickpea-salad', title: 'سلطة الحمص', description: 'وجبة خفيفة ومشبعة ويمكن تحضيرها مسبقاً',
     baseServings: 3, prepMinutes: 15, origin: 'builtin',
     ingredients: [
-      { name: 'حمص مطبوخ', quantityMilli: 300000, unit: 'g' }, { name: 'طماطم', quantityMilli: 2, unit: 'piece' },
-      { name: 'خيار', quantityMilli: 1, unit: 'piece' }, { name: 'بصل', quantityMilli: 1, unit: 'piece' },
+      { name: 'حمص مطبوخ', quantityMilli: 300000, unit: 'g' }, { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
+      { name: 'خيار', quantityMilli: 1000, unit: 'piece' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
       { name: 'زيت', quantityMilli: 20000, unit: 'ml' },
     ],
     steps: ['قطّع الخضروات إلى مكعبات صغيرة.', 'أضف الحمص المطبوخ.', 'تبّل بالزيت والملح والليمون حسب الرغبة.'],
@@ -122,7 +122,9 @@ export function createFamilyLivingPlan(userId: string, month: string): FamilyLiv
 export function scaleIngredient(quantityMilli: number, baseServings: number, servings: number): number {
   if (!validQuantity(quantityMilli) || !Number.isInteger(baseServings) || baseServings < 1 ||
       !Number.isInteger(servings) || servings < 1 || servings > 40) throw new RangeError('Invalid recipe quantity or servings.');
-  const scaled = Math.round(quantityMilli * servings / baseServings);
+  const numerator = BigInt(quantityMilli) * BigInt(servings);
+  const denominator = BigInt(baseServings);
+  const scaled = Number((numerator + denominator / 2n) / denominator);
   if (!Number.isSafeInteger(scaled)) throw new RangeError('Scaled ingredient quantity is too large.');
   return scaled;
 }
