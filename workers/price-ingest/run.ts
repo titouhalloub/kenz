@@ -66,10 +66,18 @@ async function main() {
       }
 
       const scraped = await scrapePublicSource(source);
+      const freshCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      const freshScraped = scraped.filter((row) => {
+        const observed = Date.parse(row.normalized.observedAt);
+        return Number.isFinite(observed) && observed >= freshCutoff && observed <= Date.now() + 24 * 60 * 60 * 1000;
+      });
+      const staleRows = scraped.length - freshScraped.length;
       if (dryRun) {
         console.log(JSON.stringify({
           source: source.slug,
           rows: scraped.length,
+          freshRows: freshScraped.length,
+          staleRows,
           sample: scraped.slice(0, 8).map((row) => ({
             product: row.productSlug,
             unitPriceMinor: row.normalized.unitPriceMinor,
@@ -92,7 +100,7 @@ async function main() {
       }
 
       try {
-        const observations = scraped.flatMap((row) => {
+        const observations = freshScraped.flatMap((row) => {
           const product = productBySlug.get(row.productSlug);
           if (!product || product.base_unit !== row.normalized.baseUnit) return [];
           const recordKey = sourceKey([
@@ -128,14 +136,16 @@ async function main() {
         const { error: finishError } = await supabase!.from('ingest_runs').update({
           finished_at: new Date().toISOString(),
           rows_fetched: scraped.length,
-          rows_parsed: scraped.length,
+          rows_parsed: freshScraped.length,
           rows_accepted: 0,
           error_count: 0,
           status: 'succeeded',
-          error_summary: observations.length === 0 ? 'No product rows matched the curated catalog; nothing was published.' : null,
+          error_summary: observations.length === 0
+            ? (staleRows > 0 ? `All ${staleRows} matched rows were outside the 14-day freshness window.` : 'No fresh product rows matched the curated catalog; nothing was published.')
+            : (staleRows > 0 ? `${staleRows} stale rows were excluded.` : null),
         }).eq('id', run.id);
         if (finishError) throw new Error(`Cannot finish ingest run: ${finishError.message}`);
-        console.log(`${source.slug}: staged ${observations.length} observations as pending review (run ${run.id}).`);
+        console.log(`${source.slug}: staged ${observations.length} fresh observations; excluded ${staleRows} stale rows (run ${run.id}).`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await supabase!.from('ingest_runs').update({
