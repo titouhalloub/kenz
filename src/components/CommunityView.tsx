@@ -288,6 +288,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
             </>
           )}
           {postKind === 'shopping_list' && (
+            <div className="space-y-2">
             <label className="block text-[11px] text-slate-400">Produit et quantité ({quantityLabel})
               <select value={productSlug} onChange={(event) => setProductSlug(event.target.value)} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100">
                 {PRODUCT_CATALOG.map((product) => <option key={product.slug} value={product.slug}>{productName(product, 'fr')}</option>)}
@@ -307,6 +308,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               <span>{item.label} · {item.quantityMilliUnits} {item.baseUnit}</span>
               <button type="button" onClick={() => setShoppingItems((current) => current.filter((_, i) => i !== index))} className="text-rose-300">Retirer</button>
             </div>)}
+            </div>
           )}
           <label className="flex items-start gap-2 text-[11px] text-slate-400">
             <input type="checkbox" checked={shareWilaya} onChange={(event) => setShareWilaya(event.target.checked)} />
