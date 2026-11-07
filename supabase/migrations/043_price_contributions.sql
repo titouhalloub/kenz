@@ -118,13 +118,15 @@ as $$
 declare
   v_user uuid := (select auth.uid());
   v_deleted integer;
+  v_merchant_deleted integer := 0;
 begin
   if v_user is null then raise exception 'Authentication required'; end if;
   delete from public.price_observations where contributor_id = v_user;
   get diagnostics v_deleted = row_count;
   delete from public.price_observations o using public.businesses b
     where o.business_id = b.id and b.owner_id = v_user;
-  get diagnostics v_deleted = v_deleted + row_count;
+  get diagnostics v_merchant_deleted = row_count;
+  v_deleted := v_deleted + v_merchant_deleted;
   update public.price_contributor_preferences set opt_in=false,updated_at=now() where user_id=v_user;
   perform public.refresh_price_stats(14);
   return v_deleted;
