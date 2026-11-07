@@ -6,7 +6,7 @@ import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
-  type MealSlot, type HouseholdNeedCategory,
+  type MealSlot, type HouseholdNeedCategory, type ClothingSeason,
 } from '../domain/familyLiving';
 
 interface Props { profile: UserProfile; month: string; householdSize: number; }
@@ -80,6 +80,8 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const [needMember, setNeedMember] = useState('');
   const [needPlanned, setNeedPlanned] = useState('');
   const [needDate, setNeedDate] = useState('');
+  const [needSeason, setNeedSeason] = useState<ClothingSeason>('all');
+  const [needSize, setNeedSize] = useState('');
 
   useEffect(() => {
     setPlan(readLivingPlan(profile.id, month));
@@ -187,9 +189,10 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     }
     updatePlan((current) => ({ ...current, needs: [...current.needs, {
       id: makeId('need'), category: needCategory, name, ...(needMember.trim() ? { member: needMember.trim() } : {}),
+      ...(needCategory === 'clothing' ? { season: needSeason, ...(needSize.trim() ? { size: needSize.trim() } : {}) } : {}),
       plannedMinor, actualMinor: 0, ...(needDate ? { dueDate: needDate } : {}),
     }] }));
-    setNeedName(''); setNeedMember(''); setNeedPlanned(''); setNeedDate('');
+    setNeedName(''); setNeedMember(''); setNeedPlanned(''); setNeedDate(''); setNeedSeason('all'); setNeedSize('');
   };
 
   const updateNeedActual = (id: string, value: string, original: number) => {
@@ -371,11 +374,12 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <label>{tr(profile, 'Montant prévu (DA)', 'المبلغ المخطط (دج)', 'Planned amount (DA)')}<input inputMode="decimal" value={needPlanned} onChange={(e) => setNeedPlanned(e.target.value)} placeholder="0.00" className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label className="col-span-2">{tr(profile, 'Article / besoin', 'المنتج / الاحتياج', 'Item / need')}<input value={needName} onChange={(e) => setNeedName(e.target.value)} placeholder={tr(profile, 'Ex. veste hiver, lessive, cahiers…', 'مثلاً معطف شتوي، مسحوق غسيل، كراريس…', 'e.g. winter jacket, detergent, notebooks…')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label>{tr(profile, 'Pour qui ? (facultatif)', 'لمن؟ (اختياري)', 'For whom? (optional)')}<input value={needMember} onChange={(e) => setNeedMember(e.target.value)} placeholder={tr(profile, 'Nom / membre', 'اسم الفرد', 'Name / member')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          {needCategory === 'clothing' && <><label>{tr(profile, 'Saison', 'الموسم', 'Season')}<select value={needSeason} onChange={(e) => setNeedSeason(e.target.value as ClothingSeason)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm"><option value="all">{tr(profile, 'Toute saison', 'كل المواسم', 'All seasons')}</option><option value="spring">{tr(profile, 'Printemps', 'الربيع', 'Spring')}</option><option value="summer">{tr(profile, 'Été', 'الصيف', 'Summer')}</option><option value="autumn">{tr(profile, 'Automne', 'الخريف', 'Autumn')}</option><option value="winter">{tr(profile, 'Hiver', 'الشتاء', 'Winter')}</option></select></label><label>{tr(profile, 'Taille (facultatif)', 'المقاس (اختياري)', 'Size (optional)')}<input value={needSize} onChange={(e) => setNeedSize(e.target.value)} placeholder={tr(profile, 'Taille', 'المقاس', 'Size')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label></>}
           <label>{tr(profile, 'Date prévue (facultatif)', 'التاريخ المتوقع (اختياري)', 'Due date (optional)')}<input type="date" min={monthFirstDay(month)} max={monthLastDay(month)} value={needDate} onChange={(e) => setNeedDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
         </div>
         <button onClick={addNeed} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter le besoin', 'إضافة الاحتياج', 'Add need')}</button>
         {plan.needs.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Aucun besoin détaillé pour ce mois.', 'لا توجد احتياجات مفصلة لهذا الشهر.', 'No detailed needs for this month yet.')}</p> : <div className="space-y-2">{plan.needs.map((item) => <article key={item.id} className="rounded-xl border border-violet-100 p-3">
-          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, item.category === 'clothing' ? 'Vêtements' : item.category === 'cleaning' ? 'Nettoyage' : item.category === 'hygiene' ? 'Hygiène' : item.category === 'school' ? 'École' : item.category === 'transport' ? 'Transport' : item.category === 'health' ? 'Santé' : item.category === 'home' ? 'Maison' : 'Autre', item.category === 'clothing' ? 'ملابس' : item.category === 'cleaning' ? 'تنظيف' : item.category === 'hygiene' ? 'نظافة' : item.category === 'school' ? 'مدرسة' : item.category === 'transport' ? 'نقل' : item.category === 'health' ? 'صحة' : item.category === 'home' ? 'منزل' : 'أخرى', item.category)}{item.member ? ' · ' + item.member : ''}{item.dueDate ? ' · ' + item.dueDate : ''}</span><span className="mt-1 block text-[10px] text-slate-500">{tr(profile, 'Prévu', 'مخطط', 'Planned')}: {formatMoney(item.plannedMinor, profile.preferredCurrency, profile.locale)}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, needs: current.needs.filter((need) => need.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></div>
+          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, item.category === 'clothing' ? 'Vêtements' : item.category === 'cleaning' ? 'Nettoyage' : item.category === 'hygiene' ? 'Hygiène' : item.category === 'school' ? 'École' : item.category === 'transport' ? 'Transport' : item.category === 'health' ? 'Santé' : item.category === 'home' ? 'Maison' : 'Autre', item.category === 'clothing' ? 'ملابس' : item.category === 'cleaning' ? 'تنظيف' : item.category === 'hygiene' ? 'نظافة' : item.category === 'school' ? 'مدرسة' : item.category === 'transport' ? 'نقل' : item.category === 'health' ? 'صحة' : item.category === 'home' ? 'منزل' : 'أخرى', item.category)}{item.member ? ' · ' + item.member : ''}{item.season ? ' · ' + tr(profile, item.season === 'spring' ? 'Printemps' : item.season === 'summer' ? 'Été' : item.season === 'autumn' ? 'Automne' : item.season === 'winter' ? 'Hiver' : 'Toute saison', item.season === 'spring' ? 'الربيع' : item.season === 'summer' ? 'الصيف' : item.season === 'autumn' ? 'الخريف' : item.season === 'winter' ? 'الشتاء' : 'كل المواسم', item.season) : ''}{item.size ? ' · ' + item.size : ''}{item.dueDate ? ' · ' + item.dueDate : ''}</span><span className="mt-1 block text-[10px] text-slate-500">{tr(profile, 'Prévu', 'مخطط', 'Planned')}: {formatMoney(item.plannedMinor, profile.preferredCurrency, profile.locale)}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, needs: current.needs.filter((need) => need.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></div>
           <label className="mt-2">{tr(profile, 'Montant réellement dépensé', 'المبلغ المصروف فعلياً', 'Actual amount spent')}<input key={item.id + '-actual'} inputMode="decimal" defaultValue={moneyField(item.actualMinor)} onBlur={(e) => { const next = updateNeedActual(item.id, e.currentTarget.value, item.actualMinor); e.currentTarget.value = moneyField(next); }} className="mt-1 w-full h-10 rounded-lg border px-3 text-sm font-mono-numbers" /></label>
         </article>)}</div>}
         <p className="text-[10px] text-slate-500">{tr(profile, 'Ces lignes détaillent les achats. Elles ne modifient pas automatiquement les enveloppes du budget principal afin d’éviter les doubles comptages.', 'هذه البنود تفصل المشتريات ولا تعدّل تلقائياً مخصصات الميزانية الرئيسية لتجنب احتساب المصروف مرتين.', 'These line items detail purchases and do not automatically change the main budget envelopes, to avoid double counting.')}</p>
