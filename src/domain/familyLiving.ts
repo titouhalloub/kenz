@@ -142,6 +142,7 @@ const validDate = (value: unknown): value is string => {
 };
 const validUnit = (value: unknown): value is IngredientUnit => value === 'g' || value === 'ml' || value === 'piece';
 const validQuantity = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const validRecipeQuantity = (value: unknown): value is number => validQuantity(value) && value > 0 && value <= 1_000_000_000;
 const validText = (value: unknown, max = 100): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 
 const ingredientAliases: Record<string, string> = {
@@ -225,7 +226,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   const pantryValid = row.pantry.every((item) => item && validText(item.id, 120) &&
     validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli));
   const shoppingExtrasValid = shoppingExtras.every((extra) => extra && validText(extra.id, 120) && validText(extra.name, 80) &&
-    validUnit(extra.unit) && validQuantity(extra.quantityMilli) && extra.quantityMilli > 0 &&
+    validUnit(extra.unit) && validRecipeQuantity(extra.quantityMilli) &&
     (extra.category === 'grocery' || extra.category === 'cleaning' || extra.category === 'hygiene' || extra.category === 'other'));
   const needsValid = needs.every((need) => need && validText(need.id, 120) &&
     (need.category === 'clothing' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'school' ||
@@ -242,7 +243,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     Number.isInteger(recipe.prepMinutes) && recipe.prepMinutes >= 0 && recipe.prepMinutes <= 600 &&
     Array.isArray(recipe.ingredients) && recipe.ingredients.length >= 1 && recipe.ingredients.length <= 100 &&
     recipe.ingredients.every((ingredient) => ingredient && validText(ingredient.name, 80) &&
-      validUnit(ingredient.unit) && validQuantity(ingredient.quantityMilli) && ingredient.quantityMilli > 0) &&
+      validUnit(ingredient.unit) && validRecipeQuantity(ingredient.quantityMilli)) &&
     Array.isArray(recipe.steps) && recipe.steps.length >= 1 && recipe.steps.length <= 30 &&
     recipe.steps.every((step) => validText(step, 500)) &&
     (recipe.origin === 'community' || recipe.origin === 'builtin'));
@@ -275,7 +276,7 @@ export function parseCommunityRecipe(value: unknown, id: string): FamilyRecipe |
       (candidate.prepMinutes ?? -1) < 0 || (candidate.prepMinutes ?? 9999) > 600 ||
       !Array.isArray(candidate.ingredients) || candidate.ingredients.length < 1 ||
       candidate.ingredients.length > 100 || !candidate.ingredients.every((item) => item &&
-        validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli) && item.quantityMilli > 0) ||
+        validText(item.name, 80) && validUnit(item.unit) && validRecipeQuantity(item.quantityMilli)) ||
       !Array.isArray(candidate.steps) || candidate.steps.length < 1 || candidate.steps.length > 30 ||
       !candidate.steps.every((step) => validText(step, 500))) return null;
   return {
