@@ -95,6 +95,9 @@ revoke all on public.community_profiles, public.community_posts, public.communit
   public.community_recipe_ingredients, public.community_shopping_items, public.community_comments,
   public.community_reactions, public.community_saves from public, anon, authenticated;
 
+grant select on public.community_profiles, public.community_posts, public.community_recipes,
+  public.community_recipe_ingredients, public.community_shopping_items,
+  public.community_comments, public.community_reactions to anon;
 grant select, insert, update on public.community_profiles to authenticated;
 grant select, update, delete on public.community_posts to authenticated;
 grant select, insert, update, delete on public.community_recipes,
