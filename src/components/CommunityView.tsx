@@ -5,8 +5,8 @@ import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations'
 import { loadMarketPrices } from '../services/priceStore';
 import {
   addCommunityComment, blockCommunityUser, createCommunityPost, ensureCommunityProfile,
-  loadCommunityFeed, reportCommunityPost, submitCommunityPrice, toggleCommunityReaction,
-  toggleCommunitySave, type CommunityKind, type CommunityPost,
+  loadCommunityFeed, listVerifiedOwnedBusinesses, reportCommunityPost, submitCommunityPrice, submitMerchantPrice, toggleCommunityReaction,
+  toggleCommunitySave, type CommunityKind, type CommunityPost, type VerifiedOwnedBusiness,
 } from '../services/communityStore';
 import type { UserProfile } from '../services/authStore';
 
@@ -40,6 +40,11 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   const [busy, setBusy] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [priceOpen, setPriceOpen] = useState(false);
+  const [ownedBusinesses, setOwnedBusinesses] = useState<VerifiedOwnedBusiness[]>([]);
+  const [merchantOpen, setMerchantOpen] = useState(false);
+  const [merchantBusinessId, setMerchantBusinessId] = useState('');
+  const [merchantConsent, setMerchantConsent] = useState(false);
+  const [merchantStatus, setMerchantStatus] = useState('');
   const [priceSlug, setPriceSlug] = useState(PRODUCT_CATALOG[0].slug);
   const [priceAmount, setPriceAmount] = useState('');
   const [priceDate, setPriceDate] = useState(today());
@@ -63,6 +68,16 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     if (userId) void ensureCommunityProfile({ userId, locale, wilaya: user.wilaya });
     void refresh();
   }, [user.id, user.wilaya, kindFilter, locale]);
+
+  useEffect(() => {
+    if (!userId) { setOwnedBusinesses([]); return; }
+    listVerifiedOwnedBusinesses(userId).then((result) => {
+      if (result.success) {
+        setOwnedBusinesses(result.data || []);
+        setMerchantBusinessId(result.data?.[0]?.id || '');
+      }
+    }).catch(() => setOwnedBusinesses([]));
+  }, [userId]);
 
   useEffect(() => {
     let active = true;
@@ -176,6 +191,30 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     if (result.success) { setPriceAmount(''); setPriceConsent(false); }
   };
 
+
+  const handleMerchantSubmit = async () => {
+    if (!userId || !merchantBusinessId || !wilayaCode || !merchantConsent) {
+      setMerchantStatus('Vérifie le commerce, la wilaya et ton consentement.');
+      return;
+    }
+    const priceMinor = parseToMinorUnits(priceAmount);
+    if (!Number.isSafeInteger(priceMinor) || priceMinor <= 0) {
+      setMerchantStatus('Saisis un prix valide en DZD.');
+      return;
+    }
+    setBusy(true);
+    const result = await submitMerchantPrice({
+      businessId: merchantBusinessId, productSlug: priceSlug,
+      unitPriceMinor: priceMinor, observedAt: new Date(priceDate + 'T12:00:00').toISOString(),
+      wilayaCode, consent: true,
+    });
+    setBusy(false);
+    setMerchantStatus(result.success
+      ? 'Prix envoyé en attente de vérification. Aucun prix ne sera publié sans validation.'
+      : result.error || 'Envoi impossible.');
+    if (result.success) setMerchantConsent(false);
+  };
+
   return (
     <div className="space-y-4 pb-20">
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
@@ -193,6 +232,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
           <button onClick={() => { setPriceOpen((value) => !value); setPriceStatus(''); }} className="min-h-[42px] rounded-xl border border-slate-700 text-slate-200 text-xs font-semibold">
             Contribuer un prix
           </button>
+          {ownedBusinesses.length > 0 && <button onClick={() => { setMerchantOpen((value) => !value); setMerchantStatus(''); }} className="col-span-2 min-h-[42px] rounded-xl border border-emerald-800 text-emerald-200 text-xs font-semibold">
+            Prix de mon commerce vérifié
+          </button>}
         </div>
         <p className="text-[10px] text-slate-500">Les publications sont publiques sous un pseudonyme. Ne partage pas d’adresse personnelle, de numéro de téléphone ou d’informations privées.</p>
       </section>
@@ -256,6 +298,26 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
           </label>
           <button onClick={handlePriceSubmit} disabled={busy || !priceConsent} className="w-full min-h-[42px] rounded-lg bg-slate-800 text-slate-100 text-xs disabled:opacity-50">Envoyer la contribution</button>
           {priceStatus && <p className="text-[11px] text-amber-300">{priceStatus}</p>}
+        </section>
+      )}
+
+      {merchantOpen && ownedBusinesses.length > 0 && (
+        <section className="rounded-2xl border border-emerald-800/60 bg-slate-900 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-100">Prix de mon commerce vérifié</h2>
+          <select value={merchantBusinessId} onChange={(event) => setMerchantBusinessId(event.target.value)} className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100">
+            {ownedBusinesses.map((business) => <option key={business.id} value={business.id}>{business.name}</option>)}
+          </select>
+          <select value={priceSlug} onChange={(event) => setPriceSlug(event.target.value)} className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100">
+            {PRODUCT_CATALOG.map((product) => <option key={product.slug} value={product.slug}>{productName(product, 'fr')} · {product.baseUnit}</option>)}
+          </select>
+          <input inputMode="decimal" value={priceAmount} onChange={(event) => setPriceAmount(event.target.value)} placeholder="Prix DZD par unité de base" className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
+          <input type="date" value={priceDate} min={new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)} max={today()} onChange={(event) => setPriceDate(event.target.value)} className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
+          <label className="flex items-start gap-2 text-[11px] text-slate-400">
+            <input type="checkbox" checked={merchantConsent} onChange={(event) => setMerchantConsent(event.target.checked)} />
+            Je confirme être autorisé à publier ce prix pour ce commerce et j’accepte son partage public sous forme agrégée après vérification.
+          </label>
+          <button onClick={handleMerchantSubmit} disabled={busy || !merchantConsent} className="w-full min-h-[42px] rounded-lg bg-emerald-800 text-white text-xs disabled:opacity-50">Envoyer le prix du commerce</button>
+          {merchantStatus && <p className="text-[11px] text-amber-300">{merchantStatus}</p>}
         </section>
       )}
 
