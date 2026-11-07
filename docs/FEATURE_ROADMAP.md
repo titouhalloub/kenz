@@ -43,6 +43,8 @@ Full plan: `docs/PLAN_PRICE_SIMULATOR_COMMUNITY.md`. Source audit: `docs/PRICE_S
 10. **Monthly budget simulator** — projects a whole month against the user's Kenz budget using local prices; the user's budget never leaves their account.
 11. **Community channel** — recipes, shopping lists and tips, priced at the viewer's local prices and compared with the viewer's own budget; reporting, blocking and moderation are part of the MVP.
 
+Phase 4 implementation status (feature branch only): direct public-source scrapers, price normalization/review, monthly simulator with offline cache and private scenarios, text-first community feed, crowd/verified-merchant contributions, report/block tools and moderator queues are implemented in code. Migrations 036–043 are not deployed, official commune data is not seeded, and no live prices are public until a moderator accepts observations. No APK build is being run during this work.
+
 Phase 0 status: AI-route SSRF guard wired in and tested; source audit written; product catalog seeded (`src/domain/productCatalog.ts`).
 
 ## Definition of done
