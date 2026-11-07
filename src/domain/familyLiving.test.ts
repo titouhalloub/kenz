@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
-  ingredientKey, scaleIngredient, validateFamilyLivingPlan, parseCommunityRecipe,
+  ingredientKey, scaleIngredient, validateFamilyLivingPlan, parseCommunityRecipe, suggestFamilyWeek,
 } from './familyLiving';
 
 describe('family living planner', () => {
@@ -85,4 +85,12 @@ describe('family living planner', () => {
     expect(validateFamilyLivingPlan({ ...plan, pantry: [{ id: 'a', name: 'rice', unit: 'g', quantityMilli: -1 }] }, 'u1', '2026-11')).toBeNull();
     expect(BUILTIN_FAMILY_RECIPES.length).toBeGreaterThan(0);
   });
+  it('creates all three meals for a week for the household and preserves existing meals', () => {
+    const existing = [{ id: 'kept', date: '2026-11-01', slot: 'lunch' as const, recipeId: 'dz-couscous-vegetables', servings: 5 }];
+    const result = suggestFamilyWeek(existing, '2026-11-01', '2026-11', 5);
+    expect(result.filter((meal) => meal.date >= '2026-11-01' && meal.date <= '2026-11-07')).toHaveLength(21);
+    expect(result.find((meal) => meal.id === 'kept')).toBeDefined();
+    expect(result.every((meal) => meal.servings === 5)).toBe(true);
+  });
+
 });
