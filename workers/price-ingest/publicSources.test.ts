@@ -37,6 +37,13 @@ describe('public price source adapters', () => {
   });
 
 
+  it('extracts the MADRP PDF when its viewer is embedded in an iframe src', () => {
+    const html = '<iframe src="/wp-content/plugins/embedpress/assets/pdf/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf"></iframe>';
+    const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
+    expect(links).toHaveLength(1);
+    expect(links[0].pathname).toContain('prix_04_Nov_2026_MADRP.pdf');
+  });
+
   it('extracts an embedded PDF when the viewer URL has trailing parameters', () => {
     const html = '<a href="/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf&scrolling=0&selection_tool=0">Bulletin</a>';
     const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
