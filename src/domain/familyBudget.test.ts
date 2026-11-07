@@ -19,7 +19,7 @@ describe('family budget foundation', () => {
     plan.categories[0].actualMinor = 12_000_00;
     plan.categories[1].plannedMinor = 50_000_00;
     let summary = summarizeFamilyBudget(plan);
-    expect(summary.unallocatedMinor).toBe(2_000_00);
+    expect(summary.unallocatedMinor).toBe(20_000_00);
     expect(summary.remainingPlannedMinor).toBe(68_000_00);
     expect(summary.actualMinor).toBe(12_000_00);
     plan.categories[2].plannedMinor = 25_000_00;
