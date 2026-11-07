@@ -227,7 +227,7 @@ on conflict (slug) do update set
 -- Seed exact multilingual names as deterministic aliases; fuzzy matching stays review-only.
 insert into public.product_aliases (product_id, alias, locale, normalized_alias)
 select p.id, aliases.alias, aliases.locale,
-       lower(regexp_replace(btrim(aliases.alias), '\\s+', ' ', 'g'))
+       lower(regexp_replace(btrim(aliases.alias), '\s+', ' ', 'g'))
 from public.products p
 cross join lateral (values
   ('fr'::text, p.name_fr), ('ar'::text, p.name_ar), ('en'::text, p.name_en)
