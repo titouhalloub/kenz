@@ -2,6 +2,9 @@ import React, { useState, useMemo } from 'react';
 import {
   BookOpen,
   PlusCircle,
+  HandCoins,
+  Wallet,
+  CircleDollarSign,
   Search,
   Filter,
   CheckCircle,
@@ -199,7 +202,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="kenz-kredy-page space-y-6 pb-20">
       {/* Top Header & Tab Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -222,7 +225,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
           {onOpenAIModal && (
             <button
               onClick={onOpenAIModal}
-              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-600 text-amber-300 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer min-h-[44px]"
+              className="kenz-kredy-secondary-action"
             >
               <HeartPulse className="w-4 h-4 text-amber-400" />
               <span>Optimiseur Kredy IA</span>
@@ -231,7 +234,7 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-950/40 cursor-pointer min-h-[44px]"
+            className="kenz-kredy-primary-action"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Noter un Kredy</span>
@@ -240,16 +243,16 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
       </div>
 
       {/* Segmented Tab Controls */}
-      <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-2xl border border-slate-800">
+      <div className="kenz-kredy-tabs">
         <button
           onClick={() => setActiveTab('kredy')}
           className={`flex-1 py-2.5 px-3 text-xs font-semibold rounded-xl transition min-h-[44px] cursor-pointer flex items-center justify-center gap-2 ${
             activeTab === 'kredy'
-              ? 'bg-slate-800 text-amber-300 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'kenz-kredy-tab-active'
+              : 'kenz-kredy-tab-idle'
           }`}
         >
-          <BookOpen className="w-4 h-4" />
+          <Wallet className="w-5 h-5" />
           <span>Carnet des Dettes ({summary.activeCount})</span>
         </button>
 
@@ -257,11 +260,11 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
           onClick={() => setActiveTab('health')}
           className={`flex-1 py-2.5 px-3 text-xs font-semibold rounded-xl transition min-h-[44px] cursor-pointer flex items-center justify-center gap-2 ${
             activeTab === 'health'
-              ? 'bg-slate-800 text-emerald-300 shadow-sm'
+              ? 'kenz-kredy-tab-active'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Activity className="w-4 h-4" />
+          <HeartPulse className="w-5 h-5" />
           <span>Score de Santé ({healthScore.score}/100)</span>
         </button>
 
@@ -269,11 +272,11 @@ export const DebtLedgerView: React.FC<DebtLedgerViewProps> = ({
           onClick={() => setActiveTab('analytics')}
           className={`flex-1 py-2.5 px-3 text-xs font-semibold rounded-xl transition min-h-[44px] cursor-pointer flex items-center justify-center gap-2 ${
             activeTab === 'analytics'
-              ? 'bg-slate-800 text-blue-300 shadow-sm'
+              ? 'kenz-kredy-tab-active'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <PieChart className="w-4 h-4" />
+          <CircleDollarSign className="w-5 h-5" />
           <span>Analyses & Flux</span>
         </button>
       </div>
