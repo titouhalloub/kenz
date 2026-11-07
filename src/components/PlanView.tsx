@@ -273,6 +273,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
       {/* Segmented Sub-navigation */}
       <div className="kenz-plan-tabs grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
         <button
+          onClick={() => setActiveTab('family')}
+          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
+            activeTab === 'family' ? 'bg-slate-800 text-violet-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Famille
+        </button>
+        <button
           onClick={() => setActiveTab('budgets')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
             activeTab === 'budgets'
@@ -309,14 +317,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
           }`}
         >
           Défis d'épargne
-        </button>
-        <button
-          onClick={() => setActiveTab('family')}
-          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
-            activeTab === 'family' ? 'bg-slate-800 text-violet-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          Famille
         </button>
         <button
           onClick={() => setActiveTab('simulator')}
