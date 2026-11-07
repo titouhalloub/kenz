@@ -64,6 +64,17 @@ describe('price intelligence and community migration safety', () => {
     expect(moderation).toMatch(/create or replace function public\.moderate_community_post/i);
   });
 
+  it('keeps block visibility caller-scoped and only publishes pseudonyms with a public post', () => {
+    const moderation = migration('042_community_moderation.sql');
+    const helper = moderation.slice(
+      moderation.indexOf('create or replace function public.community_can_view_author'),
+      moderation.indexOf('create or replace function public.community_text_is_safe'),
+    );
+    expect(helper).not.toMatch(/security definer/i);
+    expect(moderation).toMatch(/for select to authenticated using \\(blocked_id = \\(select auth\\.uid\\(\\)\\)\\)/i);
+    expect(moderation).toMatch(/wilaya_code,is_public\\)\\s*values \\([^;]+,true\\)/i);
+  });
+
   it('stores no budgets, income, balances or transaction snapshots in simulator scenarios', () => {
     const sql = migration('038_simulator_scenarios.sql').toLowerCase();
     const tableDefinition = sql.slice(sql.indexOf('create table public.simulator_scenarios'), sql.indexOf(');'));
