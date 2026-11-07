@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyFamilyBudgetSources, createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
+  applyFamilyBudgetSources, countRecurringOccurrencesInMonth, createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
   validateFamilyBudgetPlan, FAMILY_BUDGET_DEFAULTS, suggestFamilyBudgetAllocations,
 } from './familyBudget';
 
@@ -87,4 +87,40 @@ describe('family budget foundation', () => {
     expect(validateFamilyBudgetPlan({ ...plan, categories: [plan.categories[0], plan.categories[0], ...plan.categories.slice(2)] }, 'user-a')).toBeNull();
     expect(validateFamilyBudgetPlan({ ...plan, categories: plan.categories.slice(1) }, 'user-a')).toBeNull();
   });
-});
+});\n
+  it('counts weekly and biweekly recurring items within a selected month', () => {
+    expect(countRecurringOccurrencesInMonth('weekly', '2026-11-02', '2026-11')).toBe(5);
+    expect(countRecurringOccurrencesInMonth('biweekly', '2026-11-02', '2026-11')).toBe(2);
+    expect(countRecurringOccurrencesInMonth('weekly', '2026-12-01', '2026-11')).toBe(0);
+  });
+
+  it('counts monthly, quarterly and yearly commitments on their schedule', () => {
+    expect(countRecurringOccurrencesInMonth('monthly', '2026-10-15', '2026-11', 15)).toBe(1);
+    expect(countRecurringOccurrencesInMonth('quarterly', '2026-08-15', '2026-11', 15)).toBe(1);
+    expect(countRecurringOccurrencesInMonth('quarterly', '2026-08-15', '2026-10', 15)).toBe(0);
+    expect(countRecurringOccurrencesInMonth('yearly', '2025-11-30', '2026-11', 31)).toBe(1);
+  });
+
+  it('keeps explicit zero and positive allocations as user overrides', () => {
+    const base = createFamilyBudgetPlan('user-a', '2026-11');
+    const zero = updateFamilyCategory(base, 'housing', 'plannedMinor', 0);
+    const positive = updateFamilyCategory(base, 'food', 'plannedMinor', 10_000);
+    expect(zero.categories.find((row) => row.id === 'housing')?.plannedOverride).toBe(true);
+    expect(positive.categories.find((row) => row.id === 'food')?.plannedOverride).toBe(true);
+  });
+
+  it('marks generated allocations as explicit once the user applies the draft', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100_000;
+    const suggested = suggestFamilyBudgetAllocations(plan);
+    expect(suggested.categories.every((row) => row.plannedOverride === true)).toBe(true);
+  });
+
+  it('persists an editable income override through validation', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 7_500_000;
+    plan.monthlyIncomeOverrideMinor = 6_400_000;
+    const restored = validateFamilyBudgetPlan(JSON.parse(JSON.stringify(plan)), 'user-a');
+    expect(restored?.monthlyIncomeOverrideMinor).toBe(6_400_000);
+  });
+
