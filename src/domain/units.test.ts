@@ -26,6 +26,7 @@ describe('parsePackQuantity', () => {
     expect(parsePackQuantity('1 L', 'g')).toBeNull();
     expect(parsePackQuantity('500 g', 'ml')).toBeNull();
     expect(parsePackQuantity('large pack', 'unit')).toBeNull();
+    expect(parsePackQuantity('500', 'g')).toBeNull();
   });
 });
 
