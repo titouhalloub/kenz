@@ -40,7 +40,7 @@ const readPlan = (userId: string, month: string): FamilyBudgetPlan => {
     const raw = localStorage.getItem(familyBudgetStorageKey(userId, month));
     if (!raw) return fallback;
     const stored = validateFamilyBudgetPlan(JSON.parse(raw), userId);
-    return stored?.month === month ? normalizeLegacyAutoAllocation(stored) : fallback;
+    return stored?.month === month ? stored : fallback;
   } catch { return fallback; }
 };
 
@@ -168,7 +168,13 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   }, [selectedMonth, effectivePlan.categories]);
 
   useEffect(() => {
-    if (plan.userId !== profile.id || plan.month !== selectedMonth || plan.allocationMode !== 'automatic') return;
+    if (plan.userId !== profile.id || plan.month !== selectedMonth) return;
+    if (plan.allocationMode === undefined) {
+      const migrated = normalizeLegacyAutoAllocation(plan, monthlyIncomeMinor);
+      if (migrated.allocationMode !== undefined) setPlan(migrated);
+      return;
+    }
+    if (plan.allocationMode !== 'automatic') return;
     const next = suggestFamilyBudgetAllocations(effectivePlan);
     const changed = next.categories.some((row, index) =>
       row.plannedMinor !== plan.categories[index]?.plannedMinor ||
