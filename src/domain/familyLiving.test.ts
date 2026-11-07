@@ -54,7 +54,7 @@ describe('family living planner', () => {
   it('validates clothing and cleaning line items and rejects unsafe totals', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
     plan.needs = [
-      { id: 'n1', category: 'clothing', name: 'Winter coat', member: 'Member A', plannedMinor: 120000, actualMinor: 0, dueDate: '2026-11-10' },
+      { id: 'n1', category: 'clothing', name: 'Winter coat', member: 'Member A', season: 'winter', size: 'M', plannedMinor: 120000, actualMinor: 0, dueDate: '2026-11-10' },
       { id: 'n2', category: 'cleaning', name: 'Laundry detergent', plannedMinor: 25000, actualMinor: 5000 },
     ];
     expect(validateFamilyLivingPlan(plan, 'u1', '2026-11')?.needs).toHaveLength(2);
