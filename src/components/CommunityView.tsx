@@ -4,7 +4,7 @@ import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 import { loadMarketPrices } from '../services/priceStore';
 import {
-  addCommunityComment, blockCommunityUser, createCommunityPost, ensureCommunityProfile,
+  addCommunityComment, blockCommunityUser, createCommunityPost, deleteMyPriceContributions, ensureCommunityProfile,
   loadCommunityFeed, listVerifiedOwnedBusinesses, reportCommunityPost, submitCommunityPrice, submitMerchantPrice, toggleCommunityReaction,
   toggleCommunitySave, type CommunityKind, type CommunityPost, type VerifiedOwnedBusiness,
 } from '../services/communityStore';
@@ -192,6 +192,18 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   };
 
 
+
+  const handleDeletePriceContributions = async () => {
+    if (!userId || !window.confirm('Retirer toutes tes contributions de prix publiques ? Cette action est définitive.')) return;
+    setBusy(true);
+    const result = await deleteMyPriceContributions();
+    setBusy(false);
+    setPriceStatus(result.success
+      ? result.data + ' contribution(s) retirée(s). Les statistiques publiques sont recalculées.'
+      : result.error || 'Suppression impossible.');
+    setMerchantStatus(result.success ? 'Contributions retirées.' : '');
+  };
+
   const handleMerchantSubmit = async () => {
     if (!userId || !merchantBusinessId || !wilayaCode || !merchantConsent) {
       setMerchantStatus('Vérifie le commerce, la wilaya et ton consentement.');
@@ -298,6 +310,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
           </label>
           <button onClick={handlePriceSubmit} disabled={busy || !priceConsent} className="w-full min-h-[42px] rounded-lg bg-slate-800 text-slate-100 text-xs disabled:opacity-50">Envoyer la contribution</button>
           {priceStatus && <p className="text-[11px] text-amber-300">{priceStatus}</p>}
+          {userId && <button onClick={() => void handleDeletePriceContributions()} disabled={busy} className="w-full min-h-[38px] rounded-lg border border-rose-900/60 text-[11px] text-rose-300 disabled:opacity-50">Retirer toutes mes contributions de prix</button>}
         </section>
       )}
 
