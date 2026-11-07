@@ -47,6 +47,9 @@ const sourceAliases: Record<string, string> = {
   'lait de vache': 'lait-sachet',
   'oeufs': 'oeufs',
   'oeuf': 'oeufs',
+  'oeufs unite': 'oeufs',
+  'oeuf unite': 'oeufs',
+  'lait de vache litre': 'lait-sachet',
   'pomme de terre': 'pomme-de-terre',
   'tomate fraiche': 'tomate',
   'tomate': 'tomate',
@@ -226,16 +229,27 @@ export async function robotsAllows(url: URL): Promise<boolean> {
   return longest.allow;
 }
 
-async function fetchPublic(url: URL): Promise<Response> {
+async function fetchPublic(url: URL, redirects = 0): Promise<Response> {
   if (url.protocol !== 'https:') throw new Error('Only HTTPS source URLs are supported');
   if (!await robotsAllows(url)) throw new Error(`robots.txt disallows or could not be checked: ${url.origin}`);
   const response = await fetch(url, {
+    redirect: 'manual',
     headers: {
       'User-Agent': 'KenzPriceBot/1.0 (+https://github.com/titouhalloub/kenz)',
       Accept: 'text/html,application/pdf,application/xhtml+xml',
     },
     signal: AbortSignal.timeout(25_000),
   });
+  if (response.status >= 300 && response.status < 400) {
+    if (redirects >= 2) throw new Error('Source exceeded the allowed redirect limit');
+    const location = response.headers.get('location');
+    if (!location) throw new Error('Source returned a redirect without a location');
+    const next = new URL(location, url);
+    if (next.protocol !== 'https:' || next.hostname !== url.hostname) {
+      throw new Error('Cross-host or non-HTTPS redirects are not followed');
+    }
+    return fetchPublic(next, redirects + 1);
+  }
   if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
   return response;
 }
