@@ -5,7 +5,8 @@ function parsePriceMinor(priceText: string, currency: string): number | null {
   if (currency.toUpperCase() !== 'DZD') return null;
   const normalized = normalizePriceText(priceText)
     .replace(/\b(?:dzd|da)\b|دج|د\.ج/g, ' ')
-    .replace(/\s/g, '')
+    .trim()
+    .replace(/(?<=\d)\s+(?=\d{3}(?:\D|$))/g, '')
     .replace(/,/g, '.');
   const match = normalized.match(/(?:^|[^\d])(\d+(?:\.\d{1,2})?)(?:$|[^\d])/);
   if (!match) return null;
