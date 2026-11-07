@@ -44,6 +44,17 @@ describe('public price source adapters', () => {
     expect(links[0].hostname).toBe('madr.gov.dz');
   });
 
+
+  it('fails closed when robots.txt redirects to another location', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('', {
+      status: 302,
+      headers: { location: 'https://other.example/robots.txt' },
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await robotsAllows(new URL('https://madr.gov.dz/prices'))).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('parses a Directorate HTML table and normalizes pack quantities', () => {
     const html = `
       <html><body><p>Prix journaliers 07/11/2026</p><table>
