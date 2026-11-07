@@ -368,8 +368,8 @@ export function parseDcwPlainHtml(html: string, source: PublicSourceConfig): Scr
   if (!observedAt) throw new Error('Could not find a publication date on the Directorate price page');
   const output: ScrapedPrice[] = [];
 
-  for (const rawLine of text.split(/\\r?\\n/)) {
-    const tokens = rawLine.trim().replace(/\\s+/g, ' ').split(' ');
+  for (const rawLine of text.split(/\r?\n/)) {
+    const tokens = rawLine.trim().replace(/\s+/g, ' ').split(' ');
     if (tokens.length < 3) continue;
     const wholesale = parseMoney(tokens[tokens.length - 2]);
     const retail = parseMoney(tokens[tokens.length - 1]);
