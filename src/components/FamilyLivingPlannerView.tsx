@@ -1,0 +1,222 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, ChefHat, ClipboardList, Package, Plus, Trash2, Download, Upload, ShoppingBasket, CheckCircle2 } from 'lucide-react';
+import type { UserProfile } from '../domain/types';
+import {
+  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
+  exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
+  validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
+  type MealSlot,
+} from '../domain/familyLiving';
+
+interface Props { profile: UserProfile; month: string; householdSize: number; }
+type Section = 'meals' | 'shopping' | 'pantry' | 'recipes';
+
+const tr = (profile: UserProfile, fr: string, ar: string, en: string) =>
+  profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
+const monthFirstDay = (month: string) => `${month}-01`;
+const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+const parseQuantityMilli = (value: string) => {
+  const parsed = Number(value.replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1_000_000) return 0;
+  const milli = Math.round(parsed * 1000);
+  return Number.isSafeInteger(milli) ? milli : 0;
+};
+const formatQuantity = (milli: number, unit: IngredientUnit, locale: string) => {
+  const value = milli / 1000;
+  if (unit === 'g' && value >= 1000) return `${new Intl.NumberFormat(locale).format(value / 1000)} kg`;
+  if (unit === 'ml' && value >= 1000) return `${new Intl.NumberFormat(locale).format(value / 1000)} L`;
+  const label = unit === 'g' ? 'g' : unit === 'ml' ? 'ml' : tr({ locale } as UserProfile, 'pièce(s)', 'حبة', 'piece(s)');
+  return `${new Intl.NumberFormat(locale).format(value)} ${label}`;
+};
+
+const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
+  const fallback = createFamilyLivingPlan(userId, month);
+  try {
+    const raw = localStorage.getItem(familyLivingStorageKey(userId, month));
+    if (!raw) return fallback;
+    return validateFamilyLivingPlan(JSON.parse(raw), userId, month) || fallback;
+  } catch { return fallback; }
+};
+
+export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, householdSize }) => {
+  const [plan, setPlan] = useState(() => readLivingPlan(profile.id, month));
+  const [section, setSection] = useState<Section>('meals');
+  const [mealDate, setMealDate] = useState(monthFirstDay(month));
+  const [mealSlot, setMealSlot] = useState<MealSlot>('lunch');
+  const [recipeId, setRecipeId] = useState(BUILTIN_FAMILY_RECIPES[0].id);
+  const [servings, setServings] = useState(String(Math.max(1, householdSize)));
+  const [status, setStatus] = useState('');
+  const [pantryName, setPantryName] = useState('');
+  const [pantryUnit, setPantryUnit] = useState<IngredientUnit>('g');
+  const [pantryQuantity, setPantryQuantity] = useState('');
+  const [shareText, setShareText] = useState('');
+  const [importText, setImportText] = useState('');
+
+  useEffect(() => {
+    setPlan(readLivingPlan(profile.id, month));
+    setMealDate(monthFirstDay(month));
+    setServings(String(Math.max(1, householdSize)));
+    setStatus('');
+  }, [profile.id, month, householdSize]);
+
+  useEffect(() => {
+    if (plan.userId !== profile.id || plan.month !== month) return;
+    try {
+      localStorage.setItem(familyLivingStorageKey(profile.id, month), JSON.stringify({ ...plan, updatedAt: new Date().toISOString() }));
+    } catch { setStatus(tr(profile, 'Stockage local indisponible.', 'التخزين المحلي غير متاح.', 'Local storage is unavailable.')); }
+  }, [plan, profile.id, month, profile.locale]);
+
+  const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
+  const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
+  const requirements = useMemo(() => buildShoppingRequirements(plan), [plan]);
+  const selectedRecipe = recipeMap.get(recipeId) || recipes[0];
+  const plannedMeals = [...plan.meals].sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot));
+  const updatePlan = (updater: (current: FamilyLivingPlan) => FamilyLivingPlan) => {
+    setPlan((current) => ({ ...updater(current), updatedAt: new Date().toISOString() }));
+    setStatus('');
+  };
+
+  const addMeal = () => {
+    const count = Number(servings);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(mealDate) || mealDate.slice(0, 7) !== month ||
+        !Number.isInteger(count) || count < 1 || count > 40 || !selectedRecipe) {
+      setStatus(tr(profile, 'Vérifiez la date et le nombre de portions.', 'تحقق من التاريخ وعدد الحصص.', 'Check the date and serving count.'));
+      return;
+    }
+    if (plan.meals.some((meal) => meal.date === mealDate && meal.slot === mealSlot)) {
+      setStatus(tr(profile, 'Ce repas est déjà planifié. Supprimez-le avant de le remplacer.', 'هذه الوجبة مبرمجة مسبقاً. احذفها قبل استبدالها.', 'A meal is already planned for this slot. Remove it before replacing it.'));
+      return;
+    }
+    updatePlan((current) => ({ ...current, meals: [...current.meals, {
+      id: makeId('meal'), date: mealDate, slot: mealSlot, recipeId: selectedRecipe.id, servings: count,
+    }] }));
+  };
+
+  const addPantryItem = () => {
+    const name = pantryName.trim();
+    const quantityMilli = parseQuantityMilli(pantryQuantity);
+    if (!name || name.length > 80 || !quantityMilli) {
+      setStatus(tr(profile, 'Saisissez un nom et une quantité valides.', 'أدخل اسماً وكمية صحيحة.', 'Enter a valid item name and quantity.'));
+      return;
+    }
+    updatePlan((current) => {
+      const key = ingredientKey(name, pantryUnit);
+      const existing = current.pantry.find((item) => ingredientKey(item.name, item.unit) === key);
+      if (existing) return { ...current, pantry: current.pantry.map((item) => item.id === existing.id
+        ? { ...item, quantityMilli: item.quantityMilli + quantityMilli } : item) };
+      return { ...current, pantry: [...current.pantry, { id: makeId('stock'), name, unit: pantryUnit, quantityMilli }] };
+    });
+    setPantryName(''); setPantryQuantity('');
+  };
+
+  const importRecipe = () => {
+    try {
+      const parsed = JSON.parse(importText);
+      const recipe = parseCommunityRecipe(parsed, makeId('community-recipe'));
+      if (!recipe) throw new Error('invalid');
+      updatePlan((current) => ({ ...current, recipes: [...current.recipes, recipe] }));
+      setRecipeId(recipe.id); setImportText('');
+      setStatus(tr(profile, 'Recette importée dans votre collection privée.', 'تم استيراد الوصفة إلى مجموعتك الخاصة.', 'Recipe imported into your private collection.'));
+    } catch {
+      setStatus(tr(profile, 'Format invalide. Utilisez le JSON partagé par un autre membre.', 'الصيغة غير صحيحة. استخدم JSON المشارك من عضو آخر.', 'Invalid format. Paste the JSON recipe shared by another member.'));
+    }
+  };
+
+  const copyText = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(tr(profile, 'Copié dans le presse-papiers.', 'تم النسخ.', 'Copied to clipboard.'));
+    } catch {
+      setStatus(tr(profile, 'Sélectionnez le texte pour le copier manuellement.', 'حدد النص لنسخه يدوياً.', 'Select the text and copy it manually.'));
+    }
+  };
+
+  const slotLabel = (slot: MealSlot) => slot === 'breakfast'
+    ? tr(profile, 'Petit-déjeuner', 'الفطور', 'Breakfast')
+    : slot === 'lunch' ? tr(profile, 'Déjeuner', 'الغداء', 'Lunch') : tr(profile, 'Dîner', 'العشاء', 'Dinner');
+  const recipeTitle = (recipe: FamilyRecipe) => recipe.title;
+  const recipeDescription = (recipe: FamilyRecipe) => recipe.description;
+
+  return (
+    <section className="kenz-family-living space-y-4" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
+      <header className="kenz-family-hero">
+        <div className="kenz-family-hero-icon"><ChefHat /></div>
+        <div className="min-w-0 flex-1">
+          <span className="kenz-eyebrow">KENZ · FAMILY LIFE</span>
+          <h2>{tr(profile, 'Repas, courses & réserves', 'الوجبات والمشتريات والمخزون', 'Meals, groceries & pantry')}</h2>
+          <p>{tr(profile, 'Planifiez les repas et préparez une liste de courses sans doublons.', 'خطط الوجبات وجهّز قائمة مشتريات دون تكرار.', 'Plan meals and build a shopping list without duplicates.')}</p>
+        </div>
+      </header>
+
+      <div className="kenz-family-subtabs">
+        {([
+          ['meals', CalendarDays, tr(profile, 'Repas', 'الوجبات', 'Meals')],
+          ['shopping', ShoppingBasket, tr(profile, 'Courses', 'المشتريات', 'Shopping')],
+          ['pantry', Package, tr(profile, 'Réserves', 'المخزون', 'Pantry')],
+          ['recipes', ChefHat, tr(profile, 'Recettes', 'الوصفات', 'Recipes')],
+        ] as const).map(([id, Icon, label]) => (
+          <button key={id} onClick={() => setSection(id)} className={section === id ? 'active' : ''}><Icon />{label}</button>
+        ))}
+      </div>
+
+      {status && <p role="status" className="kenz-family-inline-status">{status}</p>}
+
+      {section === 'meals' && <div className="kenz-family-panel space-y-3">
+        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'CALENDRIER', 'التقويم', 'CALENDAR')}</span><h3>{tr(profile, 'Programmer un repas', 'برمجة وجبة', 'Plan a meal')}</h3></div><span className="text-xs text-slate-500">{month}</span></div>
+        <div className="grid grid-cols-2 gap-2">
+          <label>{tr(profile, 'Date', 'التاريخ', 'Date')}<input type="date" min={monthFirstDay(month)} max={`${month}-31`} value={mealDate} onChange={(e) => setMealDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label>{tr(profile, 'Repas', 'الوجبة', 'Meal')}<select value={mealSlot} onChange={(e) => setMealSlot(e.target.value as MealSlot)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm"><option value="breakfast">{slotLabel('breakfast')}</option><option value="lunch">{slotLabel('lunch')}</option><option value="dinner">{slotLabel('dinner')}</option></select></label>
+          <label className="col-span-2">{tr(profile, 'Recette', 'الوصفة', 'Recipe')}<select value={recipeId} onChange={(e) => setRecipeId(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm">{recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipeTitle(recipe)}</option>)}</select></label>
+          <label className="col-span-2">{tr(profile, 'Nombre de portions', 'عدد الحصص', 'Servings')}<input type="number" min="1" max="40" value={servings} onChange={(e) => setServings(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+        </div>
+        {selectedRecipe && <div className="rounded-xl bg-violet-50 p-3">
+          <strong className="text-sm text-violet-950">{recipeTitle(selectedRecipe)}</strong>
+          <p className="mt-1 text-xs text-violet-800">{recipeDescription(selectedRecipe)} · {selectedRecipe.prepMinutes} {tr(profile, 'min', 'د', 'min')}</p>
+          <p className="mt-2 text-xs font-semibold text-violet-900">{tr(profile, 'Ingrédients pour', 'المكونات لـ', 'Ingredients for')} {servings || householdSize} {tr(profile, 'personnes', 'أشخاص', 'people')}</p>
+          <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-violet-900">{selectedRecipe.ingredients.map((ingredient) => <li key={ingredient.name + ingredient.unit}>• {ingredient.name}: {formatQuantity(Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings), ingredient.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</li>)}</ul>
+        </div>}
+        <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>
+        <div className="pt-2">
+          <h3 className="mb-2 text-sm font-bold">{tr(profile, 'Repas prévus ce mois', 'وجبات هذا الشهر', 'Meals planned this month')} ({plannedMeals.length})</h3>
+          {plannedMeals.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Aucun repas planifié. Commencez par ajouter une recette.', 'لا توجد وجبات مبرمجة. ابدأ بإضافة وصفة.', 'No meals planned yet. Add a recipe to get started.')}</p> : <div className="space-y-2">{plannedMeals.map((meal) => {
+            const recipe = recipeMap.get(meal.recipeId);
+            return <article key={meal.id} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
+              <div className="min-w-0 flex-1"><strong className="block text-xs">{recipe ? recipeTitle(recipe) : meal.recipeId}</strong><span className="text-[10px] text-slate-500">{meal.date} · {slotLabel(meal.slot)} · {meal.servings} {tr(profile, 'portions', 'حصص', 'servings')}</span></div>
+              <button aria-label={tr(profile, 'Supprimer le repas', 'حذف الوجبة', 'Remove meal')} onClick={() => updatePlan((current) => ({ ...current, meals: current.meals.filter((item) => item.id !== meal.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button>
+            </article>;
+          })}</div>}
+        </div>
+      </div>}
+
+      {section === 'shopping' && <div className="kenz-family-panel space-y-3">
+        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'LISTE AUTOMATIQUE', 'قائمة تلقائية', 'AUTO LIST')}</span><h3>{tr(profile, 'À acheter', 'قائمة المشتريات', 'Shopping list')}</h3></div><span className="text-xs text-slate-500">{requirements.filter((row) => row.toBuyMilli > 0).length} {tr(profile, 'articles', 'مواد', 'items')}</span></div>
+        <p className="text-xs text-slate-500">{tr(profile, 'Les ingrédients des repas sont regroupés. Le stock enregistré est déduit automatiquement. Les quantités restent modifiables dans les réserves.', 'تُجمع مكونات الوجبات ويُخصم المخزون المسجل تلقائياً. يمكن تعديل الكميات من قسم المخزون.', 'Meal ingredients are combined and saved pantry stock is deducted automatically. Adjust stock in the pantry section.')}</p>
+        {requirements.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Planifiez d’abord quelques repas pour générer votre liste.', 'برمج بعض الوجبات أولاً لإنشاء القائمة.', 'Plan a few meals first to generate your list.')}</p> : <div className="space-y-2">{requirements.map((item) => <article key={item.key} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
+          <div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, 'Nécessaire', 'المطلوب', 'Needed')}: {formatQuantity(item.requiredMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {tr(profile, 'Stock', 'المخزون', 'Stock')}: {formatQuantity(item.inPantryMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div>
+          <strong className="text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>
+        </article>)}</div>}
+        <p className="text-[10px] text-slate-500">{tr(profile, 'Les prix ne sont pas inventés : les estimations seront ajoutées avec leur source et leur date.', 'لا يتم اختلاق الأسعار؛ ستضاف التقديرات مع مصدرها وتاريخها.', 'Prices are not fabricated; estimates will be added with their source and date.')}</p>
+      </div>}
+
+      {section === 'pantry' && <div className="kenz-family-panel space-y-3">
+        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'INVENTAIRE', 'الجرد', 'INVENTORY')}</span><h3>{tr(profile, 'Réserves à la maison', 'المخزون المنزلي', 'Home pantry')}</h3></div></div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="col-span-2">{tr(profile, 'Produit', 'المنتج', 'Item')}<input value={pantryName} onChange={(e) => setPantryName(e.target.value)} placeholder={tr(profile, 'Ex. riz, huile, œufs…', 'مثلاً أرز، زيت، بيض…', 'e.g. rice, oil, eggs…')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label>{tr(profile, 'Quantité', 'الكمية', 'Quantity')}<input inputMode="decimal" value={pantryQuantity} onChange={(e) => setPantryQuantity(e.target.value)} placeholder="0" className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label>{tr(profile, 'Unité', 'الوحدة', 'Unit')}<select value={pantryUnit} onChange={(e) => setPantryUnit(e.target.value as IngredientUnit)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm"><option value="g">g</option><option value="ml">ml</option><option value="piece">{tr(profile, 'pièce', 'حبة', 'piece')}</option></select></label>
+        </div>
+        <button onClick={addPantryItem} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au stock', 'إضافة للمخزون', 'Add to pantry')}</button>
+        {plan.pantry.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Ajoutez les produits déjà disponibles à la maison.', 'أضف المنتجات المتوفرة في المنزل.', 'Add the items you already have at home.')}</p> : <div className="space-y-2">{plan.pantry.map((item) => <article key={item.id} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{formatQuantity(item.quantityMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, pantry: current.pantry.filter((row) => row.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></article>)}</div>}
+      </div>}
+
+      {section === 'recipes' && <div className="kenz-family-panel space-y-3">
+        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'COLLECTION', 'مجموعة الوصفات', 'COLLECTION')}</span><h3>{tr(profile, 'Recettes familiales', 'وصفات عائلية', 'Family recipes')}</h3></div><span className="text-xs text-slate-500">{recipes.length}</span></div>
+        <div className="space-y-2">{recipes.map((recipe) => <article key={recipe.id} className="rounded-xl border border-violet-100 p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{recipeTitle(recipe)}</strong><p className="mt-1 text-[10px] text-slate-500">{recipeDescription(recipe)}</p><span className="mt-1 inline-block text-[10px] text-violet-700">{recipe.origin === 'community' ? tr(profile, 'Partagée par la communauté', 'مشاركة من المجتمع', 'Community shared') : tr(profile, 'Recette Kenz', 'وصفة كينز', 'Kenz recipe')} · {recipe.prepMinutes} min</span></div><button onClick={() => setShareText(exportCommunityRecipe(recipe))} aria-label={tr(profile, 'Exporter la recette', 'تصدير الوصفة', 'Export recipe')} className="rounded-lg p-2 text-violet-700"><Download className="h-4 w-4" /></button></div></article>)}</div>
+        {shareText && <div className="space-y-2"><label>{tr(profile, 'Code de partage (JSON)', 'رمز المشاركة (JSON)', 'Share code (JSON)')}<textarea readOnly value={shareText} rows={7} className="mt-1 w-full rounded-xl border p-3 text-xs" /></label><button onClick={() => copyText(shareText)} className="min-h-10 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700">{tr(profile, 'Copier le code', 'نسخ الرمز', 'Copy code')}</button></div>}
+        <div className="border-t border-violet-100 pt-3 space-y-2"><h4 className="text-xs font-bold">{tr(profile, 'Importer une recette partagée', 'استيراد وصفة مشتركة', 'Import a shared recipe')}</h4><p className="text-[10px] text-slate-500">{tr(profile, 'Collez le JSON reçu. La recette sera enregistrée localement dans votre collection.', 'ألصق JSON الذي تلقيته. سيتم حفظ الوصفة محلياً في مجموعتك.', 'Paste the JSON you received. The recipe is saved locally in your collection.')}</p><textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={6} placeholder='{"title":"...","ingredients":[],"steps":[]}' className="w-full rounded-xl border p-3 text-xs" /><button onClick={importRecipe} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Upload className="inline mr-2 h-4 w-4" />{tr(profile, 'Importer la recette', 'استيراد الوصفة', 'Import recipe')}</button></div>
+      </div>}
+
+      <p className="text-[10px] text-slate-500">{tr(profile, 'Planning et inventaire privés, enregistrés sur cet appareil. Les recettes importées restent privées tant que vous ne les partagez pas.', 'التخطيط والمخزون خاصان ومحفوظان على هذا الجهاز. تبقى الوصفات المستوردة خاصة ما لم تقم بمشاركتها.', 'Plans and pantry are private and stored on this device. Imported recipes remain private unless you explicitly share them.')}</p>
+    </section>
+  );
+};
