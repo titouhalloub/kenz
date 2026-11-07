@@ -94,7 +94,7 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<FamilyBudgetPlan>;
   if (candidate.version !== 1 || candidate.userId !== userId ||
-      typeof candidate.month !== 'string' || !/^\d{4}-\d{2}$/.test(candidate.month) ||
+      typeof candidate.month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(candidate.month) ||
       !validMinor(candidate.monthlyIncomeMinor) ||
       !Number.isInteger(candidate.adults) || (candidate.adults ?? 0) < 0 || (candidate.adults ?? 0) > 30 ||
       !Number.isInteger(candidate.children) || (candidate.children ?? 0) < 0 || (candidate.children ?? 0) > 30 ||
