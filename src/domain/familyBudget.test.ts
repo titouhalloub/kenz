@@ -65,6 +65,13 @@ describe('family budget foundation', () => {
     expect(() => updateFamilyCategory(first, 'food', 'plannedMinor', 10)).toThrow();
   });
 
+  it('migrates legacy categories to normal priority and rejects invalid priorities', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    const legacy = { ...plan, categories: plan.categories.map(({ priority: _priority, ...row }) => row) };
+    expect(validateFamilyBudgetPlan(legacy, 'user-a')?.categories[0].priority).toBe(3);
+    expect(validateFamilyBudgetPlan({ ...plan, categories: plan.categories.map((row, index) => index === 0 ? { ...row, priority: 6 } : row) }, 'user-a')).toBeNull();
+  });
+
   it('rejects unsafe aggregate totals and invalid calendar months', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.categories[0].plannedMinor = Number.MAX_SAFE_INTEGER;
