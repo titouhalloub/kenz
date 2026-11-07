@@ -135,7 +135,7 @@ describe('public price source adapters', () => {
       'C a rotte 121 132 110',
       'Pomme locale 422 522 321',
       'Viande bovine locale 2224 2346 2101',
-    ].join('\\n');
+    ].join('\n');
     const rows = parseMadrpText(text, 'https://madr.gov.dz/prix_04_Nov_2026_MADRP.pdf', '2026-11-04T00:00:00.000Z');
     expect(rows.map((row) => row.productSlug)).toEqual(['carotte', 'pomme', 'viande-bovine-locale']);
   });
