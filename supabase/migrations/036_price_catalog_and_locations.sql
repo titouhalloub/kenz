@@ -95,3 +95,55 @@ create policy "Only reviewed enabled sources are public" on public.price_sources
 for select to anon, authenticated using (reviewed and enabled);
 
 revoke truncate, references, trigger on public.products, public.product_aliases, public.communes, public.price_sources from anon, authenticated;
+
+-- Curated starter catalog: product identity only, never fabricated prices.
+insert into public.products (slug, name_fr, name_ar, name_en, category, base_unit, typical_pack_sizes)
+values
+ ('semoule-fine','Semoule fine','سميد رقيق','Fine semolina','grains','g','["500 g","1 kg","5 kg"]'::jsonb),
+ ('semoule-moyenne','Semoule moyenne','سميد متوسط','Medium semolina','grains','g','["1 kg","5 kg"]'::jsonb),
+ ('farine','Farine','فرينة','Flour','grains','g','["1 kg","5 kg"]'::jsonb),
+ ('riz','Riz','أرز','Rice','grains','g','["500 g","1 kg"]'::jsonb),
+ ('pates','Pâtes alimentaires','عجائن غذائية','Pasta','grains','g','["500 g","1 kg"]'::jsonb),
+ ('couscous','Couscous','كسكس','Couscous','grains','g','["500 g","1 kg"]'::jsonb),
+ ('lentilles','Lentilles','عدس','Lentils','legumes','g','["500 g","1 kg"]'::jsonb),
+ ('pois-chiches','Pois chiches','حمص','Chickpeas','legumes','g','["500 g","1 kg"]'::jsonb),
+ ('haricots-secs','Haricots secs','لوبيا يابسة','Dry beans','legumes','g','["500 g","1 kg"]'::jsonb),
+ ('huile-vegetale','Huile végétale','زيت المائدة','Vegetable oil','oils','ml','["1 L","2 L","5 L"]'::jsonb),
+ ('huile-olive','Huile d’olive','زيت الزيتون','Olive oil','oils','ml','["250 ml","500 ml","1 L"]'::jsonb),
+ ('sucre','Sucre','سكر','Sugar','pantry','g','["1 kg","5 kg"]'::jsonb),
+ ('sel','Sel','ملح','Salt','pantry','g','["500 g","1 kg"]'::jsonb),
+ ('lait','Lait','حليب','Milk','dairy','ml','["1 L"]'::jsonb),
+ ('lait-poudre','Lait en poudre','حليب مجفف','Milk powder','dairy','g','["500 g","1 kg"]'::jsonb),
+ ('yaourt','Yaourt nature','ياغورت طبيعي','Plain yogurt','dairy','g','["100 g","4 x 100 g"]'::jsonb),
+ ('oeufs','Œufs','بيض','Eggs','dairy','unit','["6 unités","12 unités","30 unités"]'::jsonb),
+ ('beurre','Beurre','زبدة','Butter','dairy','g','["100 g","250 g","500 g"]'::jsonb),
+ ('fromage-frais','Fromage frais','جبن طري','Fresh cheese','dairy','g','["portion","200 g"]'::jsonb),
+ ('pain','Pain','خبز','Bread','bakery','unit','["1 unité"]'::jsonb),
+ ('pomme-de-terre','Pomme de terre','بطاطا','Potatoes','vegetables','g','["1 kg"]'::jsonb),
+ ('tomate','Tomate','طماطم','Tomatoes','vegetables','g','["1 kg"]'::jsonb),
+ ('oignon','Oignon','بصل','Onions','vegetables','g','["1 kg"]'::jsonb),
+ ('carotte','Carotte','جزر','Carrots','vegetables','g','["1 kg"]'::jsonb),
+ ('courgette','Courgette','قرعة','Zucchini','vegetables','g','["1 kg"]'::jsonb),
+ ('poivron','Poivron','فلفل','Peppers','vegetables','g','["1 kg"]'::jsonb),
+ ('ail','Ail','ثوم','Garlic','vegetables','g','["100 g","1 kg"]'::jsonb),
+ ('pomme','Pomme','تفاح','Apples','fruit','g','["1 kg"]'::jsonb),
+ ('banane','Banane','موز','Bananas','fruit','g','["1 kg"]'::jsonb),
+ ('orange','Orange','برتقال','Oranges','fruit','g','["1 kg"]'::jsonb),
+ ('dattes','Dattes','تمر','Dates','fruit','g','["250 g","500 g","1 kg"]'::jsonb),
+ ('poulet','Poulet','دجاج','Chicken','meat','g','["1 kg"]'::jsonb),
+ ('viande-boeuf','Viande de bœuf','لحم بقر','Beef','meat','g','["1 kg"]'::jsonb),
+ ('sardines','Sardines','سردين','Sardines','fish','g','["1 kg"]'::jsonb),
+ ('thon-conserve','Thon en conserve','تونة معلبة','Canned tuna','canned','g','["100 g","160 g"]'::jsonb),
+ ('concentre-tomate','Concentré de tomate','طماطم مصبرة','Tomato paste','canned','g','["70 g","140 g","400 g"]'::jsonb),
+ ('cafe','Café','قهوة','Coffee','drinks','g','["100 g","250 g","500 g"]'::jsonb),
+ ('the','Thé','شاي','Tea','drinks','g','["100 g","250 g"]'::jsonb),
+ ('eau','Eau minérale','مياه معدنية','Bottled water','drinks','ml','["1.5 L","5 L"]'::jsonb),
+ ('gaz-bouteille','Bouteille de gaz','قارورة غاز','LPG cylinder','energy','unit','["13 kg cylinder"]'::jsonb),
+ ('essence','Essence','بنزين','Petrol','energy','ml','["1 L"]'::jsonb)
+on conflict (slug) do update set
+ name_fr = excluded.name_fr, name_ar = excluded.name_ar, name_en = excluded.name_en,
+ category = excluded.category, base_unit = excluded.base_unit,
+ typical_pack_sizes = excluded.typical_pack_sizes, updated_at = now();
+
+-- Commune rows are intentionally not seeded until the current official commune
+-- code/name dataset has been checked against the latest administrative register.
