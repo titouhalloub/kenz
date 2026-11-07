@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseDcwHtml, parseMadrpText, robotsAllows, scrapePublicSource } from './publicSources';
+import { extractPdfLinks, parseDcwHtml, parseMadrpText, robotsAllows, scrapePublicSource } from './publicSources';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -26,6 +26,14 @@ describe('public price source adapters', () => {
     ))));
     await expect(robotsAllows(new URL('https://example.org/prices/today'))).resolves.toBe(true);
     await expect(robotsAllows(new URL('https://example.org/private'))).resolves.toBe(true);
+  });
+
+
+  it('extracts same-host PDF URLs embedded inside the official viewer page', () => {
+    const html = '<a href="/wp-content/plugins/embedpress/assets/pdf/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf">Bulletin</a>';
+    const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
+    expect(links).toHaveLength(1);
+    expect(links[0].pathname).toContain('prix_04_Nov_2026_MADRP.pdf');
   });
 
   it('parses a Directorate HTML table and normalizes pack quantities', () => {
