@@ -75,13 +75,13 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $community_can_view_author$
   select (select auth.uid()) is null or not exists (
     select 1 from public.community_user_blocks b
     where (b.blocker_id = (select auth.uid()) and b.blocked_id = p_author_id)
        or (b.blocker_id = p_author_id and b.blocked_id = (select auth.uid()))
   );
-$;
+$community_can_view_author$;
 revoke all on function public.community_can_view_author(uuid) from public;
 grant execute on function public.community_can_view_author(uuid) to anon, authenticated;
 
