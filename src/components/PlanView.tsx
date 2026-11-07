@@ -28,11 +28,13 @@ import {
   Account,
   CommitmentFrequency,
 } from '../domain/types';
+import { SimulatorView } from './SimulatorView';
 import { getBillReminderPermission, requestBillReminderPermission, dispatchBillReminders, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 import {
   formatMoney,
   calculateCategoryBudgets,
   parseToMinorUnits,
+  calculateSafeToSpend,
 } from '../domain/financialCalculations';
 
 const getLocalDateString = (date = new Date()) =>
@@ -77,7 +79,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   challengeContributions,
   onAddChallengeContribution,
 }) => {
-  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges'>('budgets');
+  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator'>('budgets');
 
   // New recurring state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
@@ -132,6 +134,23 @@ export const PlanView: React.FC<PlanViewProps> = ({
     transactions,
     currentDate: today,
   });
+
+  // Keep the simulator's budget context local to this device. It never leaves PlanView.
+  const safeToSpend = calculateSafeToSpend({
+    accounts,
+    transactions,
+    recurringItems,
+    savingsGoals,
+    todayDate: today,
+    paydayDayOfMonth: profile.paydayDayOfMonth,
+    planningPeriodDays: profile.planningPeriodDays,
+  });
+  const foodEnvelope = categoryBudgets.find((item) =>
+    item.categoryName.toLocaleLowerCase().includes('alimentation')
+  );
+  const simulatorAvailableBudgetMinor = foodEnvelope?.budgetMinor
+    ? Math.max(0, foodEnvelope.remainingMinor)
+    : safeToSpend.safeToSpendMinor;
 
   const handleCreateRecurring = (e: React.FormEvent) => {
     e.preventDefault();
@@ -262,6 +281,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
           }`}
         >
           Défis d'épargne
+        </button>
+        <button
+          onClick={() => setActiveTab('simulator')}
+          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
+            activeTab === 'simulator' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Simulateur
         </button>
       </div>
 
@@ -933,6 +960,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
             )}
           </div>
         </div>
+      )}
+      {activeTab === 'simulator' && (
+        <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />
       )}
 
     </div>
