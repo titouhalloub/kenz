@@ -2,7 +2,24 @@ import React, { useEffect, useState } from 'react';
 import {
   PieChart,
   Calendar,
-  PiggyBank,
+  ShoppingBag,
+  Home,
+  Zap,
+  Car,
+  Heart,
+  Users,
+  Briefcase,
+  TrendingUp,
+  Utensils,
+  Gamepad2,
+  GraduationCap,
+  Shirt,
+  Plane,
+  Coffee,
+  PawPrint,
+  Fuel,
+  CircleHelp,
+  Landmark,
   PlusCircle,
   CheckCircle2,
   AlertCircle,
@@ -234,7 +251,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   };
 
   return (
-    <div className="space-y-5 pb-24">
+    <div className="kenz-page kenz-plan-page space-y-5 pb-24">
       {/* Title */}
       <div>
         <h1 className="text-lg font-bold text-slate-100">Plan budgétaire & Engagements</h1>
@@ -244,7 +261,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
       </div>
 
       {/* Segmented Sub-navigation */}
-      <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+      <div className="kenz-plan-tabs flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
         <button
           onClick={() => setActiveTab('budgets')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
@@ -304,14 +321,19 @@ export const PlanView: React.FC<PlanViewProps> = ({
           <div className="space-y-3">
             {categoryBudgets.map((item) => {
               const isEditing = editingCatId === item.categoryId;
+              const category = categories.find((entry) => entry.id === item.categoryId);
+              const BudgetIcon = getBudgetCategoryIcon(category?.icon);
+              const accentColor = category?.color || '#7950cf';
 
               return (
                 <div
                   key={item.categoryId}
-                  className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3"
+                  className="kenz-challenge-card rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="kenz-budget-category-icon" style={{ color: accentColor, backgroundColor: `${accentColor}18` }}><BudgetIcon /></span>
+                      <div className="min-w-0">
                       <span className="text-xs font-semibold text-slate-200 block">
                         {item.categoryName}
                       </span>
@@ -323,6 +345,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                             ? `Budget: ${formatMoney(item.budgetMinor, profile.preferredCurrency, profile.locale)}`
                             : 'Sans plafond'}
                         </span>
+                      </div>
                       </div>
                     </div>
 
