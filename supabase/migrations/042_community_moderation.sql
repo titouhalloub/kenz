@@ -92,9 +92,9 @@ immutable
 set search_path = ''
 as $$
   select coalesce(length(p_text), 0) > 0
-    and p_text !~* '(https?://|www\\.)'
-    and p_text !~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}'
-    and p_text !~* '(\\+?213|0)[567][0-9 .-]{7,}'
+    and p_text !~* '(https?://|www\.)'
+    and p_text !~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}'
+    and p_text !~* '(\+?213|0)[567][0-9 .-]{7,}'
 $$;
 revoke all on function public.community_text_is_safe(text) from public, anon;
 grant execute on function public.community_text_is_safe(text) to authenticated;
