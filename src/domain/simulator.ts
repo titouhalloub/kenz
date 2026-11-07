@@ -9,6 +9,7 @@ export interface SimulatorPrice {
   nContributors: number;
   lastObserved: string;
   areaLevel: 'neighborhood' | 'commune' | 'wilaya' | 'national';
+  sourceTiers?: string[];
 }
 
 export interface SimulatorBasketItem {
@@ -53,6 +54,7 @@ export interface SimulatorLine {
     stale: boolean;
     thin: boolean;
     areaLevel: SimulatorPrice['areaLevel'];
+    sourceTiers: string[];
   } | null;
 }
 
@@ -202,7 +204,7 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
       quantityMilliUnits: quantity, baseUnit: item.baseUnit, cost,
       data: {
         nObservations: price.nObservations, nContributors: price.nContributors,
-        lastObserved: price.lastObserved, ageDays, stale, thin, areaLevel: price.areaLevel,
+        lastObserved: price.lastObserved, ageDays, stale, thin, areaLevel: price.areaLevel, sourceTiers: price.sourceTiers || [],
       },
     });
   }
