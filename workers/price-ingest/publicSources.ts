@@ -32,7 +32,6 @@ export const PUBLIC_PRICE_SOURCES: PublicSourceConfig[] = [
 const products = new Map(PRODUCT_CATALOG.map((product) => [product.slug, product]));
 const sourceAliases: Record<string, string> = {
   'semoule superieure': 'semoule-ordinaire',
-  'semoule superieure': 'semoule-ordinaire',
   'semoule ordinaire': 'semoule-ordinaire',
   'semoule fine': 'semoule-fine',
   'farine superieure': 'farine-ble-tendre',
@@ -72,6 +71,7 @@ const sourceAliases: Record<string, string> = {
   'pommes locales': 'pomme',
   'pomme': 'pomme',
   'orange': 'orange',
+  'oranges': 'orange',
   'banane': 'banane',
   'bananes': 'banane',
   'dattes': 'dattes-deglet-nour',
@@ -91,6 +91,7 @@ const sourceAliases: Record<string, string> = {
   'haricot rouge': 'haricots-blancs',
   'riz': 'riz',
   'couscous ordinaire': 'couscous',
+  'couscous': 'couscous',
   'cafe': 'cafe-moulu',
   'the': 'the',
   'sucre blanc': 'sucre',
