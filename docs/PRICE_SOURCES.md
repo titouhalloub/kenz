@@ -35,7 +35,7 @@ Audit date: 2026-11-07. Scope: official and partner sources for Algerian consume
 4. `workers/price-ingest/run.ts --dry-run` fetches and parses without database credentials or writes. `.github/workflows/ingest-public-prices.yml` provides a daily scheduled job and a manual dry-run / review path. GitHub Actions requires `SUPABASE_SERVICE_ROLE_KEY` to stage or approve records. This workflow uses GitHub-hosted free Actions; it adds no paid service.
 5. CSV remains supported as an alternative via `workers/price-ingest/manualImport.ts`, not the only ingestion path. It validates DZD, dates, HTTPS provenance and optional wilaya/commune codes.
 6. The Ministry of Commerce price observation platform's public description says access to the platform itself is via the MCIRMN intranet; Kenz does not scrape that intranet page or attempt to bypass it. Never treat ONS CPI as a shelf price, and never publish a national average as a commune/neighborhood observation.
-7. Source rows are seeded disabled by migration 039. Migrations 036–040 are branch-only and have not been applied to production. No source is enabled and no price data is written until the migrations are deliberately deployed and the operator completes source review.
+7. The three official scraper sources are enabled for pending-only collection by migration 039. Crowd and verified-merchant submissions are enabled for pending-only collection by migration 043. Migrations 036–043 are branch-only and have not been applied to production; no data is written until deployment and worker-secret configuration, and no price is public until a moderator accepts it.
 
 ## 3. Legal and privacy notes (Algeria)
 
@@ -46,23 +46,21 @@ Per a July 2026 law-firm summary of Law 18-07 as amended by Law 25-11 — a seco
 
 ## 4. Source onboarding checklist
 
-- [ ] Terms / reuse licence read by a human; automated access and redistribution rights recorded
-- [ ] Robots / access rules checked where relevant; rate limit and identifying User-Agent documented
-- [ ] Written permission or official API/export agreement obtained if needed
+- [ ] Confirm the page is openly accessible without login, paywall, CAPTCHA or access-control bypass
+- [ ] robots.txt checked at runtime; host rate limit, identifying User-Agent and response-size limits enabled
 - [ ] Fields, units, currency, date semantics and geographic granularity documented
 - [ ] Parser fixture committed (saved sample; no live network in CI)
-- [ ] Trust weight and staleness window set
-- [ ] Sample import reviewed by an operator
-- [ ] Only then set `price_sources.reviewed = true` and `enabled = true`
+- [ ] Trust weight and 14-day staleness window set
+- [ ] Sample import reviewed by an operator before any observation is accepted
+- [ ] Source collection may be enabled, but every observation remains pending until moderator review
 
 ## 5. Open actions
 
-1. Contact the Ministry of Agriculture for a structured daily feed, reuse terms or written permission for bulletin transcription.
-2. Contact the Tizi Ouzou Directorate of Commerce to confirm whether its daily statement is routinely updated and may be reused.
-3. Ask the Ministry of Commerce whether the MCIRMN price platform offers an authorised public export/API.
-4. Verify current regulated-price legal texts and their effective dates before adding curated values.
-5. Verify official commune codes and names against the latest administrative register before seeding `communes`.
-6. Complete the human legal review of Law 18-07 / Law 25-11 and cross-border hosting before launching crowd/community features.
+1. Run a worker dry-run after migration deployment and verify that each current page date is parsed correctly; robots.txt must allow every fetched path.
+2. Ask the Ministry of Commerce whether the MCIRMN price platform offers an openly accessible export/API; do not attempt to bypass its intranet access.
+3. Verify current regulated-price legal texts and their effective dates before adding curated values.
+4. Verify official commune codes and names against the latest administrative register before seeding `communes`.
+5. Complete the personal-data and cross-border hosting review for user profiles, contributions and community features before public launch.
 
 
 ## 5. Current implementation and deployment boundary
