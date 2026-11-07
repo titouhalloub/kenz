@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Home, Utensils, Sparkles, Shirt, Car, GraduationCap, HeartPulse, Wifi, Wrench, CreditCard, PiggyBank, Package, Users, AlertTriangle, CheckCircle2, ReceiptText, TrendingUp, Wallet } from 'lucide-react';
+import { Home, Utensils, Sparkles, Shirt, Car, GraduationCap, HeartPulse, Wifi, Wrench, CreditCard, PiggyBank, Package, Users, AlertTriangle, CheckCircle2, ReceiptText, Wallet } from 'lucide-react';
 import { FamilyLivingPlannerView } from './FamilyLivingPlannerView';
 import type { Category, RecurringItem, Transaction, UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
@@ -133,15 +133,30 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     return totals;
   }, [monthTransactions, categories, plan.categories]);
 
+  const recurringPlannedByCategory = useMemo(() => {
+    const totals = new Map<FamilyBudgetCategoryId, number>();
+    for (const item of recurringItems) {
+      if (item.userId !== profile.id || !item.isActive || item.type !== 'expense' ||
+          item.currency !== profile.preferredCurrency || item.nextDueDate.slice(0, 7) !== selectedMonth) continue;
+      const sourceCategory = categories.find((category) => category.id === item.categoryId);
+      const familyId = familyCategoryFor(sourceCategory?.name || item.name);
+      const monthlyAmount = item.frequency === 'weekly' ? item.amountMinor * 4 :
+        item.frequency === 'biweekly' ? item.amountMinor * 2 : item.amountMinor;
+      totals.set(familyId, (totals.get(familyId) || 0) + monthlyAmount);
+    }
+    return totals;
+  }, [recurringItems, categories, profile.id, profile.preferredCurrency, selectedMonth]);
+
   const hasMonthExpenses = monthTransactions.some((tx) => tx.type === 'expense');
   const effectivePlan = useMemo(() => ({
     ...plan,
     monthlyIncomeMinor,
     categories: plan.categories.map((row) => ({
       ...row,
+      plannedMinor: Math.max(row.plannedMinor, recurringPlannedByCategory.get(row.id) || 0),
       actualMinor: hasMonthExpenses ? (actualByCategory.get(row.id) || 0) : row.actualMinor,
     })),
-  }), [plan, monthlyIncomeMinor, hasMonthExpenses, actualByCategory]);
+  }), [plan, monthlyIncomeMinor, hasMonthExpenses, actualByCategory, recurringPlannedByCategory]);
 
   const summary = useMemo(() => summarizeFamilyBudget(effectivePlan), [effectivePlan]);
   const categoryNameById = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories]);
