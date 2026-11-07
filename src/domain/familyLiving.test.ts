@@ -32,6 +32,21 @@ describe('family living planner', () => {
     expect(eggs?.toBuyMilli).toBe(0);
   });
 
+  it('merges manual cleaning and grocery items into the recipe shopping list', () => {
+    const plan = createFamilyLivingPlan('u1', '2026-11');
+    plan.meals = [{ id: 'm1', date: '2026-11-01', slot: 'lunch', recipeId: 'dz-tomato-pasta', servings: 4 }];
+    plan.shoppingExtras = [
+      { id: 's1', name: 'tomate', unit: 'piece', quantityMilli: 1000, category: 'grocery' },
+      { id: 's2', name: 'lessive', unit: 'ml', quantityMilli: 2000, category: 'cleaning' },
+    ];
+    plan.pantry = [{ id: 'p1', name: 'طماطم', unit: 'piece', quantityMilli: 3000 }];
+    const tomato = buildShoppingRequirements(plan).find((row) => row.key === ingredientKey('طماطم', 'piece'));
+    const detergent = buildShoppingRequirements(plan).find((row) => row.name === 'lessive');
+    expect(tomato?.requiredMilli).toBe(5000);
+    expect(tomato?.toBuyMilli).toBe(2000);
+    expect(detergent?.toBuyMilli).toBe(2000);
+  });
+
   it('matches common grocery names across Arabic and French', () => {
     expect(ingredientKey('طماطم', 'piece')).toBe(ingredientKey('tomate', 'piece'));
     expect(ingredientKey('بيض', 'piece')).toBe(ingredientKey('oeufs', 'piece'));
@@ -46,7 +61,7 @@ describe('family living planner', () => {
 
   it('accepts legacy monthly plans without the optional needs list', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
-    const { needs: _needs, ...legacy } = plan;
+    const { needs: _needs, shoppingExtras: _extras, ...legacy } = plan;
     const restored = validateFamilyLivingPlan(legacy, 'u1', '2026-11');
     expect(restored?.needs).toEqual([]);
   });
