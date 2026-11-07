@@ -32,6 +32,13 @@ export function parsePackQuantity(label: string, baseUnit: BaseUnit): number | n
     return null;
   }
   if (baseUnit === 'l') {
+    if (multiPack) {
+      const count = Number(multiPack[1]);
+      const packAmount = Number(multiPack[2]);
+      const packUnit = multiPack[3];
+      if (/^(l|litre|liter|لتر)$/.test(packUnit)) return Math.round(count * packAmount * 1000);
+      if (/^(ml|ملل?)$/.test(packUnit)) return Math.round(count * packAmount);
+    }
     if (hasLiter) return Math.round(amount * 1000);
     if (hasMl) return Math.round(amount);
     return null;
