@@ -1,6 +1,7 @@
 export interface RawPriceRecord {
   title: string;
   priceText: string;
+  currency: string;
   observedAt: string;
   wilayaCode?: string;
   communeCode?: string;
