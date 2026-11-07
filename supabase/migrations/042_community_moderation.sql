@@ -256,7 +256,7 @@ begin
   insert into public.community_profiles(user_id,handle,locale,wilaya_code,is_public)
   values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,true)
   on conflict (user_id) do update set is_public=true,locale=excluded.locale,
-    wilaya_code=coalesce(excluded.wilaya_code,public.community_profiles.wilaya_code),updated_at=now();
+    wilaya_code=excluded.wilaya_code,updated_at=now();
   return v_id;
 end;
 $$;
