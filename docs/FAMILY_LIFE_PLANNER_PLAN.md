@@ -161,11 +161,11 @@ For offline-first behavior, persist local edits immediately, queue sync operatio
 
 - Added the family budget foundation to Kenz Planning, with monthly household income, adult/child counts, 13 editable envelopes, planned-versus-actual amounts, and surplus/shortfall calculations.
 - Added month-specific offline storage, user scoping, strict amount validation, and safe-integer overflow checks.
-- Added a family meal calendar with five starter recipes, recipe instructions, serving scaling, and an optional seven-day lunch/dinner suggestion action that does not overwrite existing meals.
+- Added a family meal calendar with five starter recipes, recipe instructions, serving scaling, and an optional seven-day breakfast/lunch/dinner suggestion action that does not overwrite existing meals.
 - Added a consolidated grocery list that merges repeated ingredients and subtracts pantry stock.
 - Added Arabic/French/English ingredient aliases for common starter ingredients so pantry entries can match recipe ingredients across those languages.
-- Added pantry stock entry and removal.
-- Added a detailed monthly needs list for clothing, cleaning, hygiene, school, transport, health, home maintenance, and custom needs, including optional family-member assignment, due date, planned amount, and actual amount.
+- Added pantry stock entry and removal, plus manual grocery, cleaning, hygiene, and household shopping items that merge into the same consolidated list.
+- Added a detailed monthly needs list for clothing, cleaning, hygiene, school, transport, health, home maintenance, and custom needs, including optional family-member assignment, clothing season and size, due date, planned amount, and actual amount.
 - Added manual recipe JSON import/export. Imported recipes are private and saved in a user-level local library so they remain available across planning months.
 - Added domain tests for calculations, recipe scaling, shopping aggregation, pantry deductions, validation, legacy-plan migration, and overflow cases.
 - Added a GitHub Actions quality workflow to run tests, TypeScript checks, and the web build on relevant changes.
