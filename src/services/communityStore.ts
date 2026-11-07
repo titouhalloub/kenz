@@ -422,3 +422,22 @@ export async function deleteMyPriceContributions(): Promise<CommunityResult<numb
     return { success: false, error: error instanceof Error ? error.message : 'Unable to delete contributions.' };
   }
 }
+
+export async function deleteCommunityPost(postId: string, userId: string): Promise<CommunityResult<boolean>> {
+  try {
+    const supabase = requireClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user || auth.user.id !== userId) throw new Error('Authentication required.');
+    const { error } = await supabase.from('community_posts').delete().eq('id', postId).eq('author_id', userId);
+    if (error) throw error;
+    const { data: remaining, error: remainingError } = await supabase.from('community_posts')
+      .select('id').eq('author_id', userId).eq('status', 'published').limit(1);
+    if (remainingError) throw remainingError;
+    if (!remaining?.length) {
+      await supabase.from('community_profiles').update({ is_public: false, wilaya_code: null }).eq('user_id', userId);
+    }
+    return { success: true, data: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to delete post.' };
+  }
+}
