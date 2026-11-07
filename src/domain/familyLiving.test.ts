@@ -17,17 +17,17 @@ describe('family living planner', () => {
       { id: 'm1', date: '2026-11-01', slot: 'lunch', recipeId: 'dz-tomato-pasta', servings: 4 },
       { id: 'm2', date: '2026-11-02', slot: 'dinner', recipeId: 'dz-tomato-pasta', servings: 2 },
     ];
-    plan.pantry = [{ id: 'p1', name: 'طماطم', unit: 'piece', quantityMilli: 3 }];
+    plan.pantry = [{ id: 'p1', name: 'طماطم', unit: 'piece', quantityMilli: 3000 }];
     const tomato = buildShoppingRequirements(plan).find((row) => row.key === ingredientKey('طماطم', 'piece'));
-    expect(tomato?.requiredMilli).toBe(9);
-    expect(tomato?.inPantryMilli).toBe(3);
-    expect(tomato?.toBuyMilli).toBe(6);
+    expect(tomato?.requiredMilli).toBe(6000);
+    expect(tomato?.inPantryMilli).toBe(3000);
+    expect(tomato?.toBuyMilli).toBe(3000);
   });
 
   it('does not produce negative shopping quantities when stock exceeds need', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
     plan.meals = [{ id: 'm1', date: '2026-11-03', slot: 'lunch', recipeId: 'dz-omelette', servings: 2 }];
-    plan.pantry = [{ id: 'p1', name: 'بيض', unit: 'piece', quantityMilli: 20 }];
+    plan.pantry = [{ id: 'p1', name: 'بيض', unit: 'piece', quantityMilli: 20000 }];
     const eggs = buildShoppingRequirements(plan).find((row) => row.name === 'بيض');
     expect(eggs?.toBuyMilli).toBe(0);
   });
