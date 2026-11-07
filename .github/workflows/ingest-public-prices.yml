@@ -1,6 +1,8 @@
 name: Ingest public Algerian prices
 
 on:
+  push:
+    branches: [feat/price-simulator-community]
   schedule:
     - cron: '25 6 * * *'
   workflow_dispatch:
@@ -54,14 +56,14 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Scrape public price bulletins into the pending review queue
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx workers/price-ingest/run.ts
 
       - name: Verify public scrapers without database writes
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
         run: npx tsx workers/price-ingest/run.ts --dry-run
 
       - name: Enable a source after explicit human review
