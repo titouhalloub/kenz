@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calculator, Plus, Trash2 } from 'lucide-react';
 import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { simulateMonthlyBudget, type SimulatorBasketItem, type SimulatorResult } from '../domain/simulator';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
+import { loadMarketPrices } from '../services/priceStore';
+import type { SimulatorPrice } from '../domain/simulator';
 import type { UserProfile } from '../domain/types';
 
 interface SimulatorViewProps {
@@ -40,10 +42,36 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
   const [expectedPrice, setExpectedPrice] = useState('');
   const [highPrice, setHighPrice] = useState('');
   const [basket, setBasket] = useState<SimulatorBasketItem[]>([]);
+  const [marketPrice, setMarketPrice] = useState<SimulatorPrice | null>(null);
+  const [marketStatus, setMarketStatus] = useState('');
   const [error, setError] = useState('');
 
   const selectedProduct = PRODUCT_CATALOG.find((product) => product.slug === selectedSlug) || PRODUCT_CATALOG[0];
   const quantityUnit = selectedProduct.baseUnit === 'kg' ? 'g/jour' : selectedProduct.baseUnit === 'l' ? 'ml/jour' : 'unité/jour';
+
+  useEffect(() => {
+    let active = true;
+    setMarketPrice(null);
+    setMarketStatus('Recherche du prix public disponible…');
+    loadMarketPrices([selectedSlug]).then((result) => {
+      if (!active) return;
+      const found = result.pricesBySlug[selectedSlug];
+      if (found) {
+        setMarketPrice(found);
+        setLowPrice((found.p25UnitPriceMinor / 100).toFixed(2));
+        setExpectedPrice((found.medianUnitPriceMinor / 100).toFixed(2));
+        setHighPrice((found.p75UnitPriceMinor / 100).toFixed(2));
+        setMarketStatus('Prix agrégé disponible · source et fraîcheur affichées après ajout.');
+      } else {
+        setMarketStatus(result.unavailableReason === 'schema_not_deployed'
+          ? 'Le catalogue de prix n’est pas encore déployé ; tu peux saisir tes propres prix.'
+          : 'Aucun relevé public disponible pour ce produit ; tu peux saisir tes propres prix.');
+      }
+    }).catch(() => {
+      if (active) setMarketStatus('Prix publics indisponibles pour le moment ; la saisie manuelle reste possible.');
+    });
+    return () => { active = false; };
+  }, [selectedSlug]);
 
   const addProduct = () => {
     setError('');
@@ -55,7 +83,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       setError('Saisis une quantité quotidienne entière supérieure à zéro.');
       return;
     }
-    if ([low, expected, high].some((value) => value <= 0) || low > expected || expected > high) {
+    if (!marketPrice && ([low, expected, high].some((value) => value <= 0) || low > expected || expected > high)) {
       setError('Saisis trois prix valides : minimum ≤ habituel ≤ maximum.');
       return;
     }
@@ -71,7 +99,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       category: selectedProduct.category,
       baseUnit: selectedProduct.baseUnit,
       quantityPerPersonPerDayMilliUnits: amount,
-      price: {
+      price: marketPrice || {
         currency: 'DZD',
         p25UnitPriceMinor: low,
         medianUnitPriceMinor: expected,
@@ -166,19 +194,20 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         </label>
         <div className="grid grid-cols-3 gap-2">
           <label className="text-[10px] text-slate-400">Prix bas (DA)
-            <input inputMode="decimal" value={lowPrice} onChange={(event) => setLowPrice(event.target.value)} placeholder="Ex. 180"
+            <input inputMode="decimal" value={lowPrice} onChange={(event) => { setMarketPrice(null); setLowPrice(event.target.value); }} placeholder="Ex. 180"
               className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
           </label>
           <label className="text-[10px] text-slate-400">Prix habituel
-            <input inputMode="decimal" value={expectedPrice} onChange={(event) => setExpectedPrice(event.target.value)} placeholder="Ex. 200"
+            <input inputMode="decimal" value={expectedPrice} onChange={(event) => { setMarketPrice(null); setExpectedPrice(event.target.value); }} placeholder="Ex. 200"
               className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
           </label>
           <label className="text-[10px] text-slate-400">Prix haut
-            <input inputMode="decimal" value={highPrice} onChange={(event) => setHighPrice(event.target.value)} placeholder="Ex. 230"
+            <input inputMode="decimal" value={highPrice} onChange={(event) => { setMarketPrice(null); setHighPrice(event.target.value); }} placeholder="Ex. 230"
               className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
           </label>
         </div>
         <p className="text-[10px] text-slate-500">Prix par kg, litre ou unité selon le produit.</p>
+        {marketStatus && <p className="text-[10px] text-slate-500">{marketStatus}</p>}
         {error && <p role="alert" className="text-xs text-rose-400">{error}</p>}
         <button type="button" onClick={addProduct} className="w-full min-h-[44px] rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-2">
           <Plus className="h-4 w-4" /> Ajouter au panier
@@ -195,7 +224,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-slate-100 truncate">{item.name}</div>
               <div className="text-[10px] text-slate-500">{categoryLabels[item.category] || item.category} · {item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? 'g' : item.baseUnit === 'l' ? 'ml' : 'unité(s)'} / personne / jour</div>
-              <div className="text-[10px] text-amber-300">Prix saisi manuellement · non vérifié</div>
+              <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${item.data?.lastObserved || ''}` : 'Prix saisi manuellement · non vérifié'}</div>
             </div>
             <div className="text-right shrink-0">
               <div className="text-xs font-semibold text-slate-200">{formatMoney(item.price?.medianUnitPriceMinor || 0, 'DZD', profile.locale)} / {item.baseUnit}</div>
