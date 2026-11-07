@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/price-simulator-community
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
