@@ -46,6 +46,7 @@ import {
   CommitmentFrequency,
 } from '../domain/types';
 import { SimulatorView } from './SimulatorView';
+import { FamilyLifePlannerView } from './FamilyLifePlannerView';
 import { getBillReminderPermission, requestBillReminderPermission, dispatchBillReminders, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 import {
   formatMoney,
@@ -105,7 +106,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   challengeContributions,
   onAddChallengeContribution,
 }) => {
-  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator'>('budgets');
+  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator' | 'family'>('budgets');
 
   // New recurring state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
@@ -308,6 +309,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
           }`}
         >
           Défis d'épargne
+        </button>
+        <button
+          onClick={() => setActiveTab('family')}
+          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
+            activeTab === 'family' ? 'bg-slate-800 text-violet-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Famille
         </button>
         <button
           onClick={() => setActiveTab('simulator')}
@@ -994,6 +1003,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
           </div>
         </div>
       )}
+      {activeTab === 'family' && <FamilyLifePlannerView profile={profile} />}
       <div className={activeTab === 'simulator' ? '' : 'hidden'}>
         <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />
       </div>
