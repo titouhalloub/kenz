@@ -25,6 +25,42 @@ export interface FamilyBudgetPlan {
   updatedAt: string;
 }
 
+export type FamilyBudgetRecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+
+/** Count scheduled occurrences falling inside a calendar month, starting at nextDueDate. */
+export function countRecurringOccurrencesInMonth(
+  frequency: FamilyBudgetRecurrenceFrequency,
+  nextDueDate: string,
+  month: string,
+  billingDayOfMonth?: number,
+): number {
+  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDueDate)) return 0;
+  const [year, monthNumber] = month.split('-').map(Number);
+  const [dueYear, dueMonth, dueDay] = nextDueDate.split('-').map(Number);
+  const monthStart = Date.UTC(year, monthNumber - 1, 1);
+  const monthEnd = Date.UTC(year, monthNumber, 0);
+  const dueTime = Date.UTC(dueYear, dueMonth - 1, dueDay);
+  if (!Number.isFinite(dueTime) || dueTime > monthEnd) return 0;
+
+  if (frequency === 'weekly' || frequency === 'biweekly') {
+    const periodDays = frequency === 'weekly' ? 7 : 14;
+    const dayMs = 86_400_000;
+    const firstStep = Math.max(0, Math.ceil((monthStart - dueTime) / (periodDays * dayMs)));
+    let cursor = dueTime + firstStep * periodDays * dayMs;
+    let count = 0;
+    while (cursor <= monthEnd) { count++; cursor += periodDays * dayMs; }
+    return count;
+  }
+
+  const intervalMonths = frequency === 'monthly' ? 1 : frequency === 'quarterly' ? 3 : 12;
+  const targetIndex = year * 12 + monthNumber - 1;
+  const dueIndex = dueYear * 12 + dueMonth - 1;
+  if (targetIndex < dueIndex || (targetIndex - dueIndex) % intervalMonths !== 0) return 0;
+  const billingDay = Math.min(Math.max(1, billingDayOfMonth ?? dueDay), new Date(Date.UTC(year, monthNumber, 0)).getUTCDate());
+  const occurrence = Date.UTC(year, monthNumber - 1, billingDay);
+  return occurrence >= Math.max(monthStart, dueTime) && occurrence <= monthEnd ? 1 : 0;
+}
+
 export interface FamilyBudgetSummary {
   incomeMinor: number;
   plannedMinor: number;
