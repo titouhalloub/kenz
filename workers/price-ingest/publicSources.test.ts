@@ -85,6 +85,25 @@ describe('public price source adapters', () => {
   });
 
 
+  it('parses Jijel three-column rows with product and pack quantity in one cell', () => {
+    const html = `
+      <p>Journée du 25-10-2026</p>
+      <table>
+        <tr><th>PRODUITS</th><th>PRIX DE GROS</th><th>PRIX DE DETAIL</th></tr>
+        <tr><td>Semoule supérieure 25 kg</td><td>925</td><td>1000</td></tr>
+        <tr><td>Carotte 1kg</td><td>80</td><td>110</td></tr>
+        <tr><td>Oeufs 1Unite</td><td>15</td><td>17</td></tr>
+      </table>`;
+    const rows = parseDcwHtml(html, {
+      slug: 'dcw-jijel-daily', kind: 'dcw-html',
+      url: 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ', wilayaCode: '18',
+    });
+    expect(rows.map((row) => row.productSlug)).toEqual(['semoule-ordinaire', 'carotte', 'oeufs']);
+    expect(rows[0].normalized.unitPriceMinor).toBe(4000);
+    expect(rows[1].normalized.unitPriceMinor).toBe(11000);
+    expect(rows[2].normalized.unitPriceMinor).toBe(1700);
+  });
+
   it('parses Jijel plain-text rows, including products without an explicit unit column', () => {
     const html = `
       <html><body>
