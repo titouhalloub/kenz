@@ -71,8 +71,8 @@ describe('price intelligence and community migration safety', () => {
       moderation.indexOf('create or replace function public.community_text_is_safe'),
     );
     expect(helper).not.toMatch(/security definer/i);
-    expect(moderation).toMatch(/for select to authenticated using \\(blocked_id = \\(select auth\\.uid\\(\\)\\)\\)/i);
-    expect(moderation).toMatch(/wilaya_code,is_public\\)\\s*values \\([^;]+,true\\)/i);
+    expect(moderation).toContain('for select to authenticated using (blocked_id = (select auth.uid()));');
+    expect(moderation).toContain("values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,true)");
   });
 
   it('stores no budgets, income, balances or transaction snapshots in simulator scenarios', () => {
