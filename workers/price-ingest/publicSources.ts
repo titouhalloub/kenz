@@ -359,9 +359,9 @@ export function parseDcwHtml(html: string, source: PublicSourceConfig): ScrapedP
 
 export function parseDcwPlainHtml(html: string, source: PublicSourceConfig): ScrapedPrice[] {
   const text = decodeEntities(html
-    .replace(/<br\\s*\\/?\\s*>/gi, '\\n')
-    .replace(/<\\/(?:p|div|tr|li|h[1-6])\\s*>/gi, '\\n')
-    .replace(/<\\/t[dh]\\s*>/gi, ' ')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/(?:p|div|tr|li|h[1-6])\s*>/gi, '\n')
+    .replace(/<\/t[dh]\s*>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' '));
   const observedAt = dateFromText(text);
