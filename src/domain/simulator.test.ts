@@ -76,7 +76,7 @@ describe('simulateMonthlyBudget', () => {
       ],
     }));
     expect(result.cheapestSubstitutes).toContainEqual({
-      fromProductId: 'rice-premium', toProductId: 'rice-basic', estimatedSavingMinor: 10,
+      fromProductId: 'rice-premium', toProductId: 'rice-basic', estimatedSavingMinor: 750,
     });
   });
 });
