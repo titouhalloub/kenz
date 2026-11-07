@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
-  validateFamilyBudgetPlan, FAMILY_BUDGET_DEFAULTS,
+  validateFamilyBudgetPlan, FAMILY_BUDGET_DEFAULTS, suggestFamilyBudgetAllocations,
 } from './familyBudget';
 
 describe('family budget foundation', () => {
@@ -26,6 +26,29 @@ describe('family budget foundation', () => {
     summary = summarizeFamilyBudget(plan);
     expect(summary.deficitMinor).toBe(5_000_00);
     expect(summary.unallocatedMinor).toBe(-5_000_00);
+  });
+
+  it('allocates unassigned income using editable category priorities and preserves fixed envelopes', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100000;
+    plan.categories.forEach((row) => {
+      if (row.id !== 'housing' && row.id !== 'food') row.plannedMinor = 1;
+    });
+    plan.categories.find((row) => row.id === 'housing')!.priority = 5;
+    plan.categories.find((row) => row.id === 'food')!.priority = 1;
+    const suggested = suggestFamilyBudgetAllocations(plan);
+    const housing = suggested.categories.find((row) => row.id === 'housing')!;
+    const food = suggested.categories.find((row) => row.id === 'food')!;
+    expect(housing.plannedMinor).toBeGreaterThan(food.plannedMinor);
+    expect(suggested.categories.filter((row) => row.id !== 'housing' && row.id !== 'food').every((row) => row.plannedMinor === 1)).toBe(true);
+    expect(suggested.categories.reduce((sum, row) => sum + row.plannedMinor, 0)).toBe(plan.monthlyIncomeMinor);
+  });
+
+  it('does not allocate when existing envelopes already exceed the income', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100;
+    plan.categories[0].plannedMinor = 200;
+    expect(suggestFamilyBudgetAllocations(plan)).toEqual(plan);
   });
 
   it('updates only the requested category field', () => {
