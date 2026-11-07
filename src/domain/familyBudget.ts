@@ -15,6 +15,8 @@ export interface FamilyBudgetPlan {
   userId: string;
   month: string;
   monthlyIncomeMinor: number;
+  /** Optional user override for the income used in this month's family plan. */
+  monthlyIncomeOverrideMinor?: number | null;
   adults: number;
   children: number;
   categories: FamilyBudgetCategory[];
@@ -96,6 +98,7 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   if (candidate.version !== 1 || candidate.userId !== userId ||
       typeof candidate.month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(candidate.month) ||
       !validMinor(candidate.monthlyIncomeMinor) ||
+      (candidate.monthlyIncomeOverrideMinor !== undefined && candidate.monthlyIncomeOverrideMinor !== null && !validMinor(candidate.monthlyIncomeOverrideMinor)) ||
       !Number.isInteger(candidate.adults) || (candidate.adults ?? 0) < 0 || (candidate.adults ?? 0) > 30 ||
       !Number.isInteger(candidate.children) || (candidate.children ?? 0) < 0 || (candidate.children ?? 0) > 30 ||
       !Array.isArray(candidate.categories)) return null;
