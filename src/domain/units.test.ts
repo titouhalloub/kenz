@@ -9,37 +9,32 @@ describe('normalizePriceText', () => {
 
 describe('parsePackQuantity', () => {
   it.each([
-    ['1 kg', 'g', 1000],
-    ['500 g', 'g', 500],
-    ['1,5 kg', 'g', 1500],
-    ['١ كغ', 'g', 1000],
-    ['1 L', 'ml', 1000],
-    ['500 ml', 'ml', 500],
-    ['12 eggs', 'unit', 12],
-    ['pack x6', 'unit', 6],
-    ['6 حبات', 'unit', 6],
-  ] as const)('parses %s as %s base units', (label, unit, expected) => {
+    ['1 kg', 'kg', 1000], ['500 g', 'kg', 500], ['1,5 kg', 'kg', 1500],
+    ['١ كغ', 'kg', 1000], ['1 L', 'l', 1000], ['500 ml', 'l', 500],
+    ['12 eggs', 'unit', 12], ['pack x6', 'unit', 6], ['6 حبات', 'unit', 6],
+  ] as const)('parses %s as %s milli-units', (label, unit, expected) => {
     expect(parsePackQuantity(label, unit)).toBe(expected);
   });
 
   it('rejects ambiguous or incompatible units instead of guessing', () => {
-    expect(parsePackQuantity('1 L', 'g')).toBeNull();
-    expect(parsePackQuantity('500 g', 'ml')).toBeNull();
+    expect(parsePackQuantity('1 L', 'kg')).toBeNull();
+    expect(parsePackQuantity('500 g', 'l')).toBeNull();
     expect(parsePackQuantity('large pack', 'unit')).toBeNull();
-    expect(parsePackQuantity('500', 'g')).toBeNull();
+    expect(parsePackQuantity('500', 'kg')).toBeNull();
   });
 });
 
 describe('pricePerBaseUnitMinor', () => {
-  it('uses integer rounding without floating-point persistence', () => {
-    expect(pricePerBaseUnitMinor(10000, 1000)).toBe(10);
-    expect(pricePerBaseUnitMinor(100, 3)).toBe(33);
-    expect(pricePerBaseUnitMinor(101, 2)).toBe(51);
+  it('calculates integer minor-unit prices per kg, litre, or piece', () => {
+    expect(pricePerBaseUnitMinor(10000, 1000, 'kg')).toBe(10000);
+    expect(pricePerBaseUnitMinor(5000, 500, 'kg')).toBe(10000);
+    expect(pricePerBaseUnitMinor(10000, 1000, 'l')).toBe(10000);
+    expect(pricePerBaseUnitMinor(100, 3, 'unit')).toBe(33);
   });
-
-  it('rejects invalid values', () => {
-    expect(pricePerBaseUnitMinor(0, 10)).toBeNull();
-    expect(pricePerBaseUnitMinor(100, 0)).toBeNull();
-    expect(pricePerBaseUnitMinor(1.5, 2)).toBeNull();
+  it('rounds half up and rejects invalid values', () => {
+    expect(pricePerBaseUnitMinor(101, 2, 'unit')).toBe(51);
+    expect(pricePerBaseUnitMinor(0, 10, 'kg')).toBeNull();
+    expect(pricePerBaseUnitMinor(100, 0, 'kg')).toBeNull();
+    expect(pricePerBaseUnitMinor(1.5, 2, 'kg')).toBeNull();
   });
 });
