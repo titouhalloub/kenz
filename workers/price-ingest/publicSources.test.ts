@@ -36,6 +36,14 @@ describe('public price source adapters', () => {
     expect(links[0].pathname).toContain('prix_04_Nov_2026_MADRP.pdf');
   });
 
+
+  it('extracts an embedded PDF when the viewer URL has trailing parameters', () => {
+    const html = '<a href="/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf&scrolling=0&selection_tool=0">Bulletin</a>';
+    const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
+    expect(links).toHaveLength(1);
+    expect(links[0].hostname).toBe('madr.gov.dz');
+  });
+
   it('parses a Directorate HTML table and normalizes pack quantities', () => {
     const html = `
       <html><body><p>Prix journaliers 07/11/2026</p><table>
@@ -80,6 +88,35 @@ describe('public price source adapters', () => {
     expect(rows[1].normalized.unitPriceMinor).toBe(1700);
     expect(rows[2].productSlug).toBe('poulet-frais');
     expect(rows[2].normalized.unitPriceMinor).toBe(49000);
+  });
+
+
+  it('uses the explicit daily bulletin date and parses the real Jijel row variants', () => {
+    const html = `
+      <html><body>
+      <p>Archive du 16/04/2017</p>
+      <p>Journée du 25-10-2026</p>
+      <p>Semoule supérieure 25 kg 925 1000</p>
+      <p>Huiles alimentaire 5l 600 640</p>
+      <p>Café 1kg 920 1000</p>
+      <p>Concentré de tomate 1g 265 295</p>
+      <p>Pommes de terre 1kg 70 90</p>
+      <p>Viande blanche (poulet) 1kg 470 490</p>
+      <p>Oeufs 15 17</p>
+      </body></html>`;
+    const rows = parseDcwPlainHtml(html, {
+      slug: 'dcw-jijel-daily',
+      kind: 'dcw-html',
+      url: 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ',
+      wilayaCode: '18',
+    });
+    expect(rows.map((row) => row.productSlug)).toEqual([
+      'semoule-ordinaire', 'huile-table', 'cafe-moulu', 'pomme-de-terre', 'poulet-frais', 'oeufs',
+    ]);
+    expect(rows.every((row) => row.normalized.observedAt === '2026-10-25T00:00:00.000Z')).toBe(true);
+    expect(rows[0].normalized.unitPriceMinor).toBe(4000);
+    expect(rows[1].normalized.unitPriceMinor).toBe(12800);
+    expect(rows[5].normalized.unitPriceMinor).toBe(1700);
   });
 
   it('parses official MADRP bulletin text as national average observations', () => {
