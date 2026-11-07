@@ -5,7 +5,7 @@ import type { UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import {
   createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
-  updateFamilyCategory, validateFamilyBudgetPlan, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
+  updateFamilyCategory, validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
 } from '../domain/familyBudget';
 
 interface Props { profile: UserProfile; }
@@ -57,10 +57,12 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
   const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
   const [budgetMessage, setBudgetMessage] = useState('');
+  const [suggestedPlan, setSuggestedPlan] = useState<FamilyBudgetPlan | null>(null);
 
   useEffect(() => {
     const next = readPlan(profile.id, selectedMonth);
     setPlan(next);
+    setSuggestedPlan(null);
     setIncomeInput(moneyInput(next.monthlyIncomeMinor));
     setAdultsInput(String(next.adults));
     setChildrenInput(String(next.children));
@@ -75,25 +77,37 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
   }, [plan, profile.id, selectedMonth]);
 
   const summary = useMemo(() => summarizeFamilyBudget(plan), [plan]);
-  const updatePlan = (field: 'plannedMinor' | 'actualMinor', id: FamilyBudgetCategoryId, value: number) => {
-    const otherTotal = plan.categories.filter((row) => row.id !== id).reduce((sum, row) => sum + row[field], 0);
-    if (!Number.isSafeInteger(otherTotal + value)) {
-      setBudgetMessage(t(profile, 'Le total dépasse la limite numérique autorisée.', 'المجموع يتجاوز الحد الرقمي المسموح.', 'The total exceeds the supported amount.'));
-      return false;
+  const updatePlan = (field: 'plannedMinor' | 'actualMinor' | 'priority', id: FamilyBudgetCategoryId, value: number) => {
+    if (field !== 'priority') {
+      const otherTotal = plan.categories.filter((row) => row.id !== id).reduce((sum, row) => sum + row[field], 0);
+      if (!Number.isSafeInteger(otherTotal + value)) {
+        setBudgetMessage(t(profile, 'Le total dépasse la limite numérique autorisée.', 'المجموع يتجاوز الحد الرقمي المسموح.', 'The total exceeds the supported amount.'));
+        return false;
+      }
     }
     try {
       const next = updateFamilyCategory(plan, id, field, value);
-      setBudgetMessage('');
-      setPlan(next);
+      setBudgetMessage(''); setSuggestedPlan(null); setPlan(next);
       return true;
     } catch {
-      setBudgetMessage(t(profile, 'Montant trop élevé.', 'المبلغ كبير جداً.', 'Amount is too large.'));
+      setBudgetMessage(t(profile, 'Montant ou priorité invalide.', 'المبلغ أو الأولوية غير صالحين.', 'Amount or priority is invalid.'));
       return false;
     }
+  };
+  const createBudgetDraft = () => {
+    const next = suggestFamilyBudgetAllocations(plan);
+    const changed = next.categories.some((row, index) => row.plannedMinor !== plan.categories[index].plannedMinor);
+    if (!changed) {
+      setSuggestedPlan(null);
+      setBudgetMessage(t(profile, 'Aucun solde à répartir. Vérifiez le revenu et les enveloppes déjà saisies.', 'لا يوجد رصيد لتوزيعه. تحقق من الدخل والمخصصات المدخلة.', 'Nothing is available to allocate. Check income and existing envelopes.'));
+      return;
+    }
+    setBudgetMessage(''); setSuggestedPlan(next);
   };
   const setIncome = () => {
     const amount = parseBudgetInput(incomeInput);
     if (amount === null) { setIncomeInput(moneyInput(plan.monthlyIncomeMinor)); return; }
+    setSuggestedPlan(null);
     setPlan((current) => ({ ...current, monthlyIncomeMinor: amount, updatedAt: new Date().toISOString() }));
   };
   const setHousehold = () => {
@@ -145,12 +159,19 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{t(profile, 'PLANIFICATION', 'التخطيط', 'PLANNING')}</span><h3>{t(profile, 'Tous les besoins du foyer', 'كل احتياجات الأسرة', 'Everyday family needs')}</h3></div></div>
         {budgetMessage && <p role="status" className="kenz-family-inline-status">{budgetMessage}</p>}
         <p className="text-xs text-slate-500">{t(profile, 'Saisissez un montant prévu et mettez à jour le réel au fil du mois. Toutes les valeurs restent modifiables.', 'أدخل المبلغ المخطط وحدّث المصروف الفعلي خلال الشهر. كل القيم قابلة للتعديل.', 'Enter a planned amount and update actual spending during the month. Every amount is editable.')}</p>
+        <button onClick={createBudgetDraft} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white">{t(profile, 'Proposer une répartition du revenu', 'اقترح توزيع الدخل', 'Suggest a budget allocation')}</button>
+        {suggestedPlan && <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-2">
+          <strong className="text-xs text-violet-950">{t(profile, 'Brouillon de répartition', 'مسودة توزيع الميزانية', 'Suggested budget draft')}</strong>
+          <p className="text-[10px] text-violet-800">{t(profile, 'Les enveloppes déjà renseignées sont conservées. Le solde est réparti selon vos priorités 1 à 5. Rien ne change avant validation.', 'تم الاحتفاظ بالمخصصات المدخلة. يوزع الرصيد حسب أولوياتك من 1 إلى 5. لن يتغير شيء قبل التأكيد.', 'Existing allocations are preserved. The remaining income is distributed using your 1–5 priorities. Nothing changes until you apply it.')}</p>
+          <div className="space-y-1">{suggestedPlan.categories.filter((row, index) => row.plannedMinor !== plan.categories[index].plannedMinor).map((row) => <div key={row.id} className="flex justify-between gap-2 text-xs"><span>{labels[row.id][profile.locale]}</span><strong>{formatMoney(row.plannedMinor, profile.preferredCurrency, profile.locale)}</strong></div>)}</div>
+          <div className="flex gap-2"><button onClick={() => { setPlan(suggestedPlan); setSuggestedPlan(null); setBudgetMessage(t(profile, 'Répartition appliquée. Vous pouvez encore modifier chaque montant.', 'تم تطبيق التوزيع. يمكنك تعديل كل مبلغ.', 'Draft applied. You can still edit every amount.')); }} className="flex-1 min-h-10 rounded-lg bg-violet-700 px-3 text-xs font-bold text-white">{t(profile, 'Appliquer', 'تطبيق', 'Apply')}</button><button onClick={() => setSuggestedPlan(null)} className="min-h-10 rounded-lg border border-violet-200 px-3 text-xs font-bold text-violet-700">{t(profile, 'Ignorer', 'تجاهل', 'Discard')}</button></div>
+        </div>
         <div className="space-y-2">
           {plan.categories.map((row) => {
             const item = labels[row.id]; const Icon = item.icon;
             const remaining = row.plannedMinor - row.actualMinor;
             return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
-              <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small></div>
+              <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small><label className="kenz-family-priority">{t(profile, 'Priorité', 'الأولوية', 'Priority')}<select value={row.priority} onChange={(e) => updatePlan('priority', row.id, Number(e.target.value))} className="mt-1 rounded-lg border px-2 py-1 text-[10px]"><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option></select></label></div>
               <div className="grid grid-cols-2 gap-2">
                 <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.plannedMinor); else if (!updatePlan('plannedMinor', row.id, amount)) e.currentTarget.value = moneyInput(row.plannedMinor); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
                 <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input key={selectedMonth + '-' + row.id + '-actual'} inputMode="decimal" defaultValue={moneyInput(row.actualMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.actualMinor); else if (!updatePlan('actualMinor', row.id, amount)) e.currentTarget.value = moneyInput(row.actualMinor); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
