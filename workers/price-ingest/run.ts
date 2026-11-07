@@ -22,12 +22,12 @@ function sourceKey(parts: string[]): string {
 }
 
 async function main() {
-  let sourceBySlug = new Map<string, string>();
+  let sourceBySlug = new Map<string, { id: string; enabled: boolean; reviewed: boolean; termsReviewedAt: string | null }>();
   let productBySlug = new Map<string, { id: string; base_unit: string }>();
 
   if (supabase) {
     const { data: sources, error: sourceError } = await supabase
-      .from('price_sources').select('id,slug')
+      .from('price_sources').select('id,slug,enabled,reviewed,terms_reviewed_at')
       .in('slug', PUBLIC_PRICE_SOURCES.map((source) => source.slug));
     if (sourceError) {
       if (/does not exist|schema cache|could not find the table/i.test(sourceError.message)) {
@@ -36,7 +36,10 @@ async function main() {
       }
       throw new Error(`Cannot read price source registry: ${sourceError.message}`);
     }
-    sourceBySlug = new Map((sources || []).map((row) => [row.slug, row.id]));
+    sourceBySlug = new Map((sources || []).map((row) => [row.slug, {
+      id: row.id, enabled: Boolean(row.enabled), reviewed: Boolean(row.reviewed),
+      termsReviewedAt: row.terms_reviewed_at,
+    }]));
 
     const { data: products, error: productError } = await supabase
       .from('products').select('id,slug,base_unit').eq('is_active', true);
@@ -64,12 +67,17 @@ async function main() {
         continue;
       }
 
-      const sourceId = sourceBySlug.get(source.slug);
-      if (!sourceId) {
+      const sourceRecord = sourceBySlug.get(source.slug);
+      if (!sourceRecord) {
         console.warn(`Source ${source.slug} is not registered. Apply migration 039 before ingestion.`);
         failures += 1;
         continue;
       }
+      if (!sourceRecord.enabled || !sourceRecord.reviewed || !sourceRecord.termsReviewedAt) {
+        console.log(`${source.slug}: skipped; source is not yet reviewed and enabled by an operator.`);
+        continue;
+      }
+      const sourceId = sourceRecord.id;
 
       const { data: run, error: runError } = await supabase!
         .from('ingest_runs').insert({ source_id: sourceId, status: 'running' })
