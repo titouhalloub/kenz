@@ -132,14 +132,14 @@ const validText = (value: unknown, max = 100): value is string => typeof value =
 
 const ingredientAliases: Record<string, string> = {
   'طماطم': 'tomato', tomate: 'tomato', tomates: 'tomato', tomatoes: 'tomato',
-  'بصل': 'onion', oignon: 'onion', onions: 'onion',
-  'جزر': 'carrot', carotte: 'carrot', carrots: 'carrot',
+  'بصل': 'onion', oignon: 'onion', oignons: 'onion', onions: 'onion',
+  'جزر': 'carrot', carotte: 'carrot', carottes: 'carrot', carrots: 'carrot',
   'ثوم': 'garlic', ail: 'garlic', 'زيت': 'oil', huile: 'oil',
   'عدس': 'lentils', lentille: 'lentils', lentilles: 'lentils', 'كسكس': 'couscous',
   'لفت': 'turnip', navet: 'turnip', 'كوسة': 'zucchini', courgette: 'zucchini', courgettes: 'zucchini',
   'حمص': 'chickpeas', 'pois chiche': 'chickpeas', 'pois chiches': 'chickpeas',
   'حمص مطبوخ': 'cooked chickpeas', 'pois chiches cuits': 'cooked chickpeas',
-  'بيض': 'eggs', oeuf: 'eggs', oeufs: 'eggs', 'معكرونة': 'pasta', 'pâtes': 'pasta', pate: 'pasta',
+  'بيض': 'eggs', oeuf: 'eggs', oeufs: 'eggs', 'œuf': 'eggs', 'œufs': 'eggs', 'معكرونة': 'pasta', 'pâtes': 'pasta', pate: 'pasta',
   'خيار': 'cucumber', concombre: 'cucumber',
 };
 
@@ -214,7 +214,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     Number.isInteger(recipe.prepMinutes) && recipe.prepMinutes >= 0 && recipe.prepMinutes <= 600 &&
     Array.isArray(recipe.ingredients) && recipe.ingredients.length >= 1 && recipe.ingredients.length <= 100 &&
     recipe.ingredients.every((ingredient) => ingredient && validText(ingredient.name, 80) &&
-      validUnit(ingredient.unit) && validQuantity(ingredient.quantityMilli)) &&
+      validUnit(ingredient.unit) && validQuantity(ingredient.quantityMilli) && ingredient.quantityMilli > 0) &&
     Array.isArray(recipe.steps) && recipe.steps.length >= 1 && recipe.steps.length <= 30 &&
     recipe.steps.every((step) => validText(step, 500)) &&
     (recipe.origin === 'community' || recipe.origin === 'builtin'));
@@ -240,7 +240,7 @@ export function familyLivingStorageKey(userId: string, month: string): string {
 export function parseCommunityRecipe(value: unknown, id: string): FamilyRecipe | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<FamilyRecipe>;
-  if (!validText(candidate.title, 100) || !validText(candidate.description, 240) ||
+  if (!validText(id, 120) || !validText(candidate.title, 100) || !validText(candidate.description, 240) ||
       !Number.isInteger(candidate.baseServings) || (candidate.baseServings ?? 0) < 1 ||
       (candidate.baseServings ?? 0) > 40 || !Number.isInteger(candidate.prepMinutes) ||
       (candidate.prepMinutes ?? -1) < 0 || (candidate.prepMinutes ?? 9999) > 600 ||
