@@ -57,6 +57,7 @@ describe('family living planner', () => {
     plan.meals = [{ id: 'm1', date: '2026-02-31', slot: 'lunch', recipeId: 'dz-omelette', servings: 2 }];
     expect(validateFamilyLivingPlan(plan, 'u1', '2026-02')).toBeNull();
     expect(parseCommunityRecipe({ title: 'Soup', description: 'Good', baseServings: 2, prepMinutes: 10, ingredients: [{ name: 'water', quantityMilli: 1000, unit: 'ml' }], steps: [] }, 'community-x')).toBeNull();
+    expect(parseCommunityRecipe({ title: 'Soup', description: 'Good', baseServings: 2, prepMinutes: 10, ingredients: [{ name: 'water', quantityMilli: Number.MAX_SAFE_INTEGER, unit: 'ml' }], steps: ['Boil water.'] }, 'community-big')).toBeNull();
   });
 
   it('accepts legacy monthly plans without the optional needs list', () => {
