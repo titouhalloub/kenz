@@ -15,6 +15,7 @@ import {
   BookOpen,
   Moon,
   BarChart3,
+  MessageCircle,
 } from 'lucide-react';
 import {
   loadBudgetState,
@@ -81,6 +82,7 @@ import { AdvancedReportsView } from './components/AdvancedReportsView';
 import { TransactionsView } from './components/TransactionsView';
 import { PlanView } from './components/PlanView';
 import { DirectoryView } from './components/DirectoryView';
+import { CommunityView } from './components/CommunityView';
 import { SettingsView } from './components/SettingsView';
 import { DebtLedgerView } from './components/DebtLedgerView';
 import { FestiveZakatView } from './components/FestiveZakatView';
@@ -98,7 +100,7 @@ import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 import { kenzText } from './domain/i18n';
 
-type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
@@ -511,6 +513,14 @@ export default function App() {
             {kenzText(budgetState.profile.locale, 'neighborhood', 'Quartier & Services')}
           </button>
           <button
+            onClick={() => setActiveTab('community')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
+              activeTab === 'community' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            {budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}
+          </button>
+          <button
             onClick={() => setActiveTab('debts')}
             className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
               activeTab === 'debts' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
@@ -663,6 +673,14 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'community' && (
+          <CommunityView
+            user={currentUser}
+            locale={budgetState.profile.locale}
+            availableBudgetMinor={safeToSpend}
+          />
+        )}
+
         {activeTab === 'debts' && (
           <DebtLedgerView
             debts={debts}
@@ -730,7 +748,7 @@ export default function App() {
         aria-label="Navigation principale"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 px-1 py-1"
       >
-        <div className="grid grid-cols-8 items-center h-16 max-w-xl mx-auto">
+        <div className="grid grid-cols-9 items-center h-16 max-w-xl mx-auto">
           {/* 1. Home Tab */}
           <button
             onClick={() => setActiveTab('home')}
@@ -773,6 +791,17 @@ export default function App() {
           >
             <Store className="w-4 h-4" />
             <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'الحي' : budgetState.profile.locale === 'en' ? 'Nearby' : 'Quartier'}</span>
+          </button>
+
+          {/* Community tab */}
+          <button
+            onClick={() => setActiveTab('community')}
+            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
+              activeTab === 'community' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}</span>
           </button>
 
           {/* 4. Carnet Kredy Tab */}
