@@ -5,7 +5,7 @@ import type { Category, RecurringItem, Transaction, UserProfile } from '../domai
 import { formatMoney } from '../domain/financialCalculations';
 import {
   applyFamilyBudgetSources, countRecurringOccurrencesInMonth, createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
-  updateFamilyCategory, validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
+  updateFamilyCategory, validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, normalizeLegacyAutoAllocation, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
 } from '../domain/familyBudget';
 
 interface Props {
@@ -40,7 +40,7 @@ const readPlan = (userId: string, month: string): FamilyBudgetPlan => {
     const raw = localStorage.getItem(familyBudgetStorageKey(userId, month));
     if (!raw) return fallback;
     const stored = validateFamilyBudgetPlan(JSON.parse(raw), userId);
-    return stored?.month === month ? stored : fallback;
+    return stored?.month === month ? normalizeLegacyAutoAllocation(stored) : fallback;
   } catch { return fallback; }
 };
 
@@ -167,6 +167,26 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     setPlannedInputs(Object.fromEntries(effectivePlan.categories.map((row) => [row.id, moneyInput(row.plannedMinor)])));
   }, [selectedMonth, effectivePlan.categories]);
 
+  useEffect(() => {
+    if (plan.userId !== profile.id || plan.month !== selectedMonth || plan.allocationMode !== 'automatic') return;
+    const next = suggestFamilyBudgetAllocations(effectivePlan);
+    const changed = next.categories.some((row, index) =>
+      row.plannedMinor !== plan.categories[index]?.plannedMinor ||
+      row.plannedOverride !== plan.categories[index]?.plannedOverride
+    );
+    if (!changed) return;
+    setPlan((current) => {
+      if (current.allocationMode !== 'automatic' || current.month !== selectedMonth || current.userId !== profile.id) return current;
+      return {
+        ...current,
+        categories: current.categories.map((row) => {
+          const recalculated = next.categories.find((item) => item.id === row.id);
+          return recalculated ? { ...row, plannedMinor: recalculated.plannedMinor, plannedOverride: false } : row;
+        }),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }, [plan.userId, plan.month, plan.allocationMode, plan.adults, plan.children, plan.categories, profile.id, selectedMonth, monthlyIncomeMinor, effectivePlan]);
   const summary = useMemo(() => summarizeFamilyBudget(effectivePlan), [effectivePlan]);
   const categoryNameById = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories]);
   const dailyExpenses = useMemo(() => monthTransactions
