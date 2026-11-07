@@ -253,12 +253,15 @@ async function fetchPublic(url: URL, redirects = 0): Promise<Response> {
   return response;
 }
 
-function extractPdfLinks(html: string, listingUrl: URL): URL[] {
+export function extractPdfLinks(html: string, listingUrl: URL): URL[] {
   const links: URL[] = [];
   for (const match of html.matchAll(/href\s*=\s*["']([^"']+\.pdf(?:\?[^"']*)?)["']/gi)) {
     try {
-      const url = new URL(decodeEntities(match[1]), listingUrl);
-      if (url.hostname === listingUrl.hostname && /prix_\d{2}_[a-z]{3}_\d{4}_madrp\.pdf/i.test(url.pathname)) links.push(url);
+      const linked = new URL(decodeEntities(match[1]), listingUrl);
+      const embedded = linked.searchParams.get('file');
+      const url = embedded ? new URL(embedded, linked) : linked;
+      if (url.protocol === 'https:' && url.hostname === listingUrl.hostname &&
+          /prix_\d{2}_[a-z]{3}_\d{4}_madrp\.pdf/i.test(url.pathname)) links.push(url);
     } catch { /* ignore malformed external links */ }
   }
   return [...new Map(links.map((url) => [url.href, url])).values()];
