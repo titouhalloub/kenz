@@ -187,7 +187,7 @@ export function suggestFamilyBudgetAllocations(plan: FamilyBudgetPlan): FamilyBu
   if (!validMinor(plan.monthlyIncomeMinor)) return plan;
   const fixedTotal = plan.categories.reduce((sum, row) => sum + row.plannedMinor, 0);
   if (!Number.isSafeInteger(fixedTotal) || fixedTotal >= plan.monthlyIncomeMinor) return plan;
-  const eligible = plan.categories.filter((row) => row.plannedMinor === 0);
+  const eligible = plan.categories.filter((row) => row.plannedMinor === 0 && row.plannedOverride !== true);
   if (eligible.length === 0) return plan;
   const remaining = plan.monthlyIncomeMinor - fixedTotal;
   const weightTotal = eligible.reduce((sum, row) => sum + row.priority, 0);
