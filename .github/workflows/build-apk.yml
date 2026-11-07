@@ -40,8 +40,8 @@ jobs:
 
       - name: Build Web App
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://aahhwretdibddgffhnwz.supabase.co' }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'sb_publishable__ctMsyLYvpUc3WtWXMjTBA_dv0OzClw' }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'sb_publishable_keVgMBUk932fZ24ydmvsyA_C3W2dQv4' }}
         run: |
           npm run build
           test -s dist/index.html
