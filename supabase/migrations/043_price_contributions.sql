@@ -254,3 +254,133 @@ end;
 $$;
 revoke all on function public.delete_my_price_contributions() from public, anon;
 grant execute on function public.delete_my_price_contributions() to authenticated;
+
+
+-- Moderator-only review queue and source health summaries.
+create table public.price_observation_reviews (
+  id uuid primary key default gen_random_uuid(),
+  observation_id uuid not null references public.price_observations(id) on delete cascade,
+  reviewer_id uuid not null references auth.users(id) on delete restrict,
+  decision text not null check (decision in ('accepted','rejected')),
+  reason text not null check (char_length(reason) between 1 and 1000),
+  reviewed_at timestamptz not null default now()
+);
+create index price_observation_reviews_observation_idx
+  on public.price_observation_reviews(observation_id, reviewed_at desc);
+alter table public.price_observation_reviews enable row level security;
+revoke all on public.price_observation_reviews from public, anon, authenticated;
+grant select on public.price_observation_reviews to authenticated;
+create policy "Price review audit is moderator-only"
+  on public.price_observation_reviews for select to authenticated
+  using (public.is_community_moderator());
+revoke truncate, references, trigger on public.price_observation_reviews from anon, authenticated;
+
+create or replace function public.get_price_source_health()
+returns table (
+  source_id uuid,
+  source_slug text,
+  source_name text,
+  source_type text,
+  enabled boolean,
+  reviewed boolean,
+  schedule text,
+  last_run_at timestamptz,
+  last_run_status text,
+  last_rows_parsed integer,
+  last_rows_accepted integer,
+  pending_observations bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_community_moderator() then raise exception 'Moderator access required'; end if;
+  return query
+  select s.id,s.slug,s.name,s.source_type,s.enabled,s.reviewed,s.schedule,
+    r.started_at,r.status,r.rows_parsed,r.rows_accepted,
+    (select count(*) from public.price_observations o where o.source_id=s.id and o.status='pending')
+  from public.price_sources s
+  left join lateral (
+    select ir.started_at,ir.status,ir.rows_parsed,ir.rows_accepted
+    from public.ingest_runs ir where ir.source_id=s.id
+    order by ir.started_at desc limit 1
+  ) r on true
+  order by s.source_type,s.name;
+end;
+$$;
+revoke all on function public.get_price_source_health() from public, anon;
+grant execute on function public.get_price_source_health() to authenticated;
+
+create or replace function public.list_pending_price_observations(p_limit integer default 100)
+returns table (
+  observation_id uuid,
+  product_slug text,
+  product_name text,
+  source_slug text,
+  source_name text,
+  unit_price_minor bigint,
+  observed_at timestamptz,
+  wilaya_code text,
+  quality_flags text[],
+  source_reference text,
+  ingest_run_id uuid
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_community_moderator() then raise exception 'Moderator access required'; end if;
+  return query
+  select o.id,p.slug,p.name_fr,s.slug,s.name,o.unit_price_minor,o.observed_at,
+    o.wilaya_code,o.quality_flags,o.source_reference,o.ingest_run_id
+  from public.price_observations o
+  join public.products p on p.id=o.product_id
+  join public.price_sources s on s.id=o.source_id
+  where o.status='pending'
+  order by o.observed_at desc,o.created_at desc
+  limit greatest(1,least(coalesce(p_limit,100),250));
+end;
+$$;
+revoke all on function public.list_pending_price_observations(integer) from public, anon;
+grant execute on function public.list_pending_price_observations(integer) to authenticated;
+
+create or replace function public.review_price_observation(
+  p_observation_id uuid,
+  p_decision text,
+  p_reason text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_source_id uuid;
+begin
+  if v_user is null or not public.is_community_moderator() then raise exception 'Moderator access required'; end if;
+  if p_decision not in ('accepted','rejected') then raise exception 'Invalid review decision'; end if;
+  if char_length(trim(coalesce(p_reason,''))) not between 1 and 1000 then raise exception 'A review reason is required'; end if;
+  select source_id into v_source_id
+  from public.price_observations where id=p_observation_id and status='pending';
+  if v_source_id is null then raise exception 'Pending observation not found'; end if;
+  if p_decision='accepted' and not exists (
+    select 1 from public.price_sources where id=v_source_id and enabled=true and reviewed=true
+  ) then raise exception 'The source is disabled or not reviewed'; end if;
+  update public.price_observations
+  set status=p_decision,reviewed_at=now(),reviewed_by=v_user,
+      quality_flags=case when p_decision='rejected'
+        then array_append(quality_flags,'moderator_rejected') else quality_flags end
+  where id=p_observation_id and status='pending';
+  if not found then raise exception 'Observation was already reviewed'; end if;
+  insert into public.price_observation_reviews(observation_id,reviewer_id,decision,reason)
+  values (p_observation_id,v_user,p_decision,trim(p_reason));
+  perform public.refresh_price_stats(14);
+end;
+$$;
+revoke all on function public.review_price_observation(uuid,text,text) from public, anon;
+grant execute on function public.review_price_observation(uuid,text,text) to authenticated;
