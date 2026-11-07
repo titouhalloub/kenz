@@ -3,6 +3,15 @@
 Status: in progress. Working branch: `feat/price-simulator-community`; changes remain isolated from `main` until reviewed and merged.
 Stack facts this plan builds on: Vite + React 19 + TS, Tailwind 4, Express `server.ts` (AI gateway only), Supabase (Postgres + RLS, migrations 001–035), Capacitor Android, Vitest, CI = `tsc --noEmit` + `vitest` + `vite build`.
 
+## 0. Implementation status — 2026-11-07
+
+- Phase 0 security/source groundwork is present: AI provider URL validation and tests, product catalog tests, and the source audit in `docs/PRICE_SOURCES.md`.
+- Draft migrations 036–038 are on this feature branch only. They are **not applied** to the production Supabase project. No paid Supabase preview branch was created.
+- The catalog is seeded with canonical multilingual product slugs and aliases, but **no market prices are invented or seeded**. No third-party source is enabled; commune records remain unseeded until checked against an official register.
+- The price-ingest foundation now includes DZD normalization, kg/litre/piece unit handling, multipack parsing, exact alias matching, review-only fuzzy suggestions, and a rolling aggregate refresh function. Neighborhood aggregates require at least three distinct contributors/shops.
+- The monthly simulator engine and a new Planning tab are implemented. It computes on-device from the existing Kenz budget, supports manual local price inputs when public aggregates are unavailable, and can read public aggregates when migrations and reviewed data are deployed. Income, account balances, and budget figures are not sent to the price service.
+- Remaining before live-price release: validate/apply migrations, verify official commune codes, onboard at least one source through the audit gate, load real observations, and complete scenario persistence and end-to-end tests. Community features remain later in the roadmap.
+
 ## 1. Goals
 
 1. **Monthly budget simulator** — project a whole month (income, recurring commitments, savings plan, variable spending priced from real local prices) against the budget Kenz already computes for the user, and show surplus/shortfall, per category and per week.
