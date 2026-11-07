@@ -81,9 +81,15 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
       setBudgetMessage(t(profile, 'Le total dépasse la limite numérique autorisée.', 'المجموع يتجاوز الحد الرقمي المسموح.', 'The total exceeds the supported amount.'));
       return false;
     }
-    setBudgetMessage('');
-    setPlan((current) => updateFamilyCategory(current, id, field, value));
-    return true;
+    try {
+      const next = updateFamilyCategory(plan, id, field, value);
+      setBudgetMessage('');
+      setPlan(next);
+      return true;
+    } catch {
+      setBudgetMessage(t(profile, 'Montant trop élevé.', 'المبلغ كبير جداً.', 'Amount is too large.'));
+      return false;
+    }
   };
   const setIncome = () => {
     const amount = parseBudgetInput(incomeInput);
