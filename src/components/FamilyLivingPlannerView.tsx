@@ -55,7 +55,7 @@ const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
       if (Array.isArray(library)) {
         const imported = library.map((item) => item && typeof item.id === 'string' ? parseCommunityRecipe(item, item.id) : null).filter((item): item is FamilyRecipe => !!item);
         const combined = [...monthly.recipes, ...imported];
-        monthly.recipes = [...new Map(combined.map((recipe) => [recipe.id, recipe])).values()];
+        monthly.recipes = [...new Map<string, FamilyRecipe>(combined.map((recipe) => [recipe.id, recipe] as const)).values()];
       }
     } catch { /* Keep the validated monthly collection if the shared library is damaged. */ }
     return monthly;
@@ -97,7 +97,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   }, [plan, profile.id, month, profile.locale]);
 
   const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
-  const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
+  const recipeMap = useMemo(() => new Map<string, FamilyRecipe>(recipes.map((recipe) => [recipe.id, recipe] as const)), [recipes]);
   const requirements = useMemo(() => buildShoppingRequirements(plan), [plan]);
   const selectedRecipe = recipeMap.get(recipeId) || recipes[0];
   const plannedMeals = [...plan.meals].sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot));
