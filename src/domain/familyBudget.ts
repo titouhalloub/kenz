@@ -179,7 +179,7 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   }
   if (categories.length !== FAMILY_BUDGET_DEFAULTS.length || seen.size !== allowed.size) return null;
   if (!Number.isSafeInteger(categories.reduce((sum, row) => sum + row.plannedMinor, 0)) || !Number.isSafeInteger(categories.reduce((sum, row) => sum + row.actualMinor, 0))) return null;
-  return { ...candidate, categories, allocationMode: candidate.allocationMode ?? 'custom' } as FamilyBudgetPlan;
+  return { ...candidate, categories } as FamilyBudgetPlan;
 }
 
 export function familyBudgetStorageKey(userId: string, month: string): string {
@@ -189,7 +189,8 @@ export function familyBudgetStorageKey(userId: string, month: string): string {
 
 /** Migrate exact weighted splits saved by the old allocator as manual overrides. */
 export function normalizeLegacyAutoAllocation(plan: FamilyBudgetPlan): FamilyBudgetPlan {
-  if (plan.allocationMode || !plan.categories.every((row) => row.plannedOverride === true)) return plan;
+  if (plan.allocationMode) return plan;
+  if (!plan.categories.every((row) => row.plannedOverride === true)) return { ...plan, allocationMode: 'custom' };
   const total = plan.categories.reduce((sum, row) => sum + row.plannedMinor, 0);
   if (!Number.isSafeInteger(total) || total <= 0) return plan;
   const weightTotal = plan.categories.reduce((sum, row) => sum + row.priority, 0);
