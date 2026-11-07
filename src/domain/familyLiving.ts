@@ -34,6 +34,7 @@ export interface PantryItem {
   quantityMilli: number;
 }
 
+export type ClothingSeason = 'spring' | 'summer' | 'autumn' | 'winter' | 'all';
 export type HouseholdNeedCategory = 'clothing' | 'cleaning' | 'hygiene' | 'school' | 'transport' | 'health' | 'home' | 'other';
 
 export interface HouseholdNeed {
@@ -41,6 +42,8 @@ export interface HouseholdNeed {
   category: HouseholdNeedCategory;
   name: string;
   member?: string;
+  season?: ClothingSeason;
+  size?: string;
   plannedMinor: number;
   actualMinor: number;
   dueDate?: string;
@@ -205,6 +208,8 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     (need.category === 'clothing' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'school' ||
       need.category === 'transport' || need.category === 'health' || need.category === 'home' || need.category === 'other') &&
     validText(need.name, 100) && (need.member === undefined || validText(need.member, 80)) &&
+    (need.season === undefined || need.season === 'spring' || need.season === 'summer' || need.season === 'autumn' || need.season === 'winter' || need.season === 'all') &&
+    (need.size === undefined || validText(need.size, 40)) &&
     validQuantity(need.plannedMinor) && validQuantity(need.actualMinor) &&
     (need.dueDate === undefined || (validDate(need.dueDate) && need.dueDate.slice(0, 7) === month)));
   const recipesValid = row.recipes.every((recipe) => recipe && validText(recipe.id, 120) &&
