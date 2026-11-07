@@ -166,7 +166,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
           <p className="text-[10px] text-violet-800">{t(profile, 'Les enveloppes déjà renseignées sont conservées. Le solde est réparti selon vos priorités 1 à 5. Rien ne change avant validation.', 'تم الاحتفاظ بالمخصصات المدخلة. يوزع الرصيد حسب أولوياتك من 1 إلى 5. لن يتغير شيء قبل التأكيد.', 'Existing allocations are preserved. The remaining income is distributed using your 1–5 priorities. Nothing changes until you apply it.')}</p>
           <div className="space-y-1">{suggestedPlan.categories.filter((row, index) => row.plannedMinor !== plan.categories[index].plannedMinor).map((row) => <div key={row.id} className="flex justify-between gap-2 text-xs"><span>{labels[row.id][profile.locale]}</span><strong>{formatMoney(row.plannedMinor, profile.preferredCurrency, profile.locale)}</strong></div>)}</div>
           <div className="flex gap-2"><button onClick={() => { setPlan(suggestedPlan); setSuggestedPlan(null); setBudgetMessage(t(profile, 'Répartition appliquée. Vous pouvez encore modifier chaque montant.', 'تم تطبيق التوزيع. يمكنك تعديل كل مبلغ.', 'Draft applied. You can still edit every amount.')); }} className="flex-1 min-h-10 rounded-lg bg-violet-700 px-3 text-xs font-bold text-white">{t(profile, 'Appliquer', 'تطبيق', 'Apply')}</button><button onClick={() => setSuggestedPlan(null)} className="min-h-10 rounded-lg border border-violet-200 px-3 text-xs font-bold text-violet-700">{t(profile, 'Ignorer', 'تجاهل', 'Discard')}</button></div>
-        </div>
+        </div>}
         <div className="space-y-2">
           {plan.categories.map((row) => {
             const item = labels[row.id]; const Icon = item.icon;
