@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChefHat, ClipboardList, Package, Plus, Trash2, Download, Upload, ShoppingBasket, CheckCircle2 } from 'lucide-react';
+import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, ShoppingBasket } from 'lucide-react';
 import type { UserProfile } from '../domain/types';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
@@ -14,6 +14,7 @@ type Section = 'meals' | 'shopping' | 'pantry' | 'recipes';
 const tr = (profile: UserProfile, fr: string, ar: string, en: string) =>
   profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
 const monthFirstDay = (month: string) => `${month}-01`;
+const monthLastDay = (month: string) => { const [year, monthNumber] = month.split('-').map(Number); return `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, '0')}`; };
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 const parseQuantityMilli = (value: string) => {
   const parsed = Number(value.replace(',', '.'));
@@ -25,7 +26,7 @@ const formatQuantity = (milli: number, unit: IngredientUnit, locale: string) => 
   const value = milli / 1000;
   if (unit === 'g' && value >= 1000) return `${new Intl.NumberFormat(locale).format(value / 1000)} kg`;
   if (unit === 'ml' && value >= 1000) return `${new Intl.NumberFormat(locale).format(value / 1000)} L`;
-  const label = unit === 'g' ? 'g' : unit === 'ml' ? 'ml' : tr({ locale } as UserProfile, 'pièce(s)', 'حبة', 'piece(s)');
+  const label = unit === 'g' ? 'g' : unit === 'ml' ? 'ml' : locale.startsWith('ar') ? 'حبة' : locale.startsWith('fr') ? 'pièce(s)' : 'piece(s)';
   return `${new Intl.NumberFormat(locale).format(value)} ${label}`;
 };
 
@@ -102,8 +103,11 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     updatePlan((current) => {
       const key = ingredientKey(name, pantryUnit);
       const existing = current.pantry.find((item) => ingredientKey(item.name, item.unit) === key);
-      if (existing) return { ...current, pantry: current.pantry.map((item) => item.id === existing.id
-        ? { ...item, quantityMilli: item.quantityMilli + quantityMilli } : item) };
+      if (existing) {
+        const total = existing.quantityMilli + quantityMilli;
+        if (!Number.isSafeInteger(total)) throw new RangeError('Pantry quantity is too large.');
+        return { ...current, pantry: current.pantry.map((item) => item.id === existing.id ? { ...item, quantityMilli: total } : item) };
+      }
       return { ...current, pantry: [...current.pantry, { id: makeId('stock'), name, unit: pantryUnit, quantityMilli }] };
     });
     setPantryName(''); setPantryQuantity('');
@@ -134,8 +138,15 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const slotLabel = (slot: MealSlot) => slot === 'breakfast'
     ? tr(profile, 'Petit-déjeuner', 'الفطور', 'Breakfast')
     : slot === 'lunch' ? tr(profile, 'Déjeuner', 'الغداء', 'Lunch') : tr(profile, 'Dîner', 'العشاء', 'Dinner');
-  const recipeTitle = (recipe: FamilyRecipe) => recipe.title;
-  const recipeDescription = (recipe: FamilyRecipe) => recipe.description;
+  const recipeCopy: Record<string, { fr: string; en: string; descriptionFr: string; descriptionEn: string }> = {
+    'dz-lentil-soup': { fr: 'Soupe de lentilles', en: 'Lentil soup', descriptionFr: 'Soupe chaude et économique pour le déjeuner ou le dîner', descriptionEn: 'A warm, budget-friendly lunch or dinner soup' },
+    'dz-couscous-vegetables': { fr: 'Couscous aux légumes', en: 'Vegetable couscous', descriptionFr: 'Plat familial aux légumes de saison', descriptionEn: 'Family couscous with seasonal vegetables' },
+    'dz-omelette': { fr: 'Omelette aux légumes', en: 'Vegetable omelette', descriptionFr: 'Repas rapide pour le petit-déjeuner ou le dîner', descriptionEn: 'A quick breakfast or dinner' },
+    'dz-tomato-pasta': { fr: 'Pâtes à la tomate', en: 'Tomato pasta', descriptionFr: 'Plat simple avec des ingrédients courants', descriptionEn: 'A simple dish made with everyday ingredients' },
+    'dz-chickpea-salad': { fr: 'Salade de pois chiches', en: 'Chickpea salad', descriptionFr: 'Repas léger et nourrissant, préparé à l’avance', descriptionEn: 'A light, filling meal that can be prepared ahead' },
+  };
+  const recipeTitle = (recipe: FamilyRecipe) => profile.locale === 'ar' ? recipe.title : recipeCopy[recipe.id]?.[profile.locale] || recipe.title;
+  const recipeDescription = (recipe: FamilyRecipe) => profile.locale === 'ar' ? recipe.description : recipeCopy[recipe.id]?.[profile.locale === 'fr' ? 'descriptionFr' : 'descriptionEn'] || recipe.description;
 
   return (
     <section className="kenz-family-living space-y-4" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
@@ -164,7 +175,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       {section === 'meals' && <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'CALENDRIER', 'التقويم', 'CALENDAR')}</span><h3>{tr(profile, 'Programmer un repas', 'برمجة وجبة', 'Plan a meal')}</h3></div><span className="text-xs text-slate-500">{month}</span></div>
         <div className="grid grid-cols-2 gap-2">
-          <label>{tr(profile, 'Date', 'التاريخ', 'Date')}<input type="date" min={monthFirstDay(month)} max={`${month}-31`} value={mealDate} onChange={(e) => setMealDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label>{tr(profile, 'Date', 'التاريخ', 'Date')}<input type="date" min={monthFirstDay(month)} max={monthLastDay(month)} value={mealDate} onChange={(e) => setMealDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label>{tr(profile, 'Repas', 'الوجبة', 'Meal')}<select value={mealSlot} onChange={(e) => setMealSlot(e.target.value as MealSlot)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm"><option value="breakfast">{slotLabel('breakfast')}</option><option value="lunch">{slotLabel('lunch')}</option><option value="dinner">{slotLabel('dinner')}</option></select></label>
           <label className="col-span-2">{tr(profile, 'Recette', 'الوصفة', 'Recipe')}<select value={recipeId} onChange={(e) => setRecipeId(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm">{recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipeTitle(recipe)}</option>)}</select></label>
           <label className="col-span-2">{tr(profile, 'Nombre de portions', 'عدد الحصص', 'Servings')}<input type="number" min="1" max="40" value={servings} onChange={(e) => setServings(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
