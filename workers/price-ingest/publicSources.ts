@@ -337,15 +337,26 @@ async function fetchPublic(url: URL, redirects = 0): Promise<Response> {
 }
 
 export function extractPdfLinks(html: string, listingUrl: URL): URL[] {
+  const candidates = new Set<string>();
+  const normalizedHtml = html.replace(/\\\\\//g, '/');
+  const attributes = /\\b(?:href|src|data-src|data-href|data-file)\\s*=\\s*(?:["']([^"']+)["']|([^\\s>]+))/gi;
+  for (const match of normalizedHtml.matchAll(attributes)) {
+    const value = match[1] || match[2];
+    if (value) candidates.add(decodeEntities(value));
+  }
+  // Some CMS PDF viewers place the embedded file URL in inline scripts or JSON rather than an href.
+  const rawPdfUrls = /(?:https?:\\/\\/[^"'<>\\s]+|\\/[^"'<>\\s]+)prix_\\d{2}_[a-z]{3}_\\d{4}_madrp\\.pdf(?:\\?[^"'<>\\s]*)?/gi;
+  for (const match of normalizedHtml.matchAll(rawPdfUrls)) candidates.add(match[0]);
+
   const links: URL[] = [];
-  for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
+  for (const candidate of candidates) {
     try {
-      const linked = new URL(decodeEntities(match[1]), listingUrl);
+      const linked = new URL(candidate, listingUrl);
       const embedded = linked.searchParams.get('file');
       const url = embedded ? new URL(embedded, linked) : linked;
       if (url.protocol === 'https:' && url.hostname === listingUrl.hostname &&
-          /prix_\d{2}_[a-z]{3}_\d{4}_madrp\.pdf/i.test(url.pathname)) links.push(url);
-    } catch { /* ignore malformed external links */ }
+          /prix_\\d{2}_[a-z]{3}_\\d{4}_madrp\\.pdf/i.test(url.pathname)) links.push(url);
+    } catch { /* ignore malformed or external links */ }
   }
   return [...new Map(links.map((url) => [url.href, url])).values()];
 }
