@@ -228,9 +228,19 @@ export async function robotsAllows(url: URL): Promise<boolean> {
   return longest.allow;
 }
 
+const lastHostRequestAt = new Map<string, number>();
+
+async function waitForHost(origin: string): Promise<void> {
+  const previous = lastHostRequestAt.get(origin) || 0;
+  const waitMs = Math.max(0, 1_100 - (Date.now() - previous));
+  if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+  lastHostRequestAt.set(origin, Date.now());
+}
+
 async function fetchPublic(url: URL, redirects = 0): Promise<Response> {
   if (url.protocol !== 'https:') throw new Error('Only HTTPS source URLs are supported');
   if (!await robotsAllows(url)) throw new Error(`robots.txt disallows or could not be checked: ${url.origin}`);
+  await waitForHost(url.origin);
   const response = await fetch(url, {
     redirect: 'manual',
     headers: {
