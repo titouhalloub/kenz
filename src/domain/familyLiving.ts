@@ -34,12 +34,25 @@ export interface PantryItem {
   quantityMilli: number;
 }
 
+export type HouseholdNeedCategory = 'clothing' | 'cleaning' | 'hygiene' | 'school' | 'transport' | 'health' | 'home' | 'other';
+
+export interface HouseholdNeed {
+  id: string;
+  category: HouseholdNeedCategory;
+  name: string;
+  member?: string;
+  plannedMinor: number;
+  actualMinor: number;
+  dueDate?: string;
+}
+
 export interface FamilyLivingPlan {
   version: 1;
   userId: string;
   month: string;
   meals: PlannedMeal[];
   pantry: PantryItem[];
+  needs: HouseholdNeed[];
   recipes: FamilyRecipe[];
   updatedAt: string;
 }
@@ -136,7 +149,7 @@ export const ingredientKey = (name: string, unit: IngredientUnit) => {
 };
 
 export function createFamilyLivingPlan(userId: string, month: string): FamilyLivingPlan {
-  return { version: 1, userId, month, meals: [], pantry: [], recipes: [], updatedAt: new Date().toISOString() };
+  return { version: 1, userId, month, meals: [], pantry: [], needs: [], recipes: [], updatedAt: new Date().toISOString() };
 }
 
 export function scaleIngredient(quantityMilli: number, baseServings: number, servings: number): number {
@@ -178,8 +191,8 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   if (!value || typeof value !== 'object') return null;
   const row = value as Partial<FamilyLivingPlan>;
   if (row.version !== 1 || row.userId !== userId || row.month !== month || !validMonth(row.month) ||
-      !Array.isArray(row.meals) || !Array.isArray(row.pantry) || !Array.isArray(row.recipes) ||
-      row.meals.length > 400 || row.pantry.length > 500 || row.recipes.length > 500) return null;
+      !Array.isArray(row.meals) || !Array.isArray(row.pantry) || !Array.isArray(row.needs) || !Array.isArray(row.recipes) ||
+      row.meals.length > 400 || row.pantry.length > 500 || row.needs.length > 1000 || row.recipes.length > 500) return null;
 
   const mealsValid = row.meals.every((meal) => meal && validText(meal.id, 120) &&
     validDate(meal.date) && meal.date.slice(0, 7) === month &&
@@ -187,6 +200,12 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     validText(meal.recipeId, 120) && Number.isInteger(meal.servings) && meal.servings >= 1 && meal.servings <= 40);
   const pantryValid = row.pantry.every((item) => item && validText(item.id, 120) &&
     validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli));
+  const needsValid = row.needs.every((need) => need && validText(need.id, 120) &&
+    (need.category === 'clothing' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'school' ||
+      need.category === 'transport' || need.category === 'health' || need.category === 'home' || need.category === 'other') &&
+    validText(need.name, 100) && (need.member === undefined || validText(need.member, 80)) &&
+    validQuantity(need.plannedMinor) && validQuantity(need.actualMinor) &&
+    (need.dueDate === undefined || (validDate(need.dueDate) && need.dueDate.slice(0, 7) === month)));
   const recipesValid = row.recipes.every((recipe) => recipe && validText(recipe.id, 120) &&
     validText(recipe.title, 100) && validText(recipe.description, 240) &&
     (recipe.author === undefined || validText(recipe.author, 80)) &&
@@ -199,9 +218,12 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     recipe.steps.every((step) => validText(step, 500)) &&
     (recipe.origin === 'community' || recipe.origin === 'builtin'));
 
-  if (!mealsValid || !pantryValid || !recipesValid) return null;
+  if (!mealsValid || !pantryValid || !needsValid || !recipesValid) return null;
   const recipeIds = new Set([...BUILTIN_FAMILY_RECIPES, ...row.recipes].map((recipe) => recipe.id));
-  if (new Set(row.meals.map((meal) => meal.id)).size !== row.meals.length ||
+  if (new Set(row.needs.map((need) => need.id)).size !== row.needs.length ||
+      !Number.isSafeInteger(row.needs.reduce((sum, need) => sum + need.plannedMinor, 0)) ||
+      !Number.isSafeInteger(row.needs.reduce((sum, need) => sum + need.actualMinor, 0)) ||
+      new Set(row.meals.map((meal) => meal.id)).size !== row.meals.length ||
       new Set(row.meals.map((meal) => meal.date + '::' + meal.slot)).size !== row.meals.length ||
       row.meals.some((meal) => !recipeIds.has(meal.recipeId)) ||
       new Set(row.recipes.map((recipe) => recipe.id)).size !== row.recipes.length ||
