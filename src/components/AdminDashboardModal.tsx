@@ -20,6 +20,7 @@ import {
   testSupabaseConnection,
 } from '../services/supabase';
 import { Business, BusinessDocument, BusinessReport, VerificationStatus } from '../domain/types';
+import { loadCommunityModerationQueue, moderateCommunityComment, moderateCommunityPost, resolveCommunityReport, type CommunityModerationReport } from '../services/communityStore';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -46,7 +47,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onReviewBusiness,
   onResolveReport,
 }) => {
-  const [activeTab, setActiveTab] = useState<'infra' | 'queue' | 'reports'>('queue');
+  const [activeTab, setActiveTab] = useState<'infra' | 'queue' | 'reports' | 'community'>('queue');
+  const [communityQueue, setCommunityQueue] = useState<CommunityModerationReport[]>([]);
+  const [communityQueueLoading, setCommunityQueueLoading] = useState(false);
+  const [communityQueueError, setCommunityQueueError] = useState('');
   const [supabaseConfig, setSupabaseConfig] = useState(getStoredSupabaseConfig());
   const [connStatus, setConnStatus] = useState<{
     tested: boolean;
@@ -62,6 +66,39 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     saveSupabaseConfig(supabaseConfig);
     const res = await testSupabaseConnection(supabaseConfig);
     setConnStatus({ tested: true, success: res.success, message: res.message, loading: false });
+  };
+
+
+  const openCommunityModeration = async () => {
+    setActiveTab('community');
+    setCommunityQueueLoading(true);
+    setCommunityQueueError('');
+    const result = await loadCommunityModerationQueue();
+    if (result.success) setCommunityQueue(result.data || []);
+    else setCommunityQueueError(result.error || 'Accès réservé aux modérateurs communautaires.');
+    setCommunityQueueLoading(false);
+  };
+
+  const handleCommunityDecision = async (report: CommunityModerationReport, decision: 'hide' | 'dismiss') => {
+    setCommunityQueueError('');
+    if (decision === 'hide') {
+      const moderation = report.targetType === 'post'
+        ? await moderateCommunityPost(report.targetId, 'hidden', 'Masqué après examen du signalement.')
+        : await moderateCommunityComment(report.targetId, 'hidden', 'Masqué après examen du signalement.');
+      if (!moderation.success) {
+        setCommunityQueueError(moderation.error || 'Action de modération impossible.');
+        return;
+      }
+    }
+    const resolved = await resolveCommunityReport(
+      report.id, decision === 'hide' ? 'resolved' : 'dismissed',
+      decision === 'hide' ? 'Contenu masqué après examen.' : 'Signalement examiné et classé sans suite.',
+    );
+    if (!resolved.success) {
+      setCommunityQueueError(resolved.error || 'Impossible de clôturer le signalement.');
+      return;
+    }
+    setCommunityQueue((current) => current.filter((row) => row.id !== report.id));
   };
 
   const pendingBusinesses = businesses.filter((b) => b.verificationStatus === 'pending_review');
@@ -122,6 +159,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 {pendingReports.length}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => void openCommunityModeration()}
+            className={`flex-1 py-2 px-2 text-xs font-semibold rounded-lg transition min-h-[40px] cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'community' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>Modération communauté</span>
+            {communityQueue.length > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-300">{communityQueue.length}</span>}
           </button>
 
           <button
@@ -311,6 +358,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'community' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>Signalements des publications et commentaires</span>
+              <button onClick={() => void openCommunityModeration()} className="text-emerald-300">Actualiser</button>
+            </div>
+            {communityQueueLoading && <p className="p-5 text-center text-xs text-slate-400">Chargement…</p>}
+            {communityQueueError && <p className="rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-200">{communityQueueError}</p>}
+            {!communityQueueLoading && !communityQueueError && communityQueue.length === 0 && (
+              <div className="p-6 rounded-xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-400">Aucun signalement communautaire en attente.</div>
+            )}
+            {communityQueue.map((report) => (
+              <div key={report.id} className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-200">{report.targetType === 'post' ? 'Publication' : 'Commentaire'} · {report.reason}</span>
+                  <span className="text-[10px] text-slate-500">{new Date(report.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p className="whitespace-pre-wrap rounded-lg bg-slate-900 p-2 text-xs text-slate-300">{report.targetText}</p>
+                {report.details && <p className="text-[11px] text-slate-400">Détail : {report.details}</p>}
+                <div className="flex gap-2">
+                  <button onClick={() => void handleCommunityDecision(report, 'hide')} className="flex-1 rounded-lg bg-rose-700 px-3 py-2 text-xs text-white">Masquer le contenu</button>
+                  <button onClick={() => void handleCommunityDecision(report, 'dismiss')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">Classer sans suite</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
