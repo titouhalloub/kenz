@@ -4,7 +4,7 @@ import { FamilyLivingPlannerView } from './FamilyLivingPlannerView';
 import type { Category, RecurringItem, Transaction, UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import {
-  createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
+  applyFamilyBudgetSources, createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
   updateFamilyCategory, validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
 } from '../domain/familyBudget';
 
@@ -72,6 +72,7 @@ const familyCategoryFor = (name?: string): FamilyBudgetCategoryId => {
 export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, transactions, recurringItems }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, currentMonth()));
+  const [plannedInputs, setPlannedInputs] = useState<Record<string, string>>({});
   const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, currentMonth()).monthlyIncomeMinor));
   const [adultsInput, setAdultsInput] = useState(String(readPlan(profile.id, currentMonth()).adults));
   const [childrenInput, setChildrenInput] = useState(String(readPlan(profile.id, currentMonth()).children));
@@ -153,16 +154,15 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     return totals;
   }, [recurringItems, categories, profile.id, profile.preferredCurrency, selectedMonth]);
 
-  const hasMonthExpenses = monthTransactions.some((tx) => tx.type === 'expense');
-  const effectivePlan = useMemo(() => ({
-    ...plan,
-    monthlyIncomeMinor,
-    categories: plan.categories.map((row) => ({
-      ...row,
-      plannedMinor: Math.max(row.plannedMinor, recurringPlannedByCategory.get(row.id) || 0),
-      actualMinor: hasMonthExpenses ? (actualByCategory.get(row.id) || 0) : row.actualMinor,
-    })),
-  }), [plan, monthlyIncomeMinor, hasMonthExpenses, actualByCategory, recurringPlannedByCategory]);
+  const effectivePlan = useMemo(() => applyFamilyBudgetSources(
+    { ...plan, monthlyIncomeMinor },
+    recurringPlannedByCategory,
+    actualByCategory,
+  ), [plan, monthlyIncomeMinor, actualByCategory, recurringPlannedByCategory]);
+
+  useEffect(() => {
+    setPlannedInputs(Object.fromEntries(effectivePlan.categories.map((row) => [row.id, moneyInput(row.plannedMinor)])));
+  }, [selectedMonth, effectivePlan.categories]);
 
   const summary = useMemo(() => summarizeFamilyBudget(effectivePlan), [effectivePlan]);
   const categoryNameById = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories]);
@@ -297,7 +297,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
               return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
                 <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small><label className="kenz-family-priority">{t(profile, 'Priorité', 'الأولوية', 'Priority')}<select value={row.priority} onChange={(e) => updatePlan('priority', row.id, Number(e.target.value))} className="mt-1 rounded-lg border px-2 py-1 text-[10px]"><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option></select></label></div>
                 <div className="grid grid-cols-2 gap-2">
-                  <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.plannedMinor); else if (!updatePlan('plannedMinor', row.id, amount)) e.currentTarget.value = moneyInput(row.plannedMinor); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                  <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" value={plannedInputs[row.id] ?? moneyInput(row.plannedMinor)} onChange={(e) => setPlannedInputs((current) => ({ ...current, [row.id]: e.target.value }))} onBlur={(e) => { const amount = parseBudgetInput(e.currentTarget.value); if (amount === null) { setPlannedInputs((current) => ({ ...current, [row.id]: moneyInput(row.plannedMinor) })); return; } if (updatePlan('plannedMinor', row.id, amount)) setPlannedInputs((current) => ({ ...current, [row.id]: moneyInput(amount) })); else setPlannedInputs((current) => ({ ...current, [row.id]: moneyInput(row.plannedMinor) })); }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
                   <div className="text-xs"><span className="block">{t(profile, 'Réel · opérations Kenz', 'الفعلي · عمليات كنز', 'Actual · Kenz transactions')}</span><strong className="block mt-2 text-sm font-mono-numbers">{formatMoney(row.actualMinor, profile.preferredCurrency, profile.locale)}</strong></div>
                 </div>
               </article>;
