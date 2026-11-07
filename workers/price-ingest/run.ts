@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { PRODUCT_CATALOG } from '../../src/domain/productCatalog';
 import { PUBLIC_PRICE_SOURCES, scrapePublicSource } from './publicSources';
 
 const dryRun = process.argv.includes('--dry-run');
@@ -45,6 +46,11 @@ async function main() {
       .from('products').select('id,slug,base_unit').eq('is_active', true);
     if (productError) throw new Error(`Cannot read product catalog: ${productError.message}`);
     productBySlug = new Map((products || []).map((row) => [row.slug, row]));
+    const missingCatalogSlugs = PRODUCT_CATALOG.map((product) => product.slug)
+      .filter((slug) => !productBySlug.has(slug));
+    if (missingCatalogSlugs.length > 0) {
+      throw new Error(`Database product catalog is missing ${missingCatalogSlugs.length} canonical slugs. Apply migration 040 before ingestion: ${missingCatalogSlugs.slice(0, 8).join(', ')}`);
+    }
   }
 
   let failures = 0;
