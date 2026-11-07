@@ -368,3 +368,47 @@ export async function moderateCommunityComment(id: string, status: 'published' |
     return { success: false, error: error instanceof Error ? error.message : 'Unable to moderate comment.' };
   }
 }
+
+export interface VerifiedOwnedBusiness {
+  id: string;
+  name: string;
+}
+
+export async function listVerifiedOwnedBusinesses(userId: string): Promise<CommunityResult<VerifiedOwnedBusiness[]>> {
+  try {
+    const supabase = requireClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user || auth.user.id !== userId) return { success: false, error: 'Connecte-toi pour vérifier tes commerces.' };
+    const { data, error } = await supabase.from('businesses')
+      .select('id,name')
+      .eq('owner_id', userId)
+      .eq('verification_status', 'documents_verified')
+      .eq('is_published', true)
+      .limit(20);
+    if (error) throw error;
+    return { success: true, data: (data || []) as VerifiedOwnedBusiness[] };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to load verified businesses.' };
+  }
+}
+
+export async function submitMerchantPrice(input: {
+  businessId: string; productSlug: string; unitPriceMinor: number;
+  observedAt: string; wilayaCode: string; consent: boolean;
+}): Promise<CommunityResult<string>> {
+  try {
+    const { data, error } = await requireClient().rpc('submit_merchant_price_observation', {
+      p_business_id: input.businessId,
+      p_product_slug: input.productSlug,
+      p_unit_price_minor: input.unitPriceMinor,
+      p_observed_at: input.observedAt,
+      p_wilaya_code: input.wilayaCode,
+      p_commune_id: null,
+      p_consent: input.consent,
+    });
+    if (error || !data) throw error || new Error('Merchant price was not submitted.');
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to submit merchant price.' };
+  }
+}
