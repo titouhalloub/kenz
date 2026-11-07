@@ -13,14 +13,14 @@ import type { UserProfile } from '../services/authStore';
 interface CommunityViewProps {
   user: UserProfile;
   availableBudgetMinor: number;
+  locale: 'ar' | 'fr' | 'en';
 }
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
 const getWilayaCode = (value: string) => value.match(/^\s*(\d{2,3})/)?.[1] || null;
 const today = () => new Date().toISOString().slice(0, 10);
 
-export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBudgetMinor }) => {
-  const locale = user.membershipTier ? 'fr' : 'fr';
+export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBudgetMinor, locale }) => {
   const wilayaCode = getWilayaCode(user.wilaya);
   const userId = isUuid(user.id) ? user.id : undefined;
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -29,6 +29,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   const [kindFilter, setKindFilter] = useState<CommunityKind | 'all'>('all');
   const [sort, setSort] = useState<'new' | 'top' | 'fits'>('new');
   const [composerOpen, setComposerOpen] = useState(false);
+  const [shareWilaya, setShareWilaya] = useState(false);
   const [postKind, setPostKind] = useState<CommunityKind>('recipe');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -59,9 +60,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   };
 
   useEffect(() => {
-    if (userId) void ensureCommunityProfile({ userId, locale: 'fr', wilaya: user.wilaya });
+    if (userId) void ensureCommunityProfile({ userId, locale, wilaya: user.wilaya });
     void refresh();
-  }, [user.id, user.wilaya, kindFilter]);
+  }, [user.id, user.wilaya, kindFilter, locale]);
 
   useEffect(() => {
     let active = true;
@@ -106,10 +107,15 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   }), [posts, sort, costByPost, availableBudgetMinor]);
 
   const selectedProduct = PRODUCT_CATALOG.find((product) => product.slug === productSlug) || PRODUCT_CATALOG[0];
-  const quantityLabel = selectedProduct.baseUnit === 'kg' ? 'grammes' : selectedProduct.baseUnit === 'l' ? 'millilitres' : 'unités';
+  const quantityLabel = selectedProduct.baseUnit === 'kg'
+    ? (locale === 'ar' ? 'غرام' : locale === 'en' ? 'grams' : 'grammes')
+    : selectedProduct.baseUnit === 'l'
+      ? (locale === 'ar' ? 'ملليلتر' : locale === 'en' ? 'millilitres' : 'millilitres')
+      : (locale === 'ar' ? 'وحدات' : locale === 'en' ? 'units' : 'unités');
 
   const publish = async () => {
     setError('');
+    if (postKind === 'recipe' && !steps.trim()) { setError('Ajoute les étapes de la recette.'); return; }
     if (!userId) { setError('Connecte-toi avec un compte Kenz pour publier.'); return; }
     if (title.trim().length < 3) { setError('Le titre doit contenir au moins 3 caractères.'); return; }
     const amount = Number(quantity);
@@ -119,7 +125,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     setBusy(true);
     const product = selectedProduct;
     const result = await createCommunityPost({
-      kind: postKind, title: title.trim(), body: body.trim(), locale: 'fr', wilayaCode,
+      kind: postKind, title: title.trim(), body: body.trim(), locale, wilayaCode: shareWilaya ? wilayaCode : null,
       ...(postKind === 'recipe' ? {
         recipe: {
           servings: Math.max(1, Math.min(50, Number(servings) || 1)),
@@ -224,6 +230,10 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               <input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
             </label>
           )}
+          <label className="flex items-start gap-2 text-[11px] text-slate-400">
+            <input type="checkbox" checked={shareWilaya} onChange={(event) => setShareWilaya(event.target.checked)} />
+            {locale === 'ar' ? 'إظهار ولايتي في المنشور' : locale === 'en' ? 'Include my wilaya in this public post' : 'Inclure ma wilaya dans cette publication publique'}
+          </label>
           <div className="flex gap-2">
             <button onClick={publish} disabled={busy} className="flex-1 min-h-[42px] rounded-lg bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50">{busy ? 'Publication…' : 'Publier'}</button>
             <button onClick={() => setComposerOpen(false)} className="min-h-[42px] rounded-lg border border-slate-700 px-4 text-xs text-slate-300">Annuler</button>
@@ -238,7 +248,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
             {PRODUCT_CATALOG.map((product) => <option key={product.slug} value={product.slug}>{productName(product, 'fr')} · {product.baseUnit}</option>)}
           </select>
           <input inputMode="decimal" value={priceAmount} onChange={(event) => setPriceAmount(event.target.value)} placeholder="Prix en DA par unité de base" className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
-          <input type="date" value={priceDate} max={today()} onChange={(event) => setPriceDate(event.target.value)} className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
+          <input type="date" value={priceDate} min={new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)} max={today()} onChange={(event) => setPriceDate(event.target.value)} className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
           <label className="flex items-start gap-2 text-[11px] text-slate-400">
             <input type="checkbox" checked={priceConsent} onChange={(event) => setPriceConsent(event.target.checked)} />
             J’accepte que ce prix et ma wilaya soient partagés publiquement sous forme agrégée après vérification. Mon identifiant reste privé.
@@ -274,7 +284,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               {post.kind === 'recipe' && <div className="rounded-xl bg-slate-950 p-3 space-y-2">
                 <p className="text-[11px] text-slate-400">{post.servings} portions · {post.steps}</p>
                 {post.ingredients.map((ingredient, index) => <p key={index} className="text-[11px] text-slate-300">{ingredient.productSlug || ingredient.freeText} · {ingredient.quantityMilliUnits} {ingredient.baseUnit}</p>)}
-                {typeof totalCost === 'number' ? <p className="text-xs font-semibold text-emerald-300">Coût estimé : {formatMoney(totalCost, 'DZD', 'fr')} · {perServing ? formatMoney(perServing, 'DZD', 'fr') + ' / portion' : ''}</p> : <p className="text-[10px] text-slate-500">Prix public insuffisant pour chiffrer cette recette.</p>}
+                {typeof totalCost === 'number' ? <p className="text-xs font-semibold text-emerald-300">Coût estimé : {formatMoney(totalCost, 'DZD', locale)} · {perServing ? formatMoney(perServing, 'DZD', locale) + ' / portion' : ''}</p> : <p className="text-[10px] text-slate-500">Prix public insuffisant pour chiffrer cette recette.</p>}
               </div>}
               {post.kind === 'shopping_list' && <div className="space-y-1">{post.ingredients.map((item, index) => <p key={index} className="text-xs text-slate-300">• {item.freeText || item.productSlug} — {item.quantityMilliUnits} {item.baseUnit}</p>)}</div>}
               <div className="flex items-center gap-3 text-[11px] text-slate-400">
