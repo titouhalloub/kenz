@@ -34,7 +34,7 @@ export function countRecurringOccurrencesInMonth(
   month: string,
   billingDayOfMonth?: number,
 ): number {
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDueDate)) return 0;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !/^\d{4}-\d{2}-\d{2}$/.test(nextDueDate)) return 0;
   const [year, monthNumber] = month.split('-').map(Number);
   const [dueYear, dueMonth, dueDay] = nextDueDate.split('-').map(Number);
   const monthStart = Date.UTC(year, monthNumber - 1, 1);
