@@ -37,6 +37,8 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   const [servings, setServings] = useState('2');
   const [productSlug, setProductSlug] = useState(PRODUCT_CATALOG[0].slug);
   const [quantity, setQuantity] = useState('250');
+  const [recipeIngredients, setRecipeIngredients] = useState<Array<{ productSlug: string; quantityMilliUnits: number; baseUnit: 'kg' | 'l' | 'unit' }>>([]);
+  const [shoppingItems, setShoppingItems] = useState<Array<{ productSlug: string; label: string; quantityMilliUnits: number; baseUnit: 'kg' | 'l' | 'unit' }>>([]);
   const [busy, setBusy] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [priceOpen, setPriceOpen] = useState(false);
@@ -134,8 +136,8 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     if (!userId) { setError('Connecte-toi avec un compte Kenz pour publier.'); return; }
     if (title.trim().length < 3) { setError('Le titre doit contenir au moins 3 caractères.'); return; }
     const amount = Number(quantity);
-    if ((postKind === 'recipe' || postKind === 'shopping_list') && (!Number.isSafeInteger(amount) || amount <= 0)) {
-      setError('Saisis une quantité valide.'); return;
+    if ((postKind === 'recipe' && recipeIngredients.length === 0) || (postKind === 'shopping_list' && shoppingItems.length === 0)) {
+      setError('Ajoute au moins un élément à la publication.'); return;
     }
     setBusy(true);
     const product = selectedProduct;
@@ -145,19 +147,16 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
         recipe: {
           servings: Math.max(1, Math.min(50, Number(servings) || 1)),
           steps: steps.trim(),
-          ingredients: [{ productSlug: product.slug, quantityMilliUnits: amount, baseUnit: product.baseUnit }],
+          ingredients: recipeIngredients,
         },
       } : {}),
       ...(postKind === 'shopping_list' ? {
-        shoppingItems: [{
-          productSlug: product.slug, label: productName(product, 'fr'),
-          quantityMilliUnits: amount, baseUnit: product.baseUnit,
-        }],
+        shoppingItems,
       } : {}),
     });
     setBusy(false);
     if (!result.success) { setError(result.error || 'Publication impossible.'); return; }
-    setTitle(''); setBody(''); setSteps(''); setComposerOpen(false);
+    setTitle(''); setBody(''); setSteps(''); setRecipeIngredients([]); setShoppingItems([]); setComposerOpen(false);
     await refresh();
   };
 
@@ -274,6 +273,19 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
                   <input type="number" min="1" max="50" value={servings} onChange={(event) => setServings(event.target.value)} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
                 </label>
               </div>
+              <button type="button" onClick={() => {
+                const amount = Number(quantity);
+                if (!Number.isSafeInteger(amount) || amount <= 0) { setError('Saisis une quantité valide.'); return; }
+                setRecipeIngredients((current) => [...current, { productSlug: selectedProduct.slug, quantityMilliUnits: amount, baseUnit: selectedProduct.baseUnit }]);
+                setQuantity('250');
+              }} className="w-full min-h-[36px] rounded-lg border border-slate-700 text-[11px] text-emerald-300">Ajouter cet ingrédient</button>
+              {recipeIngredients.map((item, index) => {
+                const product = PRODUCT_CATALOG.find((row) => row.slug === item.productSlug);
+                return <div key={index} className="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 text-[11px] text-slate-300">
+                  <span>{product ? productName(product, 'fr') : item.productSlug} · {item.quantityMilliUnits} {item.baseUnit}</span>
+                  <button type="button" onClick={() => setRecipeIngredients((current) => current.filter((_, i) => i !== index))} className="text-rose-300">Retirer</button>
+                </div>;
+              })}
               <textarea value={steps} onChange={(event) => setSteps(event.target.value)} maxLength={5000} rows={3} placeholder="Étapes de préparation" className="w-full rounded-lg bg-slate-950 border border-slate-700 p-3 text-xs text-slate-100" />
             </>
           )}
@@ -284,6 +296,19 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               </select>
               <input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
             </label>
+            <button type="button" onClick={() => {
+              const amount = Number(quantity);
+              if (!Number.isSafeInteger(amount) || amount <= 0) { setError('Saisis une quantité valide.'); return; }
+              setShoppingItems((current) => [...current, {
+                productSlug: selectedProduct.slug, label: productName(selectedProduct, 'fr'),
+                quantityMilliUnits: amount, baseUnit: selectedProduct.baseUnit,
+              }]);
+              setQuantity('250');
+            }} className="w-full min-h-[36px] rounded-lg border border-slate-700 text-[11px] text-emerald-300">Ajouter à la liste</button>
+            {shoppingItems.map((item, index) => <div key={index} className="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 text-[11px] text-slate-300">
+              <span>{item.label} · {item.quantityMilliUnits} {item.baseUnit}</span>
+              <button type="button" onClick={() => setShoppingItems((current) => current.filter((_, i) => i !== index))} className="text-rose-300">Retirer</button>
+            </div>)}
           )}
           <label className="flex items-start gap-2 text-[11px] text-slate-400">
             <input type="checkbox" checked={shareWilaya} onChange={(event) => setShareWilaya(event.target.checked)} />
