@@ -35,6 +35,13 @@ describe('family budget foundation', () => {
     expect(next.categories.find((row) => row.id === 'food')?.actualMinor).toBe(0);
   });
 
+  it('rejects category edits that would overflow an aggregate total', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    const almostMax = Number.MAX_SAFE_INTEGER - 5;
+    const first = updateFamilyCategory(plan, 'housing', 'plannedMinor', almostMax);
+    expect(() => updateFamilyCategory(first, 'food', 'plannedMinor', 10)).toThrow();
+  });
+
   it('rejects unsafe aggregate totals and invalid calendar months', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.categories[0].plannedMinor = Number.MAX_SAFE_INTEGER;
