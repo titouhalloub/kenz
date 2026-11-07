@@ -96,7 +96,8 @@ as $$
     and p_text !~* '[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}'
     and p_text !~* '(\\+?213|0)[567][0-9 .-]{7,}'
 $$;
-revoke all on function public.community_text_is_safe(text) from public, anon, authenticated;
+revoke all on function public.community_text_is_safe(text) from public, anon;
+grant execute on function public.community_text_is_safe(text) to authenticated;
 
 -- Public posts are visible only when published and not blocked in either direction.
 create policy "Public profiles are visible by consent" on public.community_profiles
@@ -420,6 +421,7 @@ for each row execute function public.guard_community_profile_update();
 create or replace function public.limit_community_reports()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 begin
@@ -439,3 +441,31 @@ revoke all on function public.limit_community_reports() from public, anon, authe
 create trigger limit_community_reports
 before insert on public.community_reports
 for each row execute function public.limit_community_reports();
+
+
+create or replace function public.guard_community_structured_text()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare v_text text;
+begin
+  if tg_table_name = 'community_recipe_ingredients' then
+    v_text := coalesce(new.free_text, '');
+  else
+    v_text := coalesce(new.label, '');
+  end if;
+  if v_text <> '' and not public.community_text_is_safe(v_text) then
+    raise exception 'Remove links, email addresses and phone numbers from public item labels';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.guard_community_structured_text() from public, anon, authenticated;
+create trigger guard_community_recipe_ingredient_text
+before insert or update on public.community_recipe_ingredients
+for each row execute function public.guard_community_structured_text();
+create trigger guard_community_shopping_item_text
+before insert or update on public.community_shopping_items
+for each row execute function public.guard_community_structured_text();
