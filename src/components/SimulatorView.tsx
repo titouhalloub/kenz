@@ -4,6 +4,7 @@ import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { simulateMonthlyBudget, type SimulatorBasketItem, type SimulatorResult } from '../domain/simulator';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 import { loadMarketPrices } from '../services/priceStore';
+import { deleteSimulatorScenario, listSimulatorScenarios, saveSimulatorScenario, type SimulatorScenario } from '../services/simulatorScenarioStore';
 import type { SimulatorPrice } from '../domain/simulator';
 import type { UserProfile } from '../domain/types';
 import { ALGERIA_WILAYAS } from '../domain/wilayas';
@@ -47,6 +48,11 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
   const [marketPrice, setMarketPrice] = useState<SimulatorPrice | null>(null);
   const [marketStatus, setMarketStatus] = useState('');
   const [error, setError] = useState('');
+  const [scenarioTitle, setScenarioTitle] = useState('Mon scénario');
+  const [scenarioId, setScenarioId] = useState('');
+  const [scenarios, setScenarios] = useState<SimulatorScenario[]>([]);
+  const [scenarioStatus, setScenarioStatus] = useState('');
+  const [scenarioBusy, setScenarioBusy] = useState(false);
 
   const selectedProduct = PRODUCT_CATALOG.find((product) => product.slug === selectedSlug) || PRODUCT_CATALOG[0];
   const quantityUnit = selectedProduct.baseUnit === 'kg'
@@ -54,6 +60,111 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     : selectedProduct.baseUnit === 'l'
       ? (profile.locale === 'ar' ? 'مل/يوم' : profile.locale === 'en' ? 'ml/day' : 'ml/jour')
       : (profile.locale === 'ar' ? 'وحدة/يوم' : profile.locale === 'en' ? 'unit/day' : 'unité/jour');
+
+
+  useEffect(() => {
+    let active = true;
+    listSimulatorScenarios(profile.id).then((result) => {
+      if (!active) return;
+      if (result.success) {
+        setScenarios(result.data);
+        setScenarioId(result.data[0]?.id || '');
+      } else {
+        setScenarioStatus(result.message || 'Synchronisation des scénarios indisponible.');
+      }
+    }).catch(() => {
+      if (active) setScenarioStatus('Synchronisation des scénarios indisponible.');
+    });
+    return () => { active = false; };
+  }, [profile.id]);
+
+  const handleSaveScenario = async () => {
+    if (!scenarioTitle.trim()) return;
+    setScenarioBusy(true);
+    setScenarioStatus('');
+    try {
+      const result = await saveSimulatorScenario({
+        userId: profile.id,
+        title: scenarioTitle,
+        month,
+        adults,
+        children,
+        basket: basket.map((item) => ({
+          productId: item.productId,
+          quantityPerPersonPerDayMilliUnits: item.quantityPerPersonPerDayMilliUnits,
+        })),
+      });
+      if (!result.success) {
+        setScenarioStatus(result.message || 'Impossible d’enregistrer ce scénario.');
+      } else {
+        setScenarios((current) => [result.data, ...current.filter((row) => row.id !== result.data.id)].slice(0, 20));
+        setScenarioId(result.data.id);
+        setScenarioStatus('Scénario enregistré. Le budget et les comptes Kenz ne sont pas synchronisés.');
+      }
+    } catch {
+      setScenarioStatus('Impossible d’enregistrer ce scénario pour le moment.');
+    } finally {
+      setScenarioBusy(false);
+    }
+  };
+
+  const handleLoadScenario = async () => {
+    const scenario = scenarios.find((row) => row.id === scenarioId);
+    if (!scenario) return;
+    setScenarioBusy(true);
+    setScenarioStatus('');
+    try {
+      const overrides = Array.isArray(scenario.basket_overrides) ? scenario.basket_overrides : [];
+      const valid = overrides.filter((item) =>
+        item && typeof item.productId === 'string' &&
+        Number.isSafeInteger(item.quantityPerPersonPerDayMilliUnits) &&
+        item.quantityPerPersonPerDayMilliUnits > 0 &&
+        PRODUCT_CATALOG.some((product) => product.slug === item.productId),
+      );
+      const prices = await loadMarketPrices(valid.map((item) => item.productId), wilayaCode || null);
+      const restored: SimulatorBasketItem[] = valid.flatMap((item) => {
+        const product = PRODUCT_CATALOG.find((row) => row.slug === item.productId);
+        if (!product) return [];
+        return [{
+          productId: product.slug,
+          name: productName(product, profile.locale),
+          category: product.category,
+          baseUnit: product.baseUnit,
+          quantityPerPersonPerDayMilliUnits: item.quantityPerPersonPerDayMilliUnits,
+          ...(prices.pricesBySlug[product.slug] ? { price: prices.pricesBySlug[product.slug] } : {}),
+        }];
+      });
+      setMonth(scenario.month.slice(0, 7));
+      setAdults(scenario.adults);
+      setChildren(scenario.children);
+      setBasket(restored);
+      setScenarioTitle(scenario.title);
+      setScenarioStatus('Scénario chargé. Les prix publics sont actualisés ; les prix saisis manuellement doivent être ressaisis.');
+    } catch {
+      setScenarioStatus('Impossible de charger les prix actuels de ce scénario.');
+    } finally {
+      setScenarioBusy(false);
+    }
+  };
+
+  const handleDeleteScenario = async () => {
+    if (!scenarioId) return;
+    setScenarioBusy(true);
+    try {
+      const result = await deleteSimulatorScenario(profile.id, scenarioId);
+      if (!result.success) {
+        setScenarioStatus(result.message || 'Impossible de supprimer ce scénario.');
+      } else {
+        setScenarios((current) => current.filter((row) => row.id !== scenarioId));
+        setScenarioId('');
+        setScenarioStatus('Scénario supprimé.');
+      }
+    } catch {
+      setScenarioStatus('Impossible de supprimer ce scénario.');
+    } finally {
+      setScenarioBusy(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -149,6 +260,34 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold text-slate-200">Mes scénarios</h3>
+          <span className="text-[10px] text-slate-500">Synchronisation privée</span>
+        </div>
+        <input value={scenarioTitle} onChange={(event) => setScenarioTitle(event.target.value)} maxLength={80}
+          placeholder="Nom du scénario"
+          className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
+        <button type="button" onClick={handleSaveScenario} disabled={scenarioBusy || !scenarioTitle.trim()}
+          className="w-full min-h-[40px] rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs font-semibold text-slate-100">
+          {scenarioBusy ? 'Patiente…' : 'Enregistrer le scénario'}
+        </button>
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+          <select value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}
+            className="min-w-0 h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100">
+            <option value="">Choisir un scénario</option>
+            {scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.title} · {scenario.month.slice(0, 7)}</option>)}
+          </select>
+          <button type="button" onClick={handleLoadScenario} disabled={scenarioBusy || !scenarioId}
+            className="rounded-lg border border-slate-700 px-3 text-xs text-slate-200 disabled:opacity-40">Charger</button>
+          <button type="button" onClick={handleDeleteScenario} disabled={scenarioBusy || !scenarioId}
+            className="rounded-lg border border-rose-900/60 px-3 text-xs text-rose-300 disabled:opacity-40">Supprimer</button>
+        </div>
+        <p className="text-[10px] leading-relaxed text-slate-500">
+          Seuls le mois, la composition du foyer et les quantités du panier sont synchronisés. Budget, revenus, soldes et transactions restent locaux. Les prix publics sont rechargés lors du chargement.
+        </p>
+        {scenarioStatus && <p className="text-[10px] text-emerald-300">{scenarioStatus}</p>}
+      </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Calculator className="h-4 w-4 text-emerald-400" />
