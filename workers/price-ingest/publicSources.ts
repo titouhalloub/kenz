@@ -22,14 +22,9 @@ export interface PublicSourceConfig {
 
 const MADRP_LISTING = 'https://madr.gov.dz/mercuriale-des-prix/';
 const TIZI_OUZOU_URL = 'https://www.dcwtiziouzou.dz/fr/index.php?Itemid=77&id=76&option=com_content&view=article';
-const MILA_URL = 'https://dcwmila.dz/index.php/moy-prix/prix-journ';
-const ILLIZI_URL = 'https://dcwillizi.dz/index.php/moy-prix/prix-journ';
-
 export const PUBLIC_PRICE_SOURCES: PublicSourceConfig[] = [
   { slug: 'madrp-mercuriale', kind: 'madrp-pdf', url: MADRP_LISTING },
   { slug: 'dcw-tizi-ouzou-daily', kind: 'dcw-html', url: TIZI_OUZOU_URL, wilayaCode: '15' },
-  { slug: 'dcw-mila-daily', kind: 'dcw-html', url: MILA_URL, wilayaCode: '43' },
-  { slug: 'dcw-illizi-daily', kind: 'dcw-html', url: ILLIZI_URL, wilayaCode: '33' },
 ];
 
 const products = new Map(PRODUCT_CATALOG.map((product) => [product.slug, product]));
@@ -112,22 +107,26 @@ function parseMoney(value: string): string | null {
 }
 
 function quantityFor(unit: string, baseUnit: BaseUnit): string | null {
-  const value = key(unit);
+  const raw = unit.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(',', '.').trim();
+  const value = key(raw);
   if (baseUnit === 'kg') {
     if (!value || value === 'kg' || value === '1 kg') return '1 kg';
-    if (/^\d+(?:[.,]\d+)?\s*(?:kg|kilo|kilos)$/.test(value)) return value;
-    if (/^\d+(?:[.,]\d+)?\s*(?:g|gr|gram|grammes?)$/.test(value)) return value.replace(/gr|grammes?/g, 'g');
+    if (/^\d+(?:\.\d+)?\s*(?:kg|kilo|kilos)$/.test(raw)) return raw;
+    if (/^\d+(?:\.\d+)?\s*(?:g|gr|gram|grammes?)$/.test(raw)) return raw.replace(/gr|grammes?/g, 'g');
     return null;
   }
   if (baseUnit === 'l') {
     if (!value || value === 'l' || value === '1 l') return '1 l';
-    if (/^\d+(?:[.,]\d+)?\s*(?:l|litre|litres)$/.test(value)) return value;
-    if (/^\d+(?:[.,]\d+)?\s*ml$/.test(value)) return value;
+    if (/^\d+(?:\.\d+)?\s*(?:l|litre|litres)$/.test(raw)) return raw;
+    if (/^\d+(?:\.\d+)?\s*ml$/.test(raw)) return raw;
     return null;
   }
   if (!value || /^(?:unite|unites|piece|pieces|oeuf|oeufs)$/.test(value)) return '1 unit';
   const pack = value.match(/^(\d+)\s*(?:p|pcs?|pieces?|unites?)$/);
-  return pack ? `${pack[1]} units` : null;
+  if (pack) return `${pack[1]} units`;
+  // A packaged item measured in grams/litres is still one retail unit in this catalog.
+  if (/\d+(?:\.\d+)?\s*(?:kg|g|gr|gram|grammes?|l|ml|litre|litres)$/.test(raw)) return '1 unit';
+  return null;
 }
 
 function decodeEntities(value: string): string {
