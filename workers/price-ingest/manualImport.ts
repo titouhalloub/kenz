@@ -44,12 +44,13 @@ function parseCsvLine(line: string, lineNumber: number): string[] {
  */
 export function parseManualBulletinCsv(csv: string): RawPriceRecord[] {
   const lines = csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim() !== '');
-  if (lines.length < 2) throw new Error('Bulletin CSV must contain a header and at least one data row');
+  if (lines.length < 1) throw new Error('Bulletin CSV must contain a header');
 
   const headers = parseCsvLine(lines[0], 1).map((header) => header.toLowerCase());
   if (new Set(headers).size !== headers.length) throw new Error('Bulletin CSV contains duplicate columns');
   const missing = REQUIRED_COLUMNS.filter((column) => !headers.includes(column));
   if (missing.length) throw new Error(`Bulletin CSV missing required columns: ${missing.join(', ')}`);
+  if (lines.length < 2) throw new Error('Bulletin CSV must contain at least one data row');
 
   const index = (name: string) => headers.indexOf(name);
   return lines.slice(1).map((line, offset) => {
