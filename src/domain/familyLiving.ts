@@ -49,12 +49,23 @@ export interface HouseholdNeed {
   dueDate?: string;
 }
 
+export type ShoppingExtraCategory = 'grocery' | 'cleaning' | 'hygiene' | 'other';
+
+export interface ShoppingExtra {
+  id: string;
+  name: string;
+  unit: IngredientUnit;
+  quantityMilli: number;
+  category: ShoppingExtraCategory;
+}
+
 export interface FamilyLivingPlan {
   version: 1;
   userId: string;
   month: string;
   meals: PlannedMeal[];
   pantry: PantryItem[];
+  shoppingExtras: ShoppingExtra[];
   needs: HouseholdNeed[];
   recipes: FamilyRecipe[];
   updatedAt: string;
@@ -152,7 +163,7 @@ export const ingredientKey = (name: string, unit: IngredientUnit) => {
 };
 
 export function createFamilyLivingPlan(userId: string, month: string): FamilyLivingPlan {
-  return { version: 1, userId, month, meals: [], pantry: [], needs: [], recipes: [], updatedAt: new Date().toISOString() };
+  return { version: 1, userId, month, meals: [], pantry: [], shoppingExtras: [], needs: [], recipes: [], updatedAt: new Date().toISOString() };
 }
 
 export function scaleIngredient(quantityMilli: number, baseServings: number, servings: number): number {
@@ -182,6 +193,14 @@ export function buildShoppingRequirements(plan: FamilyLivingPlan): ShoppingRequi
       else totals.set(key, { key, name: ingredient.name, unit: ingredient.unit, requiredMilli: quantity, inPantryMilli: 0, toBuyMilli: quantity });
     }
   }
+  for (const extra of plan.shoppingExtras || []) {
+    const key = ingredientKey(extra.name, extra.unit);
+    const current = totals.get(key);
+    if (current) {
+      current.requiredMilli += extra.quantityMilli;
+      if (!Number.isSafeInteger(current.requiredMilli)) throw new RangeError('Combined shopping quantity is too large.');
+    } else totals.set(key, { key, name: extra.name, unit: extra.unit, requiredMilli: extra.quantityMilli, inPantryMilli: 0, toBuyMilli: extra.quantityMilli });
+  }
   for (const row of totals.values()) {
     const stock = plan.pantry.find((item) => ingredientKey(item.name, item.unit) === row.key)?.quantityMilli ?? 0;
     row.inPantryMilli = stock;
@@ -194,8 +213,9 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   if (!value || typeof value !== 'object') return null;
   const row = value as Partial<FamilyLivingPlan>;
   if (row.version !== 1 || row.userId !== userId || row.month !== month || !validMonth(row.month) ||
-      !Array.isArray(row.meals) || !Array.isArray(row.pantry) || (row.needs !== undefined && !Array.isArray(row.needs)) || !Array.isArray(row.recipes) ||
-      row.meals.length > 400 || row.pantry.length > 500 || (Array.isArray(row.needs) && row.needs.length > 1000) || row.recipes.length > 500) return null;
+      !Array.isArray(row.meals) || !Array.isArray(row.pantry) || (row.shoppingExtras !== undefined && !Array.isArray(row.shoppingExtras)) || (row.needs !== undefined && !Array.isArray(row.needs)) || !Array.isArray(row.recipes) ||
+      row.meals.length > 400 || row.pantry.length > 500 || (Array.isArray(row.shoppingExtras) && row.shoppingExtras.length > 500) || (Array.isArray(row.needs) && row.needs.length > 1000) || row.recipes.length > 500) return null;
+  const shoppingExtras = Array.isArray(row.shoppingExtras) ? row.shoppingExtras : [];
   const needs = Array.isArray(row.needs) ? row.needs : [];
 
   const mealsValid = row.meals.every((meal) => meal && validText(meal.id, 120) &&
@@ -204,6 +224,9 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     validText(meal.recipeId, 120) && Number.isInteger(meal.servings) && meal.servings >= 1 && meal.servings <= 40);
   const pantryValid = row.pantry.every((item) => item && validText(item.id, 120) &&
     validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli));
+  const shoppingExtrasValid = shoppingExtras.every((extra) => extra && validText(extra.id, 120) && validText(extra.name, 80) &&
+    validUnit(extra.unit) && validQuantity(extra.quantityMilli) && extra.quantityMilli > 0 &&
+    (extra.category === 'grocery' || extra.category === 'cleaning' || extra.category === 'hygiene' || extra.category === 'other'));
   const needsValid = needs.every((need) => need && validText(need.id, 120) &&
     (need.category === 'clothing' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'school' ||
       need.category === 'transport' || need.category === 'health' || need.category === 'home' || need.category === 'other') &&
@@ -224,9 +247,10 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     recipe.steps.every((step) => validText(step, 500)) &&
     (recipe.origin === 'community' || recipe.origin === 'builtin'));
 
-  if (!mealsValid || !pantryValid || !needsValid || !recipesValid) return null;
+  if (!mealsValid || !pantryValid || !shoppingExtrasValid || !needsValid || !recipesValid) return null;
   const recipeIds = new Set([...BUILTIN_FAMILY_RECIPES, ...row.recipes].map((recipe) => recipe.id));
-  if (new Set(needs.map((need) => need.id)).size !== needs.length ||
+  if (new Set(shoppingExtras.map((extra) => extra.id)).size !== shoppingExtras.length ||
+      new Set(needs.map((need) => need.id)).size !== needs.length ||
       !Number.isSafeInteger(needs.reduce((sum, need) => sum + need.plannedMinor, 0)) ||
       !Number.isSafeInteger(needs.reduce((sum, need) => sum + need.actualMinor, 0)) ||
       new Set(row.meals.map((meal) => meal.id)).size !== row.meals.length ||
@@ -235,7 +259,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
       new Set(row.recipes.map((recipe) => recipe.id)).size !== row.recipes.length ||
       row.recipes.some((recipe) => BUILTIN_FAMILY_RECIPES.some((builtin) => builtin.id === recipe.id)) ||
       new Set(row.pantry.map((item) => ingredientKey(item.name, item.unit))).size !== row.pantry.length) return null;
-  return { ...row, needs } as FamilyLivingPlan;
+  return { ...row, shoppingExtras, needs } as FamilyLivingPlan;
 }
 
 export function familyLivingStorageKey(userId: string, month: string): string {
