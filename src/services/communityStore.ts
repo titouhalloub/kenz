@@ -21,10 +21,6 @@ function requireClient() {
   if (!client) throw new Error('Supabase is not configured.');
   return client;
 }
-function wilayaCodeFromLabel(value: string): string | null {
-  const match = value.match(/^\s*(\d{2,3})/);
-  return match?.[1] || null;
-}
 
 export async function ensureCommunityProfile(input: {
   userId: string; locale: 'ar' | 'fr' | 'en'; wilaya: string;
