@@ -72,6 +72,105 @@ for select to anon, authenticated using (true);
 
 revoke truncate, references, trigger on public.price_observations, public.price_stats, public.ingest_runs from anon, authenticated;
 
+
+-- Rebuild one rolling aggregate window. Only reviewed, enabled sources and accepted
+-- observations are eligible. Neighborhood output requires three distinct people/shops.
+create or replace function public.refresh_price_stats(p_window_days integer default 14)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $
+declare
+  v_window_days integer := greatest(1, least(coalesce(p_window_days, 14), 90));
+begin
+  delete from public.price_stats where window_days = v_window_days;
+
+  with scoped as (
+    select
+      o.product_id,
+      o.unit_price_minor,
+      o.observed_at,
+      o.wilaya_code,
+      o.commune_id,
+      o.geo_cell,
+      o.contributor_id,
+      o.business_id,
+      s.source_type
+    from public.price_observations o
+    join public.price_sources s on s.id = o.source_id
+    where o.status = 'accepted'
+      and s.reviewed = true
+      and s.enabled = true
+      and o.observed_at >= now() - make_interval(days => v_window_days)
+  ),
+  aggregates as (
+    select
+      product_id, 'national'::text as area_level, 'DZ'::text as area_key,
+      percentile_disc(0.25) within group (order by unit_price_minor)::bigint as p25,
+      percentile_disc(0.50) within group (order by unit_price_minor)::bigint as median,
+      percentile_disc(0.75) within group (order by unit_price_minor)::bigint as p75,
+      count(*)::integer as n_observations,
+      count(distinct coalesce('u:' || contributor_id::text, 'b:' || business_id::text))::integer as n_contributors,
+      max(observed_at) as last_observed,
+      array_agg(distinct source_type order by source_type) as source_tiers
+    from scoped group by product_id
+
+    union all
+    select
+      product_id, 'wilaya', wilaya_code,
+      percentile_disc(0.25) within group (order by unit_price_minor)::bigint,
+      percentile_disc(0.50) within group (order by unit_price_minor)::bigint,
+      percentile_disc(0.75) within group (order by unit_price_minor)::bigint,
+      count(*)::integer,
+      count(distinct coalesce('u:' || contributor_id::text, 'b:' || business_id::text))::integer,
+      max(observed_at),
+      array_agg(distinct source_type order by source_type)
+    from scoped where wilaya_code is not null group by product_id, wilaya_code
+
+    union all
+    select
+      product_id, 'commune', commune_id::text,
+      percentile_disc(0.25) within group (order by unit_price_minor)::bigint,
+      percentile_disc(0.50) within group (order by unit_price_minor)::bigint,
+      percentile_disc(0.75) within group (order by unit_price_minor)::bigint,
+      count(*)::integer,
+      count(distinct coalesce('u:' || contributor_id::text, 'b:' || business_id::text))::integer,
+      max(observed_at),
+      array_agg(distinct source_type order by source_type)
+    from scoped where commune_id is not null group by product_id, commune_id
+
+    union all
+    select
+      product_id, 'neighborhood', geo_cell,
+      percentile_disc(0.25) within group (order by unit_price_minor)::bigint,
+      percentile_disc(0.50) within group (order by unit_price_minor)::bigint,
+      percentile_disc(0.75) within group (order by unit_price_minor)::bigint,
+      count(*)::integer,
+      count(distinct coalesce('u:' || contributor_id::text, 'b:' || business_id::text))::integer,
+      max(observed_at),
+      array_agg(distinct source_type order by source_type)
+    from scoped
+    where geo_cell is not null
+    group by product_id, geo_cell
+    having count(distinct coalesce('u:' || contributor_id::text, 'b:' || business_id::text)) >= 3
+  )
+  insert into public.price_stats (
+    product_id, area_level, area_key, window_days,
+    median_unit_price_minor, p25_unit_price_minor, p75_unit_price_minor,
+    n_observations, n_contributors, last_observed, source_tiers, calculated_at
+  )
+  select
+    product_id, area_level, area_key, v_window_days,
+    median, p25, p75, n_observations, n_contributors,
+    last_observed, source_tiers, now()
+  from aggregates;
+end;
+$;
+
+revoke all on function public.refresh_price_stats(integer) from public, anon, authenticated;
+grant execute on function public.refresh_price_stats(integer) to service_role;
+
 create or replace function public.get_area_prices(
   p_product_ids uuid[],
   p_wilaya_code text default null,
