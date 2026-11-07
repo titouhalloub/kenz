@@ -6,6 +6,7 @@ import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations'
 import { loadMarketPrices } from '../services/priceStore';
 import type { SimulatorPrice } from '../domain/simulator';
 import type { UserProfile } from '../domain/types';
+import { ALGERIA_WILAYAS } from '../domain/wilayas';
 
 interface SimulatorViewProps {
   profile: UserProfile;
@@ -36,6 +37,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
   const [month, setMonth] = useState(getMonth);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
+  const [wilayaCode, setWilayaCode] = useState('');
   const [selectedSlug, setSelectedSlug] = useState(PRODUCT_CATALOG[0].slug);
   const [quantity, setQuantity] = useState('100');
   const [lowPrice, setLowPrice] = useState('');
@@ -60,7 +62,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     setExpectedPrice('');
     setHighPrice('');
     setMarketStatus('Recherche du prix public disponible…');
-    loadMarketPrices([selectedSlug]).then((result) => {
+    loadMarketPrices([selectedSlug], wilayaCode || null).then((result) => {
       if (!active) return;
       const found = result.pricesBySlug[selectedSlug];
       if (found) {
@@ -78,7 +80,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       if (active) setMarketStatus('Prix publics indisponibles pour le moment ; la saisie manuelle reste possible.');
     });
     return () => { active = false; };
-  }, [selectedSlug]);
+  }, [selectedSlug, wilayaCode]);
 
   const addProduct = () => {
     setError('');
@@ -155,6 +157,13 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         <p className="text-[11px] leading-relaxed text-slate-400">
           Le calcul est fait sur cet appareil avec ton budget Kenz. Aucun revenu, solde ou budget n'est envoyé au serveur.
         </p>
+        <label className="block text-[11px] text-slate-400">
+          Wilaya (optionnelle)
+          <select value={wilayaCode} onChange={(event) => setWilayaCode(event.target.value)} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100">
+            <option value="">Toutes les wilayas · prix national si disponible</option>
+            {ALGERIA_WILAYAS.map((wilaya) => <option key={wilaya.slice(0, 2)} value={wilaya.slice(0, 2)}>{wilaya}</option>)}
+          </select>
+        </label>
         <div className="grid grid-cols-3 gap-2">
           <label className="text-[11px] text-slate-400">
             Mois
@@ -231,7 +240,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-slate-100 truncate">{item.name}</div>
               <div className="text-[10px] text-slate-500">{categoryLabels[item.category]?.[profile.locale] || item.category} · {item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? (profile.locale === 'ar' ? 'غ' : 'g') : item.baseUnit === 'l' ? (profile.locale === 'ar' ? 'مل' : 'ml') : (profile.locale === 'ar' ? 'وحدة' : 'unit')} / {profile.locale === 'ar' ? 'شخص / يوم' : profile.locale === 'en' ? 'person / day' : 'personne / jour'}</div>
-              <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${(item.price.sourceTiers || []).join(', ') || 'source non précisée'} · ${item.price.lastObserved}` : 'Prix saisi manuellement · non vérifié'}</div>
+              <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${item.price.areaLevel} · ${(item.price.sourceTiers || []).join(', ') || 'source non précisée'} · ${item.price.lastObserved}` : 'Prix saisi manuellement · non vérifié'}</div>
             </div>
             <div className="text-right shrink-0">
               <div className="text-xs font-semibold text-slate-200">{formatMoney(item.price?.medianUnitPriceMinor || 0, 'DZD', profile.locale)} / {item.baseUnit}</div>
