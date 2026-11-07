@@ -12,19 +12,19 @@ interface SimulatorViewProps {
   availableBudgetMinor: number;
 }
 
-const categoryLabels: Record<string, string> = {
-  cereals_bread: 'Céréales & pain',
-  oils_fats: 'Huiles & matières grasses',
-  sugar_sweeteners: 'Sucre & édulcorants',
-  dairy_eggs: 'Produits laitiers & œufs',
-  vegetables: 'Légumes',
-  fruits: 'Fruits',
-  meat_fish: 'Viande & poisson',
-  legumes: 'Légumineuses',
-  spices_condiments: 'Épices & condiments',
-  beverages: 'Boissons',
-  household: 'Entretien',
-  fuel_energy: 'Carburant & énergie',
+const categoryLabels: Record<string, { fr: string; ar: string; en: string }> = {
+  cereals_bread: { fr: 'Céréales & pain', ar: 'حبوب وخبز', en: 'Cereals & bread' },
+  oils_fats: { fr: 'Huiles & matières grasses', ar: 'زيوت ودهون', en: 'Oils & fats' },
+  sugar_sweeteners: { fr: 'Sucre & édulcorants', ar: 'سكر ومحليات', en: 'Sugar & sweeteners' },
+  dairy_eggs: { fr: 'Produits laitiers & œufs', ar: 'ألبان وبيض', en: 'Dairy & eggs' },
+  vegetables: { fr: 'Légumes', ar: 'خضروات', en: 'Vegetables' },
+  fruits: { fr: 'Fruits', ar: 'فواكه', en: 'Fruits' },
+  meat_fish: { fr: 'Viande & poisson', ar: 'لحوم وأسماك', en: 'Meat & fish' },
+  legumes: { fr: 'Légumineuses', ar: 'بقوليات', en: 'Legumes' },
+  spices_condiments: { fr: 'Épices & condiments', ar: 'توابل ومنكهات', en: 'Spices & condiments' },
+  beverages: { fr: 'Boissons', ar: 'مشروبات', en: 'Beverages' },
+  household: { fr: 'Entretien', ar: 'مواد التنظيف', en: 'Household' },
+  fuel_energy: { fr: 'Carburant & énergie', ar: 'وقود وطاقة', en: 'Fuel & energy' },
 };
 
 function getMonth(): string {
@@ -47,7 +47,11 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
   const [error, setError] = useState('');
 
   const selectedProduct = PRODUCT_CATALOG.find((product) => product.slug === selectedSlug) || PRODUCT_CATALOG[0];
-  const quantityUnit = selectedProduct.baseUnit === 'kg' ? 'g/jour' : selectedProduct.baseUnit === 'l' ? 'ml/jour' : 'unité/jour';
+  const quantityUnit = selectedProduct.baseUnit === 'kg'
+    ? (profile.locale === 'ar' ? 'غ/يوم' : profile.locale === 'en' ? 'g/day' : 'g/jour')
+    : selectedProduct.baseUnit === 'l'
+      ? (profile.locale === 'ar' ? 'مل/يوم' : profile.locale === 'en' ? 'ml/day' : 'ml/jour')
+      : (profile.locale === 'ar' ? 'وحدة/يوم' : profile.locale === 'en' ? 'unit/day' : 'unité/jour');
 
   useEffect(() => {
     let active = true;
@@ -226,7 +230,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
           <div key={item.productId} className="rounded-xl border border-slate-800 bg-slate-900 p-3 flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-slate-100 truncate">{item.name}</div>
-              <div className="text-[10px] text-slate-500">{categoryLabels[item.category] || item.category} · {item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? 'g' : item.baseUnit === 'l' ? 'ml' : 'unité(s)'} / personne / jour</div>
+              <div className="text-[10px] text-slate-500">{categoryLabels[item.category]?.[profile.locale] || item.category} · {item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? (profile.locale === 'ar' ? 'غ' : 'g') : item.baseUnit === 'l' ? (profile.locale === 'ar' ? 'مل' : 'ml') : (profile.locale === 'ar' ? 'وحدة' : 'unit')} / {profile.locale === 'ar' ? 'شخص / يوم' : profile.locale === 'en' ? 'person / day' : 'personne / jour'}</div>
               <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${(item.price.sourceTiers || []).join(', ') || 'source non précisée'} · ${item.price.lastObserved}` : 'Prix saisi manuellement · non vérifié'}</div>
             </div>
             <div className="text-right shrink-0">
