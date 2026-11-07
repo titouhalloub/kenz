@@ -122,7 +122,9 @@ export function createFamilyLivingPlan(userId: string, month: string): FamilyLiv
 export function scaleIngredient(quantityMilli: number, baseServings: number, servings: number): number {
   if (!validQuantity(quantityMilli) || !Number.isInteger(baseServings) || baseServings < 1 ||
       !Number.isInteger(servings) || servings < 1 || servings > 40) throw new RangeError('Invalid recipe quantity or servings.');
-  return Math.round(quantityMilli * servings / baseServings);
+  const scaled = Math.round(quantityMilli * servings / baseServings);
+  if (!Number.isSafeInteger(scaled)) throw new RangeError('Scaled ingredient quantity is too large.');
+  return scaled;
 }
 
 export function buildShoppingRequirements(plan: FamilyLivingPlan): ShoppingRequirement[] {
@@ -135,7 +137,10 @@ export function buildShoppingRequirements(plan: FamilyLivingPlan): ShoppingRequi
       const key = ingredientKey(ingredient.name, ingredient.unit);
       const quantity = scaleIngredient(ingredient.quantityMilli, recipe.baseServings, meal.servings);
       const current = totals.get(key);
-      if (current) current.requiredMilli += quantity;
+      if (current) {
+        current.requiredMilli += quantity;
+        if (!Number.isSafeInteger(current.requiredMilli)) throw new RangeError('Combined shopping quantity is too large.');
+      }
       else totals.set(key, { key, name: ingredient.name, unit: ingredient.unit, requiredMilli: quantity, inPantryMilli: 0, toBuyMilli: quantity });
     }
   }
@@ -160,7 +165,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
       !row.pantry.every((item) => item && validText(item.id, 120) && validText(item.name, 80) &&
         validUnit(item.unit) && validQuantity(item.quantityMilli)) ||
       !row.recipes.every((recipe) => recipe && validText(recipe.id, 120) && validText(recipe.title, 100) &&
-        validText(recipe.description, 240) && Number.isInteger(recipe.baseServings) && recipe.baseServings >= 1 &&
+        validText(recipe.description, 240) && (recipe.author === undefined || validText(recipe.author, 80)) && Number.isInteger(recipe.baseServings) && recipe.baseServings >= 1 &&
         recipe.baseServings <= 40 && Number.isInteger(recipe.prepMinutes) && recipe.prepMinutes >= 0 &&
         Array.isArray(recipe.ingredients) && recipe.ingredients.length <= 100 &&
         recipe.ingredients.every((ingredient) => ingredient && validText(ingredient.name, 80) &&
@@ -181,4 +186,33 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
 
 export function familyLivingStorageKey(userId: string, month: string): string {
   return `kenz_family_living_v1_${encodeURIComponent(userId)}_${month}`;
+}
+
+export function parseCommunityRecipe(value: unknown, id: string): FamilyRecipe | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<FamilyRecipe>;
+  if (!validText(candidate.title, 100) || !validText(candidate.description, 240) ||
+      !Number.isInteger(candidate.baseServings) || (candidate.baseServings ?? 0) < 1 ||
+      (candidate.baseServings ?? 0) > 40 || !Number.isInteger(candidate.prepMinutes) ||
+      (candidate.prepMinutes ?? -1) < 0 || (candidate.prepMinutes ?? 9999) > 600 ||
+      !Array.isArray(candidate.ingredients) || candidate.ingredients.length < 1 ||
+      candidate.ingredients.length > 100 || !candidate.ingredients.every((item) => item &&
+        validText(item.name, 80) && validUnit(item.unit) && validQuantity(item.quantityMilli)) ||
+      !Array.isArray(candidate.steps) || candidate.steps.length > 30 ||
+      !candidate.steps.every((step) => validText(step, 500))) return null;
+  return {
+    id, title: candidate.title.trim(), description: candidate.description.trim(),
+    baseServings: candidate.baseServings!, prepMinutes: candidate.prepMinutes!,
+    ingredients: candidate.ingredients.map((item) => ({ name: item.name.trim(), quantityMilli: item.quantityMilli, unit: item.unit })),
+    steps: candidate.steps.map((step) => step.trim()), origin: 'community',
+    ...(candidate.author && validText(candidate.author, 80) ? { author: candidate.author.trim() } : {}),
+  };
+}
+
+export function exportCommunityRecipe(recipe: FamilyRecipe): string {
+  return JSON.stringify({
+    title: recipe.title, description: recipe.description, baseServings: recipe.baseServings,
+    prepMinutes: recipe.prepMinutes, ingredients: recipe.ingredients, steps: recipe.steps,
+    ...(recipe.author ? { author: recipe.author } : {}),
+  }, null, 2);
 }
