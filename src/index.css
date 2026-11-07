@@ -141,3 +141,35 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-kredy-tab-idle{color:#81768f}
 .kenz-kredy-page .grid.grid-cols-2>div,.kenz-kredy-page .grid.grid-cols-2>div.rounded-2xl{border-color:#e9e2f2;background:#fff;border-radius:19px;box-shadow:0 4px 16px rgba(75,49,120,.045)}
 @media(max-width:520px){.kenz-action-icon{width:44px;height:44px}.kenz-action-icon svg{width:23px;height:23px}.kenz-budget-category-icon{width:46px;height:46px;flex-basis:46px}.kenz-budget-category-icon svg{width:23px;height:23px}.kenz-kredy-page>div:first-child{padding:14px;border-radius:20px}.kenz-kredy-tabs button{min-height:58px;flex-direction:column;gap:3px;padding:7px 4px;font-size:9px}.kenz-kredy-tabs button svg{width:22px;height:22px}.kenz-kredy-primary-action,.kenz-kredy-secondary-action{padding-inline:10px;font-size:10px}}
+
+
+/* Family Life Planner — first-stage budget foundation */
+.kenz-family-hero{display:flex;align-items:center;gap:13px;padding:17px;border:1px solid #e8e1f3;border-radius:21px;background:linear-gradient(120deg,#fff,#f8f4ff);box-shadow:0 7px 22px rgba(52,34,101,.045)}
+.kenz-family-hero-icon{width:46px;height:46px;flex:0 0 auto;display:grid;place-items:center;border-radius:15px;background:#eee7ff;color:#6935ca}
+.kenz-family-hero-icon svg{width:22px;height:22px}
+.kenz-family-hero h2{margin:4px 0;color:var(--kenz-ink);font-size:17px;font-weight:850;letter-spacing:-.03em}
+.kenz-family-hero p{margin:0;color:var(--kenz-muted);font-size:11px;line-height:1.5}
+.kenz-family-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kenz-family-summary-grid article{min-width:0;display:flex;flex-direction:column;gap:7px;padding:12px;border:1px solid var(--kenz-line);border-radius:16px;background:#fff}
+.kenz-family-summary-grid span{color:var(--kenz-muted);font-size:9px;line-height:1.4}
+.kenz-family-summary-grid strong{color:var(--kenz-ink);font-size:clamp(11px,3vw,14px);font-weight:850;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.kenz-family-panel{padding:15px;border:1px solid var(--kenz-line);border-radius:20px;background:#fff;box-shadow:0 5px 18px rgba(52,34,101,.035)}
+.kenz-family-panel h3{margin:3px 0 0;color:var(--kenz-ink);font-size:15px;font-weight:800}
+.kenz-family-panel label{display:block;color:var(--kenz-muted);font-size:10px;font-weight:650}
+.kenz-family-panel input{min-width:0;background:#fcfbff!important;border-color:#e7e1f1!important;color:var(--kenz-ink)!important}
+.kenz-family-status{display:flex;align-items:center;gap:11px;padding:13px;border:1px solid #d8eee5;border-radius:17px;background:#f3fbf7;color:#16805e}
+.kenz-family-status.warning{border-color:#f2dfbd;background:#fff9ee;color:#a66a13}
+.kenz-family-status>svg{width:20px;height:20px;flex:0 0 auto}
+.kenz-family-status>div{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.kenz-family-status strong{font-size:11px;font-weight:800}
+.kenz-family-status span{color:#776f83;font-size:10px;line-height:1.45}
+.kenz-family-status b{font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kenz-family-category{padding:12px;border:1px solid #eee9f5;border-radius:15px;background:#fdfcff}
+.kenz-family-category-title{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.kenz-family-category-title>span{width:31px;height:31px;display:grid;place-items:center;border-radius:10px;background:#f0eaff;color:#7040ce}
+.kenz-family-category-title>span svg{width:16px;height:16px}
+.kenz-family-category-title strong{min-width:0;flex:1;color:var(--kenz-ink);font-size:11px;font-weight:800}
+.kenz-family-category-title small{color:var(--kenz-muted);font-size:9px;white-space:nowrap}
+.kenz-family-category label{color:var(--kenz-muted);font-size:9px}
+.kenz-family-category input{height:39px;font-size:12px}
+@media(max-width:420px){.kenz-family-summary-grid{gap:6px}.kenz-family-summary-grid article{padding:9px}.kenz-family-summary-grid span{font-size:8px}.kenz-family-category-title{flex-wrap:wrap}.kenz-family-category-title small{font-size:8px}}
