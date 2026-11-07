@@ -32,7 +32,7 @@ describe('family budget foundation', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.monthlyIncomeMinor = 100000;
     plan.categories.forEach((row) => {
-      if (row.id !== 'housing' && row.id !== 'food') row.plannedMinor = 1;
+      if (row.id !== 'housing' && row.id !== 'food') { row.plannedMinor = 1; row.plannedOverride = true; }
     });
     plan.categories.find((row) => row.id === 'housing')!.priority = 5;
     plan.categories.find((row) => row.id === 'food')!.priority = 1;
@@ -130,9 +130,16 @@ describe('family budget foundation', () => {
   it('migrates the previous auto-generated equal-weight split out of manual overrides', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.monthlyIncomeMinor = 100_000;
-    const oldGenerated = suggestFamilyBudgetAllocations(plan);
-    const legacy = { ...oldGenerated, allocationMode: undefined,
-      categories: oldGenerated.categories.map((row) => ({ ...row, plannedOverride: true })) };
+    const weightTotal = plan.categories.reduce((sum, row) => sum + row.priority, 0);
+    let assigned = 0;
+    const legacyShares = plan.categories.map((row) => {
+      const amount = Math.floor(plan.monthlyIncomeMinor * row.priority / weightTotal);
+      assigned += amount;
+      return { ...row, plannedMinor: amount, plannedOverride: true };
+    });
+    let remainder = plan.monthlyIncomeMinor - assigned;
+    for (const row of legacyShares) { if (remainder-- > 0) row.plannedMinor += 1; }
+    const legacy = { ...plan, categories: legacyShares, allocationMode: undefined };
     const restored = normalizeLegacyAutoAllocation(legacy);
     expect(restored.allocationMode).toBe('automatic');
     expect(restored.categories.every((row) => row.plannedOverride === false)).toBe(true);
