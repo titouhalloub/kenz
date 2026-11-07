@@ -7,7 +7,7 @@ export interface MarketPriceLoadResult {
 }
 
 /** Reads public market aggregates only; no personal budget data is accepted or sent. */
-export async function loadMarketPrices(productSlugs: string[]): Promise<MarketPriceLoadResult> {
+export async function loadMarketPrices(productSlugs: string[], wilayaCode?: string | null): Promise<MarketPriceLoadResult> {
   const slugs = [...new Set(productSlugs.filter((slug) => /^[a-z0-9-]{1,80}$/.test(slug)))];
   if (slugs.length === 0) return { pricesBySlug: {}, unavailableReason: 'no_data' };
   const supabase = getSupabaseClient();
@@ -20,7 +20,7 @@ export async function loadMarketPrices(productSlugs: string[]): Promise<MarketPr
 
   const pricesResult = await supabase.rpc('get_area_prices', {
     p_product_ids: products.map((product) => product.id),
-    p_wilaya_code: null,
+    p_wilaya_code: wilayaCode && /^\\d{2,3}$/.test(wilayaCode) ? wilayaCode : null,
     p_commune_id: null,
     p_geo_cell: null,
     p_window_days: 14,
