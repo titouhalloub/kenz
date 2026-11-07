@@ -135,12 +135,10 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     if (postKind === 'recipe' && !steps.trim()) { setError('Ajoute les étapes de la recette.'); return; }
     if (!userId) { setError('Connecte-toi avec un compte Kenz pour publier.'); return; }
     if (title.trim().length < 3) { setError('Le titre doit contenir au moins 3 caractères.'); return; }
-    const amount = Number(quantity);
     if ((postKind === 'recipe' && recipeIngredients.length === 0) || (postKind === 'shopping_list' && shoppingItems.length === 0)) {
       setError('Ajoute au moins un élément à la publication.'); return;
     }
     setBusy(true);
-    const product = selectedProduct;
     const result = await createCommunityPost({
       kind: postKind, title: title.trim(), body: body.trim(), locale, wilayaCode: shareWilaya ? wilayaCode : null,
       ...(postKind === 'recipe' ? {
