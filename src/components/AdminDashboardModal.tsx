@@ -20,6 +20,8 @@ import {
   testSupabaseConnection,
 } from '../services/supabase';
 import { Business, BusinessDocument, BusinessReport, VerificationStatus } from '../domain/types';
+import { formatMoney } from '../domain/financialCalculations';
+import { loadPriceAdminData, reviewPriceObservation, type PendingPriceObservation, type PriceSourceHealth } from '../services/priceAdminStore';
 import { loadCommunityModerationQueue, moderateCommunityComment, moderateCommunityPost, resolveCommunityReport, type CommunityModerationReport } from '../services/communityStore';
 
 interface AdminDashboardModalProps {
@@ -47,10 +49,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   onReviewBusiness,
   onResolveReport,
 }) => {
-  const [activeTab, setActiveTab] = useState<'infra' | 'queue' | 'reports' | 'community'>('queue');
+  const [activeTab, setActiveTab] = useState<'infra' | 'queue' | 'reports' | 'community' | 'prices'>('queue');
   const [communityQueue, setCommunityQueue] = useState<CommunityModerationReport[]>([]);
   const [communityQueueLoading, setCommunityQueueLoading] = useState(false);
   const [communityQueueError, setCommunityQueueError] = useState('');
+  const [priceSources, setPriceSources] = useState<PriceSourceHealth[]>([]);
+  const [pendingPrices, setPendingPrices] = useState<PendingPriceObservation[]>([]);
+  const [priceQueueLoading, setPriceQueueLoading] = useState(false);
+  const [priceQueueError, setPriceQueueError] = useState('');
   const [supabaseConfig, setSupabaseConfig] = useState(getStoredSupabaseConfig());
   const [connStatus, setConnStatus] = useState<{
     tested: boolean;
@@ -99,6 +105,35 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       return;
     }
     setCommunityQueue((current) => current.filter((row) => row.id !== report.id));
+  };
+
+
+  const openPriceAdmin = async () => {
+    setActiveTab('prices');
+    setPriceQueueLoading(true);
+    setPriceQueueError('');
+    const result = await loadPriceAdminData();
+    if (result.success) {
+      setPriceSources(result.data?.sources || []);
+      setPendingPrices(result.data?.pending || []);
+    } else {
+      setPriceQueueError(result.error || 'Accès réservé aux modérateurs.');
+    }
+    setPriceQueueLoading(false);
+  };
+
+  const handlePriceDecision = async (row: PendingPriceObservation, decision: 'accepted' | 'rejected') => {
+    setPriceQueueError('');
+    const result = await reviewPriceObservation(
+      row.observation_id,
+      decision,
+      decision === 'accepted' ? 'Prix vérifié par un modérateur.' : 'Prix rejeté après vérification.',
+    );
+    if (!result.success) {
+      setPriceQueueError(result.error || 'La revue du prix a échoué.');
+      return;
+    }
+    await openPriceAdmin();
   };
 
   const pendingBusinesses = businesses.filter((b) => b.verificationStatus === 'pending_review');
@@ -169,6 +204,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           >
             <span>Modération communauté</span>
             {communityQueue.length > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-300">{communityQueue.length}</span>}
+          </button>
+
+          <button
+            onClick={() => void openPriceAdmin()}
+            className={`flex-1 py-2 px-2 text-xs font-semibold rounded-lg transition min-h-[40px] cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'prices' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>Prix & Sources</span>
+            {pendingPrices.length > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300">{pendingPrices.length}</span>}
           </button>
 
           <button
@@ -386,6 +431,53 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {activeTab === 'prices' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>Sources publiques et prix en attente de validation</span>
+              <button onClick={() => void openPriceAdmin()} className="text-emerald-300">Actualiser</button>
+            </div>
+            {priceQueueLoading && <p className="p-5 text-center text-xs text-slate-400">Chargement…</p>}
+            {priceQueueError && <p className="rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-200">{priceQueueError}</p>}
+            {!priceQueueLoading && !priceQueueError && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {priceSources.map((source) => (
+                    <div key={source.source_id} className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-200">{source.source_name}</span>
+                        <span className={`text-[9px] rounded px-2 py-0.5 ${source.enabled && source.reviewed ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-800 text-slate-400'}`}>{source.enabled && source.reviewed ? 'Activée' : 'Désactivée'}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">{source.source_type} · {source.schedule || 'manuel'}</p>
+                      <p className="text-[10px] text-slate-400">Dernier passage : {source.last_run_at ? new Date(source.last_run_at).toLocaleString() : 'Jamais'} · {source.last_run_status || '—'}</p>
+                      <p className="text-[10px] text-slate-400">Lignes : {source.last_rows_parsed ?? 0} analysées / {source.last_rows_accepted ?? 0} acceptées · {source.pending_observations} en attente</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-slate-200">File de validation des prix ({pendingPrices.length})</h3>
+                  {pendingPrices.length === 0 ? (
+                    <p className="rounded-xl border border-slate-800 bg-slate-950 p-5 text-center text-xs text-slate-400">Aucun prix en attente.</p>
+                  ) : pendingPrices.map((row) => (
+                    <div key={row.observation_id} className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div><p className="text-xs font-semibold text-slate-100">{row.product_name}</p><p className="text-[10px] text-slate-500">{row.source_name} · Wilaya {row.wilaya_code || 'DZ'}</p></div>
+                        <span className="text-sm font-bold text-emerald-300">{formatMoney(row.unit_price_minor, 'DZD', 'fr')}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Observé : {new Date(row.observed_at).toLocaleString()} · {row.quality_flags.join(', ') || 'Aucun drapeau'}</p>
+                      {row.source_reference && <p className="text-[10px] text-slate-500">{row.source_reference}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={() => void handlePriceDecision(row, 'accepted')} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2 text-xs text-white">Accepter</button>
+                        <button onClick={() => void handlePriceDecision(row, 'rejected')} className="flex-1 rounded-lg border border-rose-900/60 px-3 py-2 text-xs text-rose-300">Rejeter</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
