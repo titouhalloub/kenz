@@ -6,7 +6,7 @@ import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
-  type MealSlot, type HouseholdNeedCategory, type ClothingSeason,
+  type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
 } from '../domain/familyLiving';
 
 interface Props { profile: UserProfile; month: string; householdSize: number; }
@@ -82,6 +82,10 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const [needDate, setNeedDate] = useState('');
   const [needSeason, setNeedSeason] = useState<ClothingSeason>('all');
   const [needSize, setNeedSize] = useState('');
+  const [extraName, setExtraName] = useState('');
+  const [extraQuantity, setExtraQuantity] = useState('');
+  const [extraUnit, setExtraUnit] = useState<IngredientUnit>('piece');
+  const [extraCategory, setExtraCategory] = useState<ShoppingExtraCategory>('grocery');
 
   useEffect(() => {
     setPlan(readLivingPlan(profile.id, month));
@@ -176,6 +180,19 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       return { ...current, pantry: [...current.pantry, { id: makeId('stock'), name, unit: pantryUnit, quantityMilli }] };
     });
     setPantryName(''); setPantryQuantity('');
+  };
+
+  const addShoppingExtra = () => {
+    const name = extraName.trim();
+    const quantityMilli = parseQuantityMilli(extraQuantity);
+    if (!name || name.length > 80 || !quantityMilli || plan.shoppingExtras.length >= 500) {
+      setStatus(tr(profile, 'Vérifiez le produit et la quantité.', 'تحقق من المنتج والكمية.', 'Check the item and quantity.'));
+      return;
+    }
+    updatePlan((current) => ({ ...current, shoppingExtras: [...current.shoppingExtras, {
+      id: makeId('shopping'), name, unit: extraUnit, quantityMilli, category: extraCategory,
+    }] }));
+    setExtraName(''); setExtraQuantity('');
   };
 
   const addNeed = () => {
@@ -337,6 +354,17 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       {section === 'shopping' && <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'LISTE AUTOMATIQUE', 'قائمة تلقائية', 'AUTO LIST')}</span><h3>{tr(profile, 'À acheter', 'قائمة المشتريات', 'Shopping list')}</h3></div><span className="text-xs text-slate-500">{requirements.filter((row) => row.toBuyMilli > 0).length} {tr(profile, 'articles', 'مواد', 'items')}</span></div>
         <p className="text-xs text-slate-500">{tr(profile, 'Les ingrédients des repas sont regroupés. Le stock enregistré est déduit automatiquement. Les quantités restent modifiables dans les réserves.', 'تُجمع مكونات الوجبات ويُخصم المخزون المسجل تلقائياً. يمكن تعديل الكميات من قسم المخزون.', 'Meal ingredients are combined and saved pantry stock is deducted automatically. Adjust stock in the pantry section.')}</p>
+        <div className="rounded-xl bg-violet-50 p-3 space-y-2">
+          <h4 className="text-xs font-bold text-violet-950">{tr(profile, 'Ajouter un produit hors recette', 'إضافة منتج خارج الوصفات', 'Add a non-recipe item')}</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="col-span-2">{tr(profile, 'Produit', 'المنتج', 'Item')}<input value={extraName} onChange={(e) => setExtraName(e.target.value)} placeholder={tr(profile, 'Ex. lessive, savon, papier…', 'مثلاً مسحوق غسيل، صابون، ورق…', 'e.g. detergent, soap, paper…')} className="mt-1 w-full h-10 rounded-lg border px-3 text-xs" /></label>
+            <label>{tr(profile, 'Quantité', 'الكمية', 'Quantity')}<input inputMode="decimal" value={extraQuantity} onChange={(e) => setExtraQuantity(e.target.value)} placeholder="0" className="mt-1 w-full h-10 rounded-lg border px-3 text-xs" /></label>
+            <label>{tr(profile, 'Unité', 'الوحدة', 'Unit')}<select value={extraUnit} onChange={(e) => setExtraUnit(e.target.value as IngredientUnit)} className="mt-1 w-full h-10 rounded-lg border px-3 text-xs"><option value="piece">{tr(profile, 'pièce', 'حبة', 'piece')}</option><option value="g">g</option><option value="ml">ml</option></select></label>
+            <label className="col-span-2">{tr(profile, 'Type', 'النوع', 'Type')}<select value={extraCategory} onChange={(e) => setExtraCategory(e.target.value as ShoppingExtraCategory)} className="mt-1 w-full h-10 rounded-lg border px-3 text-xs"><option value="grocery">{tr(profile, 'Épicerie', 'مواد غذائية', 'Groceries')}</option><option value="cleaning">{tr(profile, 'Nettoyage', 'تنظيف', 'Cleaning')}</option><option value="hygiene">{tr(profile, 'Hygiène', 'نظافة شخصية', 'Hygiene')}</option><option value="other">{tr(profile, 'Autre', 'أخرى', 'Other')}</option></select></label>
+          </div>
+          <button onClick={addShoppingExtra} className="w-full min-h-10 rounded-lg bg-violet-700 px-3 text-xs font-bold text-white"><Plus className="inline mr-1 h-4 w-4" />{tr(profile, 'Ajouter à la liste', 'إضافة إلى القائمة', 'Add to list')}</button>
+          {plan.shoppingExtras.length > 0 && <div className="space-y-1 pt-1">{plan.shoppingExtras.map((extra) => <div key={extra.id} className="flex items-center gap-2 text-xs"><span className="min-w-0 flex-1 truncate">{extra.name} · {formatQuantity(extra.quantityMilli, extra.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, shoppingExtras: current.shoppingExtras.filter((item) => item.id !== extra.id) }))} className="p-1 text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div>}
+        </div>
         {requirements.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Planifiez d’abord quelques repas pour générer votre liste.', 'برمج بعض الوجبات أولاً لإنشاء القائمة.', 'Plan a few meals first to generate your list.')}</p> : <div className="space-y-2">{requirements.map((item) => <article key={item.key} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
           <div className="min-w-0 flex-1"><strong className="block text-xs">{ingredientLabel(item.name)}</strong><span className="text-[10px] text-slate-500">{tr(profile, 'Nécessaire', 'المطلوب', 'Needed')}: {formatQuantity(item.requiredMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {tr(profile, 'Stock', 'المخزون', 'Stock')}: {formatQuantity(item.inPantryMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div>
           <strong className="text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>
