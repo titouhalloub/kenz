@@ -1,7 +1,9 @@
 name: Build Android APK (Capacitor)
 
 on:
-  # APK builds are intentionally paused until the user explicitly asks for a new APK.
+  push:
+    branches:
+      - feat/price-simulator-community
   workflow_dispatch:
 
 permissions:
