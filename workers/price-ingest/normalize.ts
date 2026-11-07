@@ -29,7 +29,7 @@ export function normalizePriceRecord(
   const totalPriceMinor = parsePriceMinor(record.priceText, record.currency);
   if (!totalPriceMinor) return null;
 
-  const unitPriceMinor = pricePerBaseUnitMinor(totalPriceMinor, baseQuantity);
+  const unitPriceMinor = pricePerBaseUnitMinor(totalPriceMinor, baseQuantity, baseUnit);
   if (!unitPriceMinor) return null;
 
   if (record.wilayaCode && !/^\d{2,3}$/.test(record.wilayaCode)) return null;
@@ -42,7 +42,7 @@ export function normalizePriceRecord(
     ...(record.wilayaCode ? { wilayaCode: record.wilayaCode } : {}),
     ...(record.communeCode ? { communeCode: record.communeCode } : {}),
     ...(record.sourceReference ? { sourceReference: record.sourceReference.slice(0, 500) } : {}),
-    baseQuantity,
+    quantityMilliUnits: baseQuantity,
     baseUnit,
   };
 }
