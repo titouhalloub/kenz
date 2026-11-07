@@ -16,7 +16,7 @@ export interface NormalizedPriceRecord {
   wilayaCode?: string;
   communeCode?: string;
   sourceReference?: string;
-  baseQuantity: number;
+  quantityMilliUnits: number;
   baseUnit: 'g' | 'ml' | 'unit';
 }
 
