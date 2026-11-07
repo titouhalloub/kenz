@@ -108,7 +108,8 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const selectedRecipe = recipeMap.get(recipeId) || recipes[0];
   const plannedMeals = [...plan.meals].sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot));
   const updatePlan = (updater: (current: FamilyLivingPlan) => FamilyLivingPlan) => {
-    setPlan((current) => ({ ...updater(current), updatedAt: new Date().toISOString() }));
+    const next = updater(plan);
+    setPlan({ ...next, updatedAt: new Date().toISOString() });
     setStatus('');
   };
 
