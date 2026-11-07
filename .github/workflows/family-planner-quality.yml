@@ -1,0 +1,45 @@
+name: Family Planner Quality Checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/domain/familyBudget.ts'
+      - 'src/domain/familyBudget.test.ts'
+      - 'src/domain/familyLiving.ts'
+      - 'src/domain/familyLiving.test.ts'
+      - 'src/components/FamilyLifePlannerView.tsx'
+      - 'src/components/FamilyLivingPlannerView.tsx'
+      - 'src/index.css'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/family-planner-quality.yml'
+  pull_request:
+    paths:
+      - 'src/domain/familyBudget.ts'
+      - 'src/domain/familyBudget.test.ts'
+      - 'src/domain/familyLiving.ts'
+      - 'src/domain/familyLiving.test.ts'
+      - 'src/components/FamilyLifePlannerView.tsx'
+      - 'src/components/FamilyLivingPlannerView.tsx'
+      - 'src/index.css'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/family-planner-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
