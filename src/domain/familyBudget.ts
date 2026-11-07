@@ -8,6 +8,8 @@ export interface FamilyBudgetCategory {
   plannedMinor: number;
   actualMinor: number;
   priority: number;
+  /** True when the user explicitly set this envelope, including an intentional zero. */
+  plannedOverride?: boolean;
 }
 
 export interface FamilyBudgetPlan {
@@ -56,8 +58,30 @@ const localCurrentMonth = () => { const now = new Date(); return `${now.getFullY
 export function createFamilyBudgetPlan(userId: string, month = localCurrentMonth()): FamilyBudgetPlan {
   return {
     version: 1, userId, month, monthlyIncomeMinor: 0, adults: 2, children: 0,
-    categories: FAMILY_BUDGET_DEFAULTS.map((row) => ({ ...row })),
+    categories: FAMILY_BUDGET_DEFAULTS.map((row) => ({ ...row, plannedOverride: false })),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Combines saved family choices with live Kenz records.
+ * Explicit user allocations always win over recurring-commitment suggestions,
+ * including an intentional zero. Actuals always come from recorded transactions.
+ */
+export function applyFamilyBudgetSources(
+  plan: FamilyBudgetPlan,
+  recurringPlannedByCategory: ReadonlyMap<FamilyBudgetCategoryId, number>,
+  actualByCategory: ReadonlyMap<FamilyBudgetCategoryId, number>,
+): FamilyBudgetPlan {
+  return {
+    ...plan,
+    categories: plan.categories.map((row) => ({
+      ...row,
+      plannedMinor: row.plannedOverride || row.plannedMinor > 0
+        ? row.plannedMinor
+        : recurringPlannedByCategory.get(row.id) ?? row.plannedMinor,
+      actualMinor: actualByCategory.get(row.id) ?? 0,
+    })),
   };
 }
 
@@ -86,7 +110,7 @@ export function updateFamilyCategory(
     return { ...plan, categories: plan.categories.map((row) => row.id === id ? { ...row, priority: value } : row), updatedAt: new Date().toISOString() };
   }
   if (!validMinor(value)) throw new RangeError('Budget amounts must be non-negative safe integers.');
-  const categories = plan.categories.map((row) => row.id === id ? { ...row, [field]: value } : row);
+  const categories = plan.categories.map((row) => row.id === id ? { ...row, [field]: value, ...(field === 'plannedMinor' ? { plannedOverride: true } : {}) } : row);
   const total = categories.reduce((sum, row) => sum + row[field], 0);
   if (!Number.isSafeInteger(total)) throw new RangeError('Family budget total is too large.');
   return { ...plan, categories, updatedAt: new Date().toISOString() };
@@ -109,9 +133,10 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   for (const row of candidate.categories) {
     if (!row || !allowed.has(row.id) || seen.has(row.id) ||
         !validMinor(row.plannedMinor) || !validMinor(row.actualMinor) ||
+        (row.plannedOverride !== undefined && typeof row.plannedOverride !== 'boolean') ||
         (row.priority !== undefined && (!Number.isInteger(row.priority) || row.priority < 1 || row.priority > 5))) return null;
     seen.add(row.id);
-    categories.push({ id: row.id, plannedMinor: row.plannedMinor, actualMinor: row.actualMinor, priority: row.priority ?? 3 });
+    categories.push({ id: row.id, plannedMinor: row.plannedMinor, actualMinor: row.actualMinor, priority: row.priority ?? 3, plannedOverride: row.plannedOverride ?? row.plannedMinor > 0 });
   }
   if (categories.length !== FAMILY_BUDGET_DEFAULTS.length || seen.size !== allowed.size) return null;
   if (!Number.isSafeInteger(categories.reduce((sum, row) => sum + row.plannedMinor, 0)) || !Number.isSafeInteger(categories.reduce((sum, row) => sum + row.actualMinor, 0))) return null;
@@ -146,7 +171,7 @@ export function suggestFamilyBudgetAllocations(plan: FamilyBudgetPlan): FamilyBu
   }
   return {
     ...plan,
-    categories: plan.categories.map((row) => shares.has(row.id) ? { ...row, plannedMinor: shares.get(row.id)! } : row),
+    categories: plan.categories.map((row) => shares.has(row.id) ? { ...row, plannedMinor: shares.get(row.id)!, plannedOverride: true } : row),
     updatedAt: new Date().toISOString(),
   };
 }
