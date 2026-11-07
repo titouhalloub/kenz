@@ -62,7 +62,6 @@ export async function loadCommunityFeed(input: {
     const ids = rows.map((row) => row.id);
     const authorIds = [...new Set(rows.map((row) => row.author_id))];
     const [recipesResult, ingredientsResult, itemsResult, reactionsResult, commentsResult] = await Promise.all([
-      supabase.from('community_profiles').select('user_id,handle').in('user_id', authorIds),
       supabase.from('community_recipes').select('post_id,servings,steps').in('post_id', ids),
       supabase.from('community_recipe_ingredients').select('post_id,product_id,free_text,quantity_milli_units,base_unit').in('post_id', ids),
       supabase.from('community_shopping_items').select('post_id,product_id,label,quantity_milli_units,base_unit').in('post_id', ids),
