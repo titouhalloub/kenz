@@ -35,7 +35,7 @@ Audit date: 2026-11-07. Scope: official and partner sources for Algerian consume
 4. `workers/price-ingest/run.ts --dry-run` fetches and parses without database credentials or writes. `.github/workflows/ingest-public-prices.yml` provides a daily scheduled job and a manual dry-run / review path. GitHub Actions requires `SUPABASE_SERVICE_ROLE_KEY` to stage or approve records. This workflow uses GitHub-hosted free Actions; it adds no paid service.
 5. CSV remains supported as an alternative via `workers/price-ingest/manualImport.ts`, not the only ingestion path. It validates DZD, dates, HTTPS provenance and optional wilaya/commune codes.
 6. The Ministry of Commerce price observation platform's public description says access to the platform itself is via the MCIRMN intranet; Kenz does not scrape that intranet page or attempt to bypass it. Never treat ONS CPI as a shelf price, and never publish a national average as a commune/neighborhood observation.
-7. Source rows are seeded disabled by migration 039. Migrations 036–039 are branch-only and have not been applied to production. No source is enabled and no price data is written until the migrations are deliberately deployed and the operator completes source review.
+7. Source rows are seeded disabled by migration 039. Migrations 036–040 are branch-only and have not been applied to production. No source is enabled and no price data is written until the migrations are deliberately deployed and the operator completes source review.
 
 ## 3. Legal and privacy notes (Algeria)
 
