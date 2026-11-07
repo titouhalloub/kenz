@@ -6,9 +6,9 @@ create table public.community_profiles (
   wilaya_code text check (wilaya_code is null or wilaya_code ~ '^[0-9]{2,3}$'),
   is_public boolean not null default true,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (lower(handle))
+  updated_at timestamptz not null default now()
 );
+create unique index community_profiles_handle_uidx on public.community_profiles(lower(handle));
 
 create table public.community_posts (
   id uuid primary key default gen_random_uuid(),
