@@ -1,59 +1,63 @@
-# Price Source Audit (Phase 0)
+# Price Source Audit (Phase 0 / Phase 1 onboarding)
 
-Audit date: 2026-11-07. Scope: where Kenz can obtain *real* Algerian consumer prices for the budget simulator and the community channel (see `docs/PLAN_PRICE_SIMULATOR_COMMUNITY.md`).
+Audit date: 2026-11-07. Scope: official and partner sources for Algerian consumer prices used by Kenz's simulator.
 
-**Method and limits.** Desktop research via web search and page fetches. Several sites could not be read automatically (JavaScript-only pages, robots.txt not fetchable from this environment, Facebook not scrapable). Anything not directly read is marked **UNVERIFIED**. This is an engineering audit, not legal advice; confirm the legal points with Algerian counsel before launch.
+**Method and limits.** Public pages and indexed official bulletins were reviewed. Finding a published document does not itself grant permission to bulk-copy or republish its contents. Terms, reuse licences, robots rules and any API access must be confirmed by a human before automated ingestion. This is an engineering audit, not legal advice.
 
-**Gate rule.** A source may be enabled in `price_sources` (`reviewed = true`) only after: (1) terms of use read by a human, (2) robots.txt checked, (3) licence/permission recorded here, (4) a parser fixture committed. Until then it stays disabled.
+**Gate rule.** A source may be enabled in `price_sources` (`reviewed = true`) only after: (1) reuse terms/licence or written permission recorded, (2) robots/access rules checked where relevant, (3) scope and geographic granularity documented, (4) parser fixture committed, and (5) an operator reviews a sample import. Until then it stays disabled.
 
 ## 1. Findings
 
-| # | Source | Type | What it gives | Granularity | Evidence | Verdict |
+| # | Source | Type | What it provides | Granularity / cadence | Evidence | Verdict |
 |---|---|---|---|---|---|---|
-| S1 | Ministry of Agriculture retail price posts | Official | Min / max / average retail prices for vegetables, fruit, beef, chicken, eggs (Feb 2024 example: potatoes 62 DA/kg avg, tomatoes 82, eggs 22/unit) | National, no wilaya or market named | Reported by Algerie360 (11 Feb 2024); the Ministry posts on its Facebook page; schedule "regular", not fixed | **Use as baseline** via manual/semi-automated entry or an official data agreement. Do **not** scrape Facebook (platform terms). |
-| S2 | Regulated / subsidized prices (oil, sugar, semolina, flour, bread, milk) | Official (legal texts) | Fixed ceiling prices per pack size | National | Only a secondary list found (consumer-association list reported by TSA, 16 Oct 2022); other press reports mention later oil price revisions | **Use**, but source from the official legal texts (Journal Officiel / ministry notices), maintained as a curated table with `effective_from` dates. Treat the 2022 figures as **stale**; never ship them as current. |
-| S3 | ONS consumer price index | Official | Monthly inflation index and category changes | National index, not price levels | Monthly figures covered by Algerian press; ONS site not directly verified | **Use for trend adjustment only** (age-correct stale prices), not as basket prices. |
-| S4 | Wholesale market prices (marchés de gros) | Official / press | Wholesale price levels, reported around events such as Ramadan | Market-level, unstructured | Press mentions only; no structured feed found | **Investigate.** Ask the Ministry of Commerce/Agriculture whether a feed exists. Wholesale ≠ shelf price; needs a documented retail-margin rule if used. |
-| S5 | Ouedkniss (classifieds) | Scraped | Asking prices on listings | Per listing, city | Site has terms/legal pages but they are JavaScript-rendered and **could not be read**; robots.txt **not retrievable here** | **UNVERIFIED — do not scrape.** Poor fit anyway: asking prices, mostly non-grocery. Only pursue with written permission. |
-| S6 | Online grocery apps/sites (e.g. Alimarket) | Scraped / partner | Possibly DZD shelf prices | Unknown | App-store page shows an "online supermarket" by an individual developer; coverage, prices and terms not stated | **UNVERIFIED, low priority.** Needs per-service check; prefer a partnership or API over HTML scraping. |
-| S7 | Hypermarket / supermarket chains | Partner | Shelf prices | Per store | Large chains exist (press list of the biggest hypermarkets); no verified public price feed | **Partnership route** via the merchant tier, not scraping. |
-| S8 | Merchant submissions (Kenz directory) | Merchant | Shelf prices from verified local shops | Neighborhood | Built by us | **Core source for neighborhood precision.** No identity-document upload (roadmap constraint). |
-| S9 | Crowd observations (users) | Crowd | "I paid X for Y at Z" | Neighborhood | Built by us | **Core source**, opt-in, with plausibility checks and k-anonymity (min 3 contributors). |
-| S10 | Fuel and gas-bottle prices | Official | Government-set prices | National | Not verified in this audit | **Curated table** from official texts, like S2. |
+| S1 | Ministry of Commerce — Observation des prix platform | Official | Daily wholesale and retail prices for selected products | Per wilaya; described as daily | Official ministry page says access is via the ministry's MCIRMN intranet: [FR](https://www.commerce.gov.dz/fr/observation-des-prix), [AR](https://www.commerce.gov.dz/observation-des-prix) | **Do not automate from the public page.** Ask the ministry for an authorised export/API or data agreement. |
+| S2 | Ministry of Agriculture — Mercuriale des produits agricoles | Official | Daily retail average, minimum and maximum for fresh produce, fruit, meat, eggs and some dairy | National averages in reviewed November 2026 bulletins; not neighborhood prices | Official ministry-hosted PDFs indexed for 2 and 4 Nov 2026 (see links below) | **Best first baseline candidate.** Manual reviewed import only until reuse permission / feed terms are confirmed. |
+| S3 | Directorate of Commerce, Tizi Ouzou — daily and monthly price statements | Official local directorate | Wholesale/retail and min/max retail prices for staple products | Tizi Ouzou wilaya; dated daily pages and monthly PDF statements | [Daily price statement](https://www.dcwtiziouzou.dz/fr/index.php?Itemid=77&id=76&option=com_content&view=article); [February 2026 monthly statement](https://www.dcwtiziouzou.dz/fr/images/stories/bilan/doc%202026/releve%20du%20prix%202026/Prix%20Fevrier%202026.pdf) | **Pilot manual import candidate.** Verify current publication cadence, reuse permission and product/unit consistency. |
+| S4 | ONS — Consumer Price Index | Official statistics | Monthly CPI movement and category-level inflation | National / city index; monthly, not shelf price levels | [ONS CPI bulletin](https://www.ons.dz/IMG/pdf/i.IPC_janvier2026.pdf) | **Trend context only.** Never convert CPI into a fabricated basket price. |
+| S5 | Ministry of Commerce — regulated-price legal notices | Official legal texts | Legally fixed prices / ceilings for specified products and pack sizes | National; effective dates depend on each legal text | [Regulated prices FAQ](https://commerce.gov.dz/fr/questions-frequentes/themes/prix-reglementees); [price regulation page](https://www.commerce.gov.dz/fr/reglementation-des-prix-des-biens-et-services) | **Curated legal table only.** A human must verify the current legal text and effective date; do not treat an old page as current shelf price. |
+| S6 | Ouedkniss (classifieds) | Scraped | Asking prices in listings | Listing/city; irregular | Terms and robots access were not verified | **UNVERIFIED — do not scrape.** Poor fit for grocery shelf prices; only revisit with written permission. |
+| S7 | Online grocery apps and supermarket chains | Partner / scraped | Potential shelf prices | Store-level, if a partner feed exists | No verified public price API or reuse licence found in this audit | **Partnership route only.** No HTML scraper enabled. |
+| S8 | Kenz verified merchant submissions | Merchant | Shelf prices from participating local shops | Store / neighborhood | Kenz feature not yet implemented | Future source; requires merchant agreement, verification and review. |
+| S9 | Kenz opt-in community observations | Crowd | User-reported paid prices | Neighborhood after aggregation | Kenz feature not yet implemented | Future source; requires explicit opt-in, abuse controls and minimum three distinct contributors for neighborhood aggregates. |
 
-## 2. Conclusions
+### Official bulletin examples reviewed
 
-1. **No verified source gives neighborhood-level shelf prices.** The audit confirms the plan's four-tier design: official baselines (S1–S4, S10) + merchant (S8) + crowd (S9), with scraping (S5–S7) as optional and only where permission is clear.
-2. **The first ingest worker should not be an HTML scraper.** Build it around the **curated official tables** (S2, S10) and a **manual/semi-automated importer for S1** (an admin pastes or uploads the Ministry's published figures; the worker validates and stores them with provenance). This delivers real, defensible prices sooner and with no terms-of-service risk.
-3. **Scraper framework stays in scope** (adapter interface, fixtures, health monitoring) but ships with zero enabled third-party adapters until a source passes the gate.
-4. **Stale data must be labeled.** Regulated prices change; every observation carries `observed_at` / `effective_from` and the UI shows age.
+- [Ministry of Agriculture bulletin — 2 November 2026](https://madr.gov.dz/wp-content/uploads/2026/11/prix_02_Nov_2026_MADRP.pdf): national retail averages and min/max for produce, fruit, meat, eggs and milk.
+- [Ministry of Agriculture bulletin — 4 November 2026](https://madr.gov.dz/wp-content/uploads/2026/11/prix_04_Nov_2026_MADRP.pdf): same general structure and daily date.
+- The Ministry of Commerce price observation platform describes daily wholesale/retail monitoring across all wilayas, but its page says the platform itself is accessed through the ministry intranet. Public description ≠ public feed.
+
+## 2. Phase 1 decision
+
+1. **No unattended scraper is authorised by this audit.** No third-party source is enabled in the database.
+2. The first integration is a **human-reviewed CSV import**. An operator transcribes or exports values from an official bulletin, includes the source URL and observation date, and reviews the normalized preview before any database write.
+3. `workers/price-ingest/manualImport.ts` accepts the documented CSV columns: `title,quantity,price,currency,observed_at,source_reference`; optional columns are `wilaya_code,commune_code`. It rejects non-DZD values, invalid dates, non-HTTPS provenance and malformed wilaya codes. It makes no network request and does not enable a source.
+4. Each imported row retains its source URL and observation date. Unit normalization is delegated to the existing unit parser; unmatched product names remain review-only.
+5. Start with the Ministry of Agriculture bulletin and the Tizi Ouzou directorate statement only after reuse permission is confirmed. The Ministry of Commerce intranet platform is an outreach/API request, not a scraper target.
+6. Never treat ONS CPI as a shelf price, and never publish a national estimate as a commune/neighborhood observation.
 
 ## 3. Legal and privacy notes (Algeria)
 
-Per a July 2026 law-firm summary (Gide) of Law 18-07 as amended by Law 25-11 — **single secondary source, verify with counsel**:
-- Processing personal data generally needs express consent; prior notification to the data protection authority (ANPDP) is required, with prior authorization for high-risk processing; a data protection officer and a processing register are expected.
-- Transfers of personal data abroad generally need prior ANPDP authorization.
-- Penalties can include fines up to 500,000 DA and imprisonment depending on the offence.
+Per a July 2026 law-firm summary of Law 18-07 as amended by Law 25-11 — a secondary source; verify with Algerian counsel:
+- Processing personal data generally needs express consent; prior notification / authorization requirements may apply depending on processing.
+- Transfers of personal data abroad need a legal review. The Kenz Supabase project is hosted in EU West (Paris), so community and contribution features need a cross-border data review before launch.
+- Keep public data minimal: handle only, no email, no budget/income. Price-only official bulletin imports do not need personal data.
 
-Implications for Kenz:
-- Crowd contributions and community posts are personal data processing: privacy notice, explicit opt-in, erasure of own posts/contributions, ANPDP declaration.
-- **Where the Supabase project is hosted matters** (cross-border transfer). Check the region and get counsel's view before launching community features.
-- Keep public data minimal: handle only, no email, no budget/income.
+## 4. Source onboarding checklist
 
-## 4. Source onboarding checklist (copy per source)
-
-- [ ] Terms of use read by a human; clause on automated access and reuse recorded
-- [ ] robots.txt checked and respected; crawl delay set
-- [ ] Written permission / licence obtained if terms are restrictive
-- [ ] Data fields, units, currency, update frequency, geographic granularity documented
-- [ ] Parser fixture committed (saved sample, no live network in CI)
+- [ ] Terms / reuse licence read by a human; automated access and redistribution rights recorded
+- [ ] Robots / access rules checked where relevant; rate limit and identifying User-Agent documented
+- [ ] Written permission or official API/export agreement obtained if needed
+- [ ] Fields, units, currency, date semantics and geographic granularity documented
+- [ ] Parser fixture committed (saved sample; no live network in CI)
 - [ ] Trust weight and staleness window set
-- [ ] `price_sources.reviewed = true` set by an admin
+- [ ] Sample import reviewed by an operator
+- [ ] Only then set `price_sources.reviewed = true` and `enabled = true`
 
 ## 5. Open actions
 
-1. Read Ouedkniss terms and robots.txt in a browser (only if the source is wanted at all).
-2. Ask the Ministry of Agriculture / Commerce for a structured price feed or published dataset.
-3. Locate the current official texts for regulated prices (S2) and fuel/gas (S10) and record effective dates.
-4. Confirm Supabase hosting region and the ANPDP declaration path with counsel.
-5. Identify two or three pilot merchants (Alger + one inland wilaya) for the merchant tier.
+1. Contact the Ministry of Agriculture for a structured daily feed, reuse terms or written permission for bulletin transcription.
+2. Contact the Tizi Ouzou Directorate of Commerce to confirm whether its daily statement is routinely updated and may be reused.
+3. Ask the Ministry of Commerce whether the MCIRMN price platform offers an authorised public export/API.
+4. Verify current regulated-price legal texts and their effective dates before adding curated values.
+5. Verify official commune codes and names against the latest administrative register before seeding `communes`.
+6. Complete the human legal review of Law 18-07 / Law 25-11 and cross-border hosting before launching crowd/community features.
