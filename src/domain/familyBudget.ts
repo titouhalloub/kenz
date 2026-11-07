@@ -48,7 +48,9 @@ export const FAMILY_BUDGET_DEFAULTS: FamilyBudgetCategory[] = [
 const validMinor = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
-export function createFamilyBudgetPlan(userId: string, month = new Date().toISOString().slice(0, 7)): FamilyBudgetPlan {
+const localCurrentMonth = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; };
+
+export function createFamilyBudgetPlan(userId: string, month = localCurrentMonth()): FamilyBudgetPlan {
   return {
     version: 1, userId, month, monthlyIncomeMinor: 0, adults: 2, children: 0,
     categories: FAMILY_BUDGET_DEFAULTS.map((row) => ({ ...row })),
@@ -57,8 +59,8 @@ export function createFamilyBudgetPlan(userId: string, month = new Date().toISOS
 }
 
 export function summarizeFamilyBudget(plan: FamilyBudgetPlan): FamilyBudgetSummary {
-  const plannedMinor = plan.categories.reduce((sum, row) => sum + row.plannedMinor, 0);
-  const actualMinor = plan.categories.reduce((sum, row) => sum + row.actualMinor, 0);
+  const plannedMinor = plan.categories.reduce((sum, row) => { const total = sum + row.plannedMinor; if (!Number.isSafeInteger(total)) throw new RangeError('Planned budget total is too large.'); return total; }, 0);
+  const actualMinor = plan.categories.reduce((sum, row) => { const total = sum + row.actualMinor; if (!Number.isSafeInteger(total)) throw new RangeError('Actual spending total is too large.'); return total; }, 0);
   const unallocatedMinor = plan.monthlyIncomeMinor - plannedMinor;
   return {
     incomeMinor: plan.monthlyIncomeMinor,
@@ -104,6 +106,7 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
     categories.push({ id: row.id, plannedMinor: row.plannedMinor, actualMinor: row.actualMinor });
   }
   if (categories.length !== FAMILY_BUDGET_DEFAULTS.length || seen.size !== allowed.size) return null;
+  if (!Number.isSafeInteger(categories.reduce((sum, row) => sum + row.plannedMinor, 0)) || !Number.isSafeInteger(categories.reduce((sum, row) => sum + row.actualMinor, 0))) return null;
   return { ...candidate, categories } as FamilyBudgetPlan;
 }
 
