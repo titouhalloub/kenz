@@ -38,9 +38,10 @@ describe('price intelligence and community migration safety', () => {
   });
 
   it('keeps public scraper observations pending until moderator review', () => {
+    const observations = migration('037_price_observations_and_stats.sql');
     const ingestion = migration('039_public_price_ingestion.sql');
     const review = migration('043_price_contributions.sql');
-    expect(ingestion).toMatch(/status:\s*'pending'/i);
+    expect(observations).toMatch(/status text not null default 'pending'/i);
     expect(review).toMatch(/status,\s*quality_flags,\s*source_reference/i);
     expect(review).toMatch(/'pending',v_flags/i);
     expect(review).toMatch(/review_price_observation/i);
