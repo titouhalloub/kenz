@@ -271,7 +271,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
       </div>
 
       {/* Segmented Sub-navigation */}
-      <div className="kenz-plan-tabs flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+      <div className="kenz-plan-tabs grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
         <button
           onClick={() => setActiveTab('budgets')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
