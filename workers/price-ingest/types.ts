@@ -1,3 +1,5 @@
+import type { BaseUnit } from '../../src/domain/productCatalog';
+
 export interface RawPriceRecord {
   title: string;
   priceText: string;
@@ -17,7 +19,7 @@ export interface NormalizedPriceRecord {
   communeCode?: string;
   sourceReference?: string;
   quantityMilliUnits: number;
-  baseUnit: 'g' | 'ml' | 'unit';
+  baseUnit: BaseUnit;
 }
 
 export interface PriceSourceAdapter<T = unknown> {
