@@ -9,8 +9,8 @@ describe('normalizePriceText', () => {
 
 describe('parsePackQuantity', () => {
   it.each([
-    ['1 kg', 'kg', 1000], ['500 g', 'kg', 500], ['1,5 kg', 'kg', 1500],
-    ['١ كغ', 'kg', 1000], ['1 L', 'l', 1000], ['500 ml', 'l', 500],
+    ['1 kg', 'kg', 1000], ['500 g', 'kg', 500], ['1,5 kg', 'kg', 1500], ['6x100g', 'kg', 600],
+    ['١ كغ', 'kg', 1000], ['1 L', 'l', 1000], ['500 ml', 'l', 500], ['4x1L', 'l', 4000],
     ['12 eggs', 'unit', 12], ['pack x6', 'unit', 6], ['6 حبات', 'unit', 6],
   ] as const)('parses %s as %s milli-units', (label, unit, expected) => {
     expect(parsePackQuantity(label, unit)).toBe(expected);
