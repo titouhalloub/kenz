@@ -268,7 +268,37 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
           {result.dataQuality.thinProducts > 0 && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex gap-2 text-[11px] text-amber-200">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              Les prix saisis n'ont pas encore de relevés vérifiés. Cette projection est indicative, pas une cotation de marché.
+              Certaines lignes ont moins de trois relevés ou utilisent des prix saisis manuellement. La projection reste indicative.
+            </div>
+          )}
+          {result.dataQuality.staleProducts > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex gap-2 text-[11px] text-amber-200">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Certains relevés datent de plus de 14 jours ou leur date est inconnue.
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2">
+            <h3 className="text-xs font-semibold text-slate-200">Détail et fraîcheur des prix</h3>
+            {result.lines.map((line) => (
+              <div key={line.productId} className="flex justify-between gap-3 text-[10px]">
+                <span className="text-slate-400 truncate">{line.name}</span>
+                <span className={line.data?.stale || line.data?.thin ? 'text-amber-300 shrink-0' : 'text-emerald-300 shrink-0'}>
+                  {!line.data ? 'Sans prix' : line.data.nObservations === 0 ? 'Saisie manuelle' : `${line.data.nObservations} relevés · ${line.data.ageDays === null ? 'date inconnue' : `${line.data.ageDays} j`}`}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {result.categoryTotals.length > 0 && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2">
+              <h3 className="text-xs font-semibold text-slate-200">Total par catégorie</h3>
+              {result.categoryTotals.map((row) => (
+                <div key={row.category} className="flex justify-between text-[11px] text-slate-400">
+                  <span>{categoryLabels[row.category]?.[profile.locale] || row.category}</span>
+                  <span className="font-mono-numbers text-slate-200">{formatMoney(row.cost.expectedMinor, 'DZD', profile.locale)}</span>
+                </div>
+              ))}
             </div>
           )}
 
