@@ -10,10 +10,10 @@ describe('normalizePriceRecord', () => {
       observedAt: '2026-11-07T10:00:00Z',
       wilayaCode: '16',
     }, 'g')).toMatchObject({
-      unitPriceMinor: 25,
+      unitPriceMinor: 25000,
       currency: 'DZD',
       quantityMilliUnits: 1000,
-      baseUnit: 'g',
+      baseUnit: 'kg',
     });
   });
 
