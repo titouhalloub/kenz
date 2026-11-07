@@ -152,6 +152,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     const result = await addCommunityComment(postId, bodyText);
     if (!result.success) { setError(result.error || 'Commentaire impossible.'); return; }
     setCommentDrafts((current) => ({ ...current, [postId]: '' }));
+    await refresh();
     setError('Commentaire publié.');
   };
 
@@ -308,6 +309,12 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
                   else setError(result.error || 'Blocage impossible.');
                 }} className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Bloquer</button>}
               </div>
+              {post.comments.length > 0 && <div className="space-y-2 border-t border-slate-800 pt-2">
+                {post.comments.map((comment) => <div key={comment.id} className="rounded-lg bg-slate-950 px-3 py-2">
+                  <p className="text-[10px] text-emerald-300">{comment.authorHandle}</p>
+                  <p className="text-[11px] text-slate-300 whitespace-pre-wrap">{comment.body}</p>
+                </div>)}
+              </div>}
               <div className="flex gap-2">
                 <input value={commentDrafts[post.id] || ''} onChange={(event) => setCommentDrafts((current) => ({ ...current, [post.id]: event.target.value }))} maxLength={2000} placeholder="Ajouter un commentaire…" className="min-w-0 flex-1 h-9 rounded-lg bg-slate-950 border border-slate-800 px-3 text-[11px] text-slate-100" />
                 <button disabled={!userId || !commentDrafts[post.id]?.trim()} onClick={() => void addComment(post.id)} className="rounded-lg border border-slate-700 px-3 text-[11px] text-slate-200 disabled:opacity-40"><MessageCircle className="h-4 w-4" /></button>
