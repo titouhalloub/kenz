@@ -73,7 +73,6 @@ create or replace function public.community_can_view_author(p_author_id uuid)
 returns boolean
 language sql
 stable
-security definer
 set search_path = ''
 as $community_can_view_author$
   select (select auth.uid()) is null or not exists (
@@ -190,6 +189,8 @@ for delete to authenticated using (user_id = (select auth.uid()));
 create policy "Users manage their own blocks" on public.community_user_blocks
 for all to authenticated using (blocker_id = (select auth.uid()))
 with check (blocker_id = (select auth.uid()) and blocker_id <> blocked_id);
+create policy "Users can see blocks involving them" on public.community_user_blocks
+for select to authenticated using (blocked_id = (select auth.uid()));
 create policy "Users submit reports" on public.community_reports
 for insert to authenticated with check (reporter_id = (select auth.uid()));
 create policy "Moderators read reports" on public.community_reports
@@ -255,9 +256,9 @@ begin
   values (v_user,p_kind,trim(p_title),coalesce(p_body,''),p_locale,p_wilaya_code,'published')
   returning id into v_id;
   insert into public.community_profiles(user_id,handle,locale,wilaya_code,is_public)
-  values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,false)
+  values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,true)
   on conflict (user_id) do update set locale=excluded.locale,
-    wilaya_code=excluded.wilaya_code,updated_at=now();
+    wilaya_code=excluded.wilaya_code,is_public=true,updated_at=now();
   return v_id;
 end;
 $$;
@@ -446,7 +447,6 @@ for each row execute function public.limit_community_reports();
 create or replace function public.guard_community_structured_text()
 returns trigger
 language plpgsql
-security definer
 set search_path = ''
 as $$
 declare v_text text;
