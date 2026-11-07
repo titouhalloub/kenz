@@ -1,6 +1,6 @@
 # Kenz Phase 4 Plan — Local Price Intelligence, Monthly Budget Simulator, Community Channel
 
-Status: proposed. Branch: `feat/kenz-expansion` (per docs/FEATURE_ROADMAP.md); one sub-branch per phase below.
+Status: in progress. Working branch: `feat/price-simulator-community`; changes remain isolated from `main` until reviewed and merged.
 Stack facts this plan builds on: Vite + React 19 + TS, Tailwind 4, Express `server.ts` (AI gateway only), Supabase (Postgres + RLS, migrations 001–035), Capacitor Android, Vitest, CI = `tsc --noEmit` + `vitest` + `vite build`.
 
 ## 1. Goals
@@ -141,5 +141,5 @@ De-risk: ship first against a static `reference_prices.json` (national estimates
 1. Create branch `feat/price-simulator-community` from `feat/kenz-expansion`.
 2. Wire `resolveOpenAIBaseUrl` into the two AI routes + tests.
 3. Create `docs/PRICE_SOURCES.md` and complete the audit of candidate sources.
-4. Draft migrations 036–037 and test on a Supabase branch.
-5. Write `units.ts` + `simulator.ts` skeleton with failing tests from the fixtures above.
+4. Draft migrations 036–038 and validate them in CI/static review. A paid Supabase preview branch is intentionally not used; do not apply to production until separately approved.
+5. Implement `units.ts`, the price-ingest normalization core, and `simulator.ts` with deterministic tests. (Initial implementations are now on the feature branch.)
