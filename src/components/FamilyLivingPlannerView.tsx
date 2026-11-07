@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, ShoppingBasket } from 'lucide-react';
+import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, ShoppingBasket, ClipboardList } from 'lucide-react';
 import type { UserProfile } from '../domain/types';
+import { formatMoney } from '../domain/financialCalculations';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
-  type MealSlot,
+  type MealSlot, type HouseholdNeedCategory,
 } from '../domain/familyLiving';
 
 interface Props { profile: UserProfile; month: string; householdSize: number; }
-type Section = 'meals' | 'shopping' | 'pantry' | 'recipes';
+type Section = 'meals' | 'shopping' | 'pantry' | 'recipes' | 'needs';
 
 const tr = (profile: UserProfile, fr: string, ar: string, en: string) =>
   profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
@@ -22,6 +23,13 @@ const isValidCalendarDate = (value: string) => {
 };
 const monthLastDay = (month: string) => { const [year, monthNumber] = month.split('-').map(Number); return `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, '0')}`; };
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+const parseMoneyMinor = (value: string): number | null => {
+  const normalized = value.trim().replace(',', '.');
+  if (!/^\\d+(?:\\.\\d{0,2})?$/.test(normalized)) return null;
+  const amount = Math.round(Number(normalized) * 100);
+  return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
+};
+const moneyField = (minor: number) => (minor / 100).toFixed(2);
 const parseQuantityMilli = (value: string) => {
   const parsed = Number(value.replace(',', '.'));
   if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1_000_000) return 0;
@@ -58,6 +66,11 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const [pantryQuantity, setPantryQuantity] = useState('');
   const [shareText, setShareText] = useState('');
   const [importText, setImportText] = useState('');
+  const [needCategory, setNeedCategory] = useState<HouseholdNeedCategory>('clothing');
+  const [needName, setNeedName] = useState('');
+  const [needMember, setNeedMember] = useState('');
+  const [needPlanned, setNeedPlanned] = useState('');
+  const [needDate, setNeedDate] = useState('');
 
   useEffect(() => {
     setPlan(readLivingPlan(profile.id, month));
@@ -150,6 +163,34 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     setPantryName(''); setPantryQuantity('');
   };
 
+  const addNeed = () => {
+    const name = needName.trim();
+    const plannedMinor = parseMoneyMinor(needPlanned);
+    if (!name || name.length > 100 || plannedMinor === null || (needMember.trim().length > 80) || (needDate && (!isValidCalendarDate(needDate) || needDate.slice(0, 7) !== month))) {
+      setStatus(tr(profile, 'Vérifiez le nom, le montant et la date.', 'تحقق من الاسم والمبلغ والتاريخ.', 'Check the name, amount and date.'));
+      return;
+    }
+    const total = plan.needs.reduce((sum, item) => sum + item.plannedMinor, 0) + plannedMinor;
+    if (!Number.isSafeInteger(total)) {
+      setStatus(tr(profile, 'Le total des besoins est trop élevé.', 'إجمالي الاحتياجات كبير جداً.', 'The needs total is too large.'));
+      return;
+    }
+    updatePlan((current) => ({ ...current, needs: [...current.needs, {
+      id: makeId('need'), category: needCategory, name, ...(needMember.trim() ? { member: needMember.trim() } : {}),
+      plannedMinor, actualMinor: 0, ...(needDate ? { dueDate: needDate } : {}),
+    }] }));
+    setNeedName(''); setNeedMember(''); setNeedPlanned(''); setNeedDate('');
+  };
+
+  const updateNeedActual = (id: string, value: string, original: number) => {
+    const amount = parseMoneyMinor(value);
+    if (amount === null) return original;
+    const otherTotal = plan.needs.filter((item) => item.id !== id).reduce((sum, item) => sum + item.actualMinor, 0);
+    if (!Number.isSafeInteger(otherTotal + amount)) return original;
+    updatePlan((current) => ({ ...current, needs: current.needs.map((item) => item.id === id ? { ...item, actualMinor: amount } : item) }));
+    return amount;
+  };
+
   const importRecipe = () => {
     try {
       if (importText.length > 100000) throw new Error('too large');
@@ -240,6 +281,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           ['shopping', ShoppingBasket, tr(profile, 'Courses', 'المشتريات', 'Shopping')],
           ['pantry', Package, tr(profile, 'Réserves', 'المخزون', 'Pantry')],
           ['recipes', ChefHat, tr(profile, 'Recettes', 'الوصفات', 'Recipes')],
+          ['needs', ClipboardList, tr(profile, 'Besoins', 'الاحتياجات', 'Needs')],
         ] as const).map(([id, Icon, label]) => (
           <button key={id} onClick={() => setSection(id)} className={section === id ? 'active' : ''}><Icon />{label}</button>
         ))}
@@ -297,6 +339,37 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         {plan.pantry.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Ajoutez les produits déjà disponibles à la maison.', 'أضف المنتجات المتوفرة في المنزل.', 'Add the items you already have at home.')}</p> : <div className="space-y-2">{plan.pantry.map((item) => <article key={item.id} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{formatQuantity(item.quantityMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, pantry: current.pantry.filter((row) => row.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></article>)}</div>}
       </div>}
 
+      {section === 'needs' && <div className="kenz-family-panel space-y-3">
+        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'BESOINS DU MOIS', 'احتياجات الشهر', 'MONTHLY NEEDS')}</span><h3>{tr(profile, 'Vêtements, nettoyage & autres', 'الملابس والتنظيف واحتياجات أخرى', 'Clothing, cleaning & more')}</h3></div></div>
+        <div className="kenz-family-summary-grid">
+          <article><span>{tr(profile, 'Prévu', 'المخطط', 'Planned')}</span><strong>{formatMoney(plan.needs.reduce((sum, item) => sum + item.plannedMinor, 0), profile.preferredCurrency, profile.locale)}</strong></article>
+          <article><span>{tr(profile, 'Réel', 'الفعلي', 'Actual')}</span><strong>{formatMoney(plan.needs.reduce((sum, item) => sum + item.actualMinor, 0), profile.preferredCurrency, profile.locale)}</strong></article>
+          <article><span>{tr(profile, 'Articles', 'العناصر', 'Items')}</span><strong>{plan.needs.length}</strong></article>
+        </div>
+        <p className="text-xs text-slate-500">{tr(profile, 'Ajoutez les achats prévus : vêtements par membre, chaussures, lessive, savon, fournitures scolaires, transport, entretien et tout besoin personnalisé.', 'أضف المشتريات المخططة: ملابس لكل فرد، أحذية، مسحوق الغسيل، الصابون، اللوازم المدرسية، النقل والصيانة وكل احتياج خاص.', 'Track planned purchases: clothing per family member, shoes, laundry detergent, soap, school supplies, transport, maintenance and any custom need.')}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <label>{tr(profile, 'Catégorie', 'الفئة', 'Category')}<select value={needCategory} onChange={(e) => setNeedCategory(e.target.value as HouseholdNeedCategory)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm">
+            <option value="clothing">{tr(profile, 'Vêtements & chaussures', 'ملابس وأحذية', 'Clothing & footwear')}</option>
+            <option value="cleaning">{tr(profile, 'Nettoyage', 'التنظيف', 'Cleaning')}</option>
+            <option value="hygiene">{tr(profile, 'Hygiène', 'النظافة الشخصية', 'Personal hygiene')}</option>
+            <option value="school">{tr(profile, 'École', 'المدرسة', 'School')}</option>
+            <option value="transport">{tr(profile, 'Transport', 'النقل', 'Transport')}</option>
+            <option value="health">{tr(profile, 'Santé', 'الصحة', 'Health')}</option>
+            <option value="home">{tr(profile, 'Maison', 'المنزل', 'Home')}</option>
+            <option value="other">{tr(profile, 'Autre', 'أخرى', 'Other')}</option>
+          </select></label>
+          <label>{tr(profile, 'Montant prévu (DA)', 'المبلغ المخطط (دج)', 'Planned amount (DA)')}<input inputMode="decimal" value={needPlanned} onChange={(e) => setNeedPlanned(e.target.value)} placeholder="0.00" className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label className="col-span-2">{tr(profile, 'Article / besoin', 'المنتج / الاحتياج', 'Item / need')}<input value={needName} onChange={(e) => setNeedName(e.target.value)} placeholder={tr(profile, 'Ex. veste hiver, lessive, cahiers…', 'مثلاً معطف شتوي، مسحوق غسيل، كراريس…', 'e.g. winter jacket, detergent, notebooks…')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label>{tr(profile, 'Pour qui ? (facultatif)', 'لمن؟ (اختياري)', 'For whom? (optional)')}<input value={needMember} onChange={(e) => setNeedMember(e.target.value)} placeholder={tr(profile, 'Nom / membre', 'اسم الفرد', 'Name / member')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+          <label>{tr(profile, 'Date prévue (facultatif)', 'التاريخ المتوقع (اختياري)', 'Due date (optional)')}<input type="date" min={monthFirstDay(month)} max={monthLastDay(month)} value={needDate} onChange={(e) => setNeedDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
+        </div>
+        <button onClick={addNeed} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter le besoin', 'إضافة الاحتياج', 'Add need')}</button>
+        {plan.needs.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Aucun besoin détaillé pour ce mois.', 'لا توجد احتياجات مفصلة لهذا الشهر.', 'No detailed needs for this month yet.')}</p> : <div className="space-y-2">{plan.needs.map((item) => <article key={item.id} className="rounded-xl border border-violet-100 p-3">
+          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, item.category === 'clothing' ? 'Vêtements' : item.category === 'cleaning' ? 'Nettoyage' : item.category === 'hygiene' ? 'Hygiène' : item.category === 'school' ? 'École' : item.category === 'transport' ? 'Transport' : item.category === 'health' ? 'Santé' : item.category === 'home' ? 'Maison' : 'Autre', item.category === 'clothing' ? 'ملابس' : item.category === 'cleaning' ? 'تنظيف' : item.category === 'hygiene' ? 'نظافة' : item.category === 'school' ? 'مدرسة' : item.category === 'transport' ? 'نقل' : item.category === 'health' ? 'صحة' : item.category === 'home' ? 'منزل' : 'أخرى', item.category)}{item.member ? ' · ' + item.member : ''}{item.dueDate ? ' · ' + item.dueDate : ''}</span><span className="mt-1 block text-[10px] text-slate-500">{tr(profile, 'Prévu', 'مخطط', 'Planned')}: {formatMoney(item.plannedMinor, profile.preferredCurrency, profile.locale)}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, needs: current.needs.filter((need) => need.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></div>
+          <label className="mt-2">{tr(profile, 'Montant réellement dépensé', 'المبلغ المصروف فعلياً', 'Actual amount spent')}<input key={item.id + '-actual'} inputMode="decimal" defaultValue={moneyField(item.actualMinor)} onBlur={(e) => { const next = updateNeedActual(item.id, e.currentTarget.value, item.actualMinor); e.currentTarget.value = moneyField(next); }} className="mt-1 w-full h-10 rounded-lg border px-3 text-sm font-mono-numbers" /></label>
+        </article>)}</div>}
+        <p className="text-[10px] text-slate-500">{tr(profile, 'Ces lignes détaillent les achats. Elles ne modifient pas automatiquement les enveloppes du budget principal afin d’éviter les doubles comptages.', 'هذه البنود تفصل المشتريات ولا تعدّل تلقائياً مخصصات الميزانية الرئيسية لتجنب احتساب المصروف مرتين.', 'These line items detail purchases and do not automatically change the main budget envelopes, to avoid double counting.')}</p>
+      </div>}
       {section === 'recipes' && <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'COLLECTION', 'مجموعة الوصفات', 'COLLECTION')}</span><h3>{tr(profile, 'Recettes familiales', 'وصفات عائلية', 'Family recipes')}</h3></div><span className="text-xs text-slate-500">{recipes.length}</span></div>
         <div className="space-y-2">{recipes.map((recipe) => <article key={recipe.id} className="rounded-xl border border-violet-100 p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{recipeTitle(recipe)}</strong><p className="mt-1 text-[10px] text-slate-500">{recipeDescription(recipe)}</p><span className="mt-1 inline-block text-[10px] text-violet-700">{recipe.origin === 'community' ? tr(profile, 'Partagée par la communauté', 'مشاركة من المجتمع', 'Community shared') : tr(profile, 'Recette Kenz', 'وصفة كينز', 'Kenz recipe')} · {recipe.prepMinutes} min</span></div><button onClick={() => setShareText(exportCommunityRecipe(recipe))} aria-label={tr(profile, 'Exporter la recette', 'تصدير الوصفة', 'Export recipe')} className="rounded-lg p-2 text-violet-700"><Download className="h-4 w-4" /></button></div></article>)}</div>
