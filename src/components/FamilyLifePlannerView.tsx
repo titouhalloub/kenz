@@ -56,6 +56,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
   const [childrenInput, setChildrenInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).children));
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
   const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
+  const [budgetMessage, setBudgetMessage] = useState('');
 
   useEffect(() => {
     const next = readPlan(profile.id, selectedMonth);
@@ -75,8 +76,14 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
 
   const summary = useMemo(() => summarizeFamilyBudget(plan), [plan]);
   const updatePlan = (field: 'plannedMinor' | 'actualMinor', id: FamilyBudgetCategoryId, value: number) => {
-    try { setPlan((current) => updateFamilyCategory(current, id, field, value)); }
-    catch { setSaveState('error'); }
+    const otherTotal = plan.categories.filter((row) => row.id !== id).reduce((sum, row) => sum + row[field], 0);
+    if (!Number.isSafeInteger(otherTotal + value)) {
+      setBudgetMessage(t(profile, 'Le total dépasse la limite numérique autorisée.', 'المجموع يتجاوز الحد الرقمي المسموح.', 'The total exceeds the supported amount.'));
+      return false;
+    }
+    setBudgetMessage('');
+    setPlan((current) => updateFamilyCategory(current, id, field, value));
+    return true;
   };
   const setIncome = () => {
     const amount = parseBudgetInput(incomeInput);
@@ -130,6 +137,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
 
       <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{t(profile, 'PLANIFICATION', 'التخطيط', 'PLANNING')}</span><h3>{t(profile, 'Tous les besoins du foyer', 'كل احتياجات الأسرة', 'Everyday family needs')}</h3></div></div>
+        {budgetMessage && <p role="status" className="kenz-family-inline-status">{budgetMessage}</p>}
         <p className="text-xs text-slate-500">{t(profile, 'Saisissez un montant prévu et mettez à jour le réel au fil du mois. Toutes les valeurs restent modifiables.', 'أدخل المبلغ المخطط وحدّث المصروف الفعلي خلال الشهر. كل القيم قابلة للتعديل.', 'Enter a planned amount and update actual spending during the month. Every amount is editable.')}</p>
         <div className="space-y-2">
           {plan.categories.map((row) => {
@@ -138,8 +146,8 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
             return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
               <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small></div>
               <div className="grid grid-cols-2 gap-2">
-                <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.plannedMinor); else updatePlan('plannedMinor', row.id, amount); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
-                <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input key={selectedMonth + '-' + row.id + '-actual'} inputMode="decimal" defaultValue={moneyInput(row.actualMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.actualMinor); else updatePlan('actualMinor', row.id, amount); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.plannedMinor); else if (!updatePlan('plannedMinor', row.id, amount)) e.currentTarget.value = moneyInput(row.plannedMinor); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input key={selectedMonth + '-' + row.id + '-actual'} inputMode="decimal" defaultValue={moneyInput(row.actualMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.actualMinor); else if (!updatePlan('actualMinor', row.id, amount)) e.currentTarget.value = moneyInput(row.actualMinor); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
               </div>
             </article>;
           })}
