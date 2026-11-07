@@ -135,7 +135,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
 
   const addMeal = () => {
     const count = Number(servings);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(mealDate) || mealDate.slice(0, 7) !== month ||
+    if (!isValidCalendarDate(mealDate) || mealDate.slice(0, 7) !== month ||
         !Number.isInteger(count) || count < 1 || count > 40 || !selectedRecipe) {
       setStatus(tr(profile, 'Vérifiez la date et le nombre de portions.', 'تحقق من التاريخ وعدد الحصص.', 'Check the date and serving count.'));
       return;
