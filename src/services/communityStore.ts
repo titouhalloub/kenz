@@ -35,7 +35,7 @@ export async function ensureCommunityProfile(input: {
     const handle = 'Kenz-' + input.userId.replace(/-/g, '').slice(-7).toUpperCase();
     const { error } = await supabase.from('community_profiles').upsert({
       user_id: input.userId, handle, locale: input.locale,
-      wilaya_code: wilayaCodeFromLabel(input.wilaya), is_public: true,
+      wilaya_code: null, is_public: false,
     }, { onConflict: 'user_id', ignoreDuplicates: true });
     if (error) return { success: false, error: error.message };
     return { success: true, data: true };
