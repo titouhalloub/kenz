@@ -184,8 +184,8 @@ function productSlug(label: string): string | null {
   const mapped = sourceAliases[normalized];
   if (mapped) return mapped;
   // Official PDF text extraction sometimes inserts spaces inside words (e.g. "C a rotte").
-  const compact = normalized.replace(/\\s+/g, '');
-  const compactAlias = Object.entries(sourceAliases).find(([alias]) => alias.replace(/\\s+/g, '') === compact)?.[1];
+  const compact = normalized.replace(/\s+/g, '');
+  const compactAlias = Object.entries(sourceAliases).find(([alias]) => alias.replace(/\s+/g, '') === compact)?.[1];
   if (compactAlias) return compactAlias;
   const exact = PRODUCT_CATALOG.find((product) =>
     key(product.nameFr) === normalized || key(product.nameEn) === normalized || key(product.nameAr) === normalized);
