@@ -23,6 +23,7 @@ export interface FamilyBudgetPlan {
   children: number;
   categories: FamilyBudgetCategory[];
   updatedAt: string;
+  allocationMode?: 'automatic' | 'custom';
 }
 
 export type FamilyBudgetRecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -95,6 +96,7 @@ export function createFamilyBudgetPlan(userId: string, month = localCurrentMonth
   return {
     version: 1, userId, month, monthlyIncomeMinor: 0, adults: 2, children: 0,
     categories: FAMILY_BUDGET_DEFAULTS.map((row) => ({ ...row, plannedOverride: false })),
+    allocationMode: 'automatic',
     updatedAt: new Date().toISOString(),
   };
 }
@@ -113,7 +115,7 @@ export function applyFamilyBudgetSources(
     ...plan,
     categories: plan.categories.map((row) => ({
       ...row,
-      plannedMinor: row.plannedOverride || row.plannedMinor > 0
+      plannedMinor: row.plannedOverride === true
         ? row.plannedMinor
         : recurringPlannedByCategory.get(row.id) ?? row.plannedMinor,
       actualMinor: actualByCategory.get(row.id) ?? 0,
@@ -149,7 +151,7 @@ export function updateFamilyCategory(
   const categories = plan.categories.map((row) => row.id === id ? { ...row, [field]: value, ...(field === 'plannedMinor' ? { plannedOverride: true } : {}) } : row);
   const total = categories.reduce((sum, row) => sum + row[field], 0);
   if (!Number.isSafeInteger(total)) throw new RangeError('Family budget total is too large.');
-  return { ...plan, categories, updatedAt: new Date().toISOString() };
+  return { ...plan, categories, ...(field === 'plannedMinor' ? { allocationMode: 'custom' as const } : {}), updatedAt: new Date().toISOString() };
 }
 
 export function validateFamilyBudgetPlan(value: unknown, userId: string): FamilyBudgetPlan | null {
@@ -158,6 +160,7 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   if (candidate.version !== 1 || candidate.userId !== userId ||
       typeof candidate.month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(candidate.month) ||
       !validMinor(candidate.monthlyIncomeMinor) ||
+      (candidate.allocationMode !== undefined && candidate.allocationMode !== 'automatic' && candidate.allocationMode !== 'custom') ||
       (candidate.monthlyIncomeOverrideMinor !== undefined && candidate.monthlyIncomeOverrideMinor !== null && !validMinor(candidate.monthlyIncomeOverrideMinor)) ||
       !Number.isInteger(candidate.adults) || (candidate.adults ?? 0) < 0 || (candidate.adults ?? 0) > 30 ||
       !Number.isInteger(candidate.children) || (candidate.children ?? 0) < 0 || (candidate.children ?? 0) > 30 ||
@@ -176,26 +179,62 @@ export function validateFamilyBudgetPlan(value: unknown, userId: string): Family
   }
   if (categories.length !== FAMILY_BUDGET_DEFAULTS.length || seen.size !== allowed.size) return null;
   if (!Number.isSafeInteger(categories.reduce((sum, row) => sum + row.plannedMinor, 0)) || !Number.isSafeInteger(categories.reduce((sum, row) => sum + row.actualMinor, 0))) return null;
-  return { ...candidate, categories } as FamilyBudgetPlan;
+  return { ...candidate, categories, allocationMode: candidate.allocationMode ?? 'custom' } as FamilyBudgetPlan;
 }
 
 export function familyBudgetStorageKey(userId: string, month: string): string {
   return `kenz_family_budget_v1_${encodeURIComponent(userId)}_${month}`;
 }
 
-export function suggestFamilyBudgetAllocations(plan: FamilyBudgetPlan): FamilyBudgetPlan {
-  if (!validMinor(plan.monthlyIncomeMinor)) return plan;
-  const fixedTotal = plan.categories.reduce((sum, row) => sum + row.plannedMinor, 0);
-  if (!Number.isSafeInteger(fixedTotal) || fixedTotal >= plan.monthlyIncomeMinor) return plan;
-  const eligible = plan.categories.filter((row) => row.plannedMinor === 0 && row.plannedOverride !== true);
-  if (eligible.length === 0) return plan;
-  const remaining = plan.monthlyIncomeMinor - fixedTotal;
-  const weightTotal = eligible.reduce((sum, row) => sum + row.priority, 0);
+
+/** Migrate exact weighted splits saved by the old allocator as manual overrides. */
+export function normalizeLegacyAutoAllocation(plan: FamilyBudgetPlan): FamilyBudgetPlan {
+  if (plan.allocationMode || !plan.categories.every((row) => row.plannedOverride === true)) return plan;
+  const total = plan.categories.reduce((sum, row) => sum + row.plannedMinor, 0);
+  if (!Number.isSafeInteger(total) || total <= 0) return plan;
+  const weightTotal = plan.categories.reduce((sum, row) => sum + row.priority, 0);
   if (!Number.isSafeInteger(weightTotal) || weightTotal <= 0) return plan;
   let assigned = 0;
-  const shares = new Map<string, number>();
+  const expected = new Map<FamilyBudgetCategoryId, number>();
+  for (const row of plan.categories) {
+    const share = Number((BigInt(total) * BigInt(row.priority)) / BigInt(weightTotal));
+    expected.set(row.id, share);
+    assigned += share;
+  }
+  let remainder = total - assigned;
+  for (const row of plan.categories) {
+    if (remainder <= 0) break;
+    expected.set(row.id, (expected.get(row.id) || 0) + 1);
+    remainder--;
+  }
+  if (!plan.categories.every((row) => row.plannedMinor === expected.get(row.id))) {
+    return { ...plan, allocationMode: 'custom' };
+  }
+  return {
+    ...plan,
+    allocationMode: 'automatic',
+    categories: plan.categories.map((row) => ({ ...row, plannedOverride: false })),
+  };
+}
+
+export function suggestFamilyBudgetAllocations(plan: FamilyBudgetPlan): FamilyBudgetPlan {
+  if (!validMinor(plan.monthlyIncomeMinor) || !Number.isInteger(plan.adults) ||
+      !Number.isInteger(plan.children) || plan.adults < 0 || plan.children < 0) return plan;
+  const fixedTotal = plan.categories.reduce((sum, row) => sum + (row.plannedOverride === true ? row.plannedMinor : 0), 0);
+  if (!Number.isSafeInteger(fixedTotal) || fixedTotal >= plan.monthlyIncomeMinor) return plan;
+  const eligible = plan.categories.filter((row) => row.plannedOverride !== true);
+  if (eligible.length === 0) return plan;
+  const remaining = plan.monthlyIncomeMinor - fixedTotal;
+  const householdPermille = Math.max(1000, plan.adults * 1000 + plan.children * 500);
+  const weights = new Map<FamilyBudgetCategoryId, number>(eligible.map((row) => [
+    row.id, row.priority * (row.id === 'food' ? householdPermille : 1000),
+  ]));
+  const weightTotal = [...weights.values()].reduce((sum, value) => sum + value, 0);
+  if (!Number.isSafeInteger(weightTotal) || weightTotal <= 0) return plan;
+  let assigned = 0;
+  const shares = new Map<FamilyBudgetCategoryId, number>();
   for (const row of eligible) {
-    const share = Number((BigInt(remaining) * BigInt(row.priority)) / BigInt(weightTotal));
+    const share = Number((BigInt(remaining) * BigInt(weights.get(row.id)!)) / BigInt(weightTotal));
     shares.set(row.id, share);
     assigned += share;
   }
@@ -207,7 +246,10 @@ export function suggestFamilyBudgetAllocations(plan: FamilyBudgetPlan): FamilyBu
   }
   return {
     ...plan,
-    categories: plan.categories.map((row) => shares.has(row.id) ? { ...row, plannedMinor: shares.get(row.id)!, plannedOverride: true } : row),
+    allocationMode: 'automatic',
+    categories: plan.categories.map((row) => shares.has(row.id)
+      ? { ...row, plannedMinor: shares.get(row.id)!, plannedOverride: false }
+      : row),
     updatedAt: new Date().toISOString(),
   };
 }
