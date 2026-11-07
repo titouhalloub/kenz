@@ -68,17 +68,20 @@ const sourceAliases: Record<string, string> = {
   'chou fleur': 'chou-fleur',
   'navet': 'navet',
   'pomme locale': 'pomme',
+  'pasteques': 'pasteque',
   'pommes locales': 'pomme',
   'pomme': 'pomme',
   'orange': 'orange',
   'oranges': 'orange',
   'banane': 'banane',
   'bananes': 'banane',
+  'datte': 'dattes-deglet-nour',
   'dattes': 'dattes-deglet-nour',
   'viande bovine locale': 'viande-bovine-locale',
   'viande ovine locale': 'viande-ovine',
   'viande ovine': 'viande-ovine',
   'viande blanche poulet': 'poulet-frais',
+  'viande blanche locale poulet': 'poulet-frais',
   'poisson sardine': 'sardines',
   'poulet de chair': 'poulet-frais',
   'poulet': 'poulet-frais',
@@ -162,8 +165,18 @@ function htmlCellText(html: string): string {
 function dateFromText(value: string): string | null {
   const match = value.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
   if (!match) return null;
-  const [, day, month, year] = match;
-  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).toISOString();
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString();
+}
+
+function dateFromDirectorateText(value: string): string | null {
+  const publication = value.match(/journ(?:ée|ee)\s+du\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i);
+  return publication ? dateFromText(publication[1]) : dateFromText(value);
 }
 
 function productSlug(label: string): string | null {
@@ -340,7 +353,7 @@ export function parseMadrpText(text: string, sourceUrl: string, observedAt: stri
 export function parseDcwHtml(html: string, source: PublicSourceConfig): ScrapedPrice[] {
   const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
   const pageText = htmlCellText(html);
-  const observedAt = dateFromText(pageText);
+  const observedAt = dateFromDirectorateText(pageText);
   if (!observedAt) throw new Error('Could not find a publication date on the Directorate price page');
   const output: ScrapedPrice[] = [];
   for (const row of rows) {
@@ -368,7 +381,7 @@ export function parseDcwPlainHtml(html: string, source: PublicSourceConfig): Scr
     .replace(/<\/t[dh]\s*>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' '));
-  const observedAt = dateFromText(text);
+  const observedAt = dateFromDirectorateText(text);
   if (!observedAt) throw new Error('Could not find a publication date on the Directorate price page');
   const output: ScrapedPrice[] = [];
 
