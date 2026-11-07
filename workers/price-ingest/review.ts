@@ -14,7 +14,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !serviceRoleKey) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
 if (!enableSourceSlug) throw new Error('Provide --enable-source <slug> after a human has reviewed the source.');
-if (!confirmed || !termsReviewedAt || !/^\\d{4}-\\d{2}-\\d{2}$/.test(termsReviewedAt)) {
+if (!confirmed || !termsReviewedAt || !/^\d{4}-\d{2}-\d{2}$/.test(termsReviewedAt)) {
   throw new Error('Enabling a source requires --confirm-source-review and --terms-reviewed-at YYYY-MM-DD after a human has checked its published access/reuse terms.');
 }
 const reviewedDate = new Date(termsReviewedAt + 'T00:00:00.000Z');
