@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
-  ingredientKey, scaleIngredient, validateFamilyLivingPlan,
+  ingredientKey, scaleIngredient, validateFamilyLivingPlan, parseCommunityRecipe,
 } from './familyLiving';
 
 describe('family living planner', () => {
@@ -30,6 +30,18 @@ describe('family living planner', () => {
     plan.pantry = [{ id: 'p1', name: 'بيض', unit: 'piece', quantityMilli: 20000 }];
     const eggs = buildShoppingRequirements(plan).find((row) => row.name === 'بيض');
     expect(eggs?.toBuyMilli).toBe(0);
+  });
+
+  it('matches common grocery names across Arabic and French', () => {
+    expect(ingredientKey('طماطم', 'piece')).toBe(ingredientKey('tomate', 'piece'));
+    expect(ingredientKey('بيض', 'piece')).toBe(ingredientKey('oeufs', 'piece'));
+  });
+
+  it('rejects impossible calendar dates and incomplete community recipes', () => {
+    const plan = createFamilyLivingPlan('u1', '2026-02');
+    plan.meals = [{ id: 'm1', date: '2026-02-31', slot: 'lunch', recipeId: 'dz-omelette', servings: 2 }];
+    expect(validateFamilyLivingPlan(plan, 'u1', '2026-02')).toBeNull();
+    expect(parseCommunityRecipe({ title: 'Soup', description: 'Good', baseServings: 2, prepMinutes: 10, ingredients: [{ name: 'water', quantityMilli: 1000, unit: 'ml' }], steps: [] }, 'community-x')).toBeNull();
   });
 
   it('rejects cross-user, cross-month, duplicate and malformed data', () => {
