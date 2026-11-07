@@ -188,7 +188,7 @@ export function familyBudgetStorageKey(userId: string, month: string): string {
 
 
 /** Migrate exact weighted splits saved by the old allocator as manual overrides. */
-export function normalizeLegacyAutoAllocation(plan: FamilyBudgetPlan): FamilyBudgetPlan {
+export function normalizeLegacyAutoAllocation(plan: FamilyBudgetPlan, expectedIncomeMinor?: number): FamilyBudgetPlan {
   if (plan.allocationMode) return plan;
   if (!plan.categories.every((row) => row.plannedOverride === true)) return { ...plan, allocationMode: 'custom' };
   const total = plan.categories.reduce((sum, row) => sum + row.plannedMinor, 0);
@@ -208,9 +208,9 @@ export function normalizeLegacyAutoAllocation(plan: FamilyBudgetPlan): FamilyBud
     expected.set(row.id, (expected.get(row.id) || 0) + 1);
     remainder--;
   }
-  if (!plan.categories.every((row) => row.plannedMinor === expected.get(row.id))) {
-    return { ...plan, allocationMode: 'custom' };
-  }
+  const matchesOldGeneratedSplit = plan.categories.every((row) => row.plannedMinor === expected.get(row.id));
+  const matchesFullyAllocatedIncome = Number.isSafeInteger(expectedIncomeMinor) && expectedIncomeMinor! > 0 && total === expectedIncomeMinor;
+  if (!matchesOldGeneratedSplit && !matchesFullyAllocatedIncome) return { ...plan, allocationMode: 'custom' };
   return {
     ...plan,
     allocationMode: 'automatic',
