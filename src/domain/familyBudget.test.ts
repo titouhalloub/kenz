@@ -87,7 +87,8 @@ describe('family budget foundation', () => {
     expect(validateFamilyBudgetPlan({ ...plan, categories: [plan.categories[0], plan.categories[0], ...plan.categories.slice(2)] }, 'user-a')).toBeNull();
     expect(validateFamilyBudgetPlan({ ...plan, categories: plan.categories.slice(1) }, 'user-a')).toBeNull();
   });
-});\n
+
+
   it('counts weekly and biweekly recurring items within a selected month', () => {
     expect(countRecurringOccurrencesInMonth('weekly', '2026-11-02', '2026-11')).toBe(5);
     expect(countRecurringOccurrencesInMonth('biweekly', '2026-11-02', '2026-11')).toBe(3);
@@ -132,4 +133,4 @@ describe('family budget foundation', () => {
     const restored = validateFamilyBudgetPlan(JSON.parse(JSON.stringify(plan)), 'user-a');
     expect(restored?.monthlyIncomeOverrideMinor).toBe(6_400_000);
   });
-
+});
