@@ -48,8 +48,7 @@ const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
   const fallback = createFamilyLivingPlan(userId, month);
   try {
     const raw = localStorage.getItem(familyLivingStorageKey(userId, month));
-    if (!raw) return fallback;
-    const monthly = validateFamilyLivingPlan(JSON.parse(raw), userId, month) || fallback;
+    const monthly = raw ? (validateFamilyLivingPlan(JSON.parse(raw), userId, month) || fallback) : fallback;
     try {
       const libraryRaw = localStorage.getItem('kenz_family_recipe_library_v1_' + encodeURIComponent(userId));
       const library = libraryRaw ? JSON.parse(libraryRaw) : [];
