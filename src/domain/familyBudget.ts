@@ -79,11 +79,10 @@ export function updateFamilyCategory(
   value: number,
 ): FamilyBudgetPlan {
   if (!validMinor(value)) throw new RangeError('Budget amounts must be non-negative safe integers.');
-  return {
-    ...plan,
-    categories: plan.categories.map((row) => row.id === id ? { ...row, [field]: value } : row),
-    updatedAt: new Date().toISOString(),
-  };
+  const categories = plan.categories.map((row) => row.id === id ? { ...row, [field]: value } : row);
+  const total = categories.reduce((sum, row) => sum + row[field], 0);
+  if (!Number.isSafeInteger(total)) throw new RangeError('Family budget total is too large.');
+  return { ...plan, categories, updatedAt: new Date().toISOString() };
 }
 
 export function validateFamilyBudgetPlan(value: unknown, userId: string): FamilyBudgetPlan | null {
