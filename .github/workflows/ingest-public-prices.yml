@@ -10,10 +10,6 @@ on:
         required: false
         default: false
         type: boolean
-      approve_run_id:
-        description: 'Optional ingest run UUID to approve after checking its staged rows'
-        required: false
-        type: string
       enable_source_slug:
         description: 'Optional source slug to enable after checking its public access and reuse terms'
         required: false
@@ -55,7 +51,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends poppler-utils
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Scrape public price bulletins into the pending review queue
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
@@ -69,17 +65,15 @@ jobs:
         run: npx tsx workers/price-ingest/run.ts --dry-run
 
       - name: Approve reviewed observations and optionally enable a source
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.approve_run_id != '' || inputs.enable_source_slug != '') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.enable_source_slug != '') }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          APPROVE_RUN_ID: ${{ inputs.approve_run_id }}
           ENABLE_SOURCE_SLUG: ${{ inputs.enable_source_slug }}
           TERMS_REVIEWED_AT: ${{ inputs.terms_reviewed_at }}
           CONFIRM_SOURCE_REVIEW: ${{ inputs.confirm_source_review }}
         run: |
           ARGS=()
-          if [ -n "$APPROVE_RUN_ID" ]; then ARGS+=(--approve-run-id "$APPROVE_RUN_ID"); fi
           if [ -n "$ENABLE_SOURCE_SLUG" ]; then
             if [ "$CONFIRM_SOURCE_REVIEW" != "true" ]; then
               echo "Source enabling requires explicit confirmation of the human source review."
