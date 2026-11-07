@@ -4,7 +4,7 @@ create table public.community_profiles (
   handle text not null check (char_length(handle) between 3 and 24),
   locale text not null default 'fr' check (locale in ('ar','fr','en')),
   wilaya_code text check (wilaya_code is null or wilaya_code ~ '^[0-9]{2,3}$'),
-  is_public boolean not null default true,
+  is_public boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
