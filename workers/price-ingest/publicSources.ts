@@ -139,7 +139,7 @@ function quantityFor(unit: string, baseUnit: BaseUnit): string | null {
     if (mlMatch) return `${mlMatch[1]} ml`;
     return null;
   }
-  if (!value || /^(?:unite|unites|piece|pieces|oeuf|oeufs)$/.test(value)) return '1 unit';
+  if (!value || /^(?:1\s*)?(?:unite|unites|piece|pieces|oeuf|oeufs)$/.test(value)) return '1 unit';
   const pack = value.match(/^(\d+)\s*(?:p|pcs?|pieces?|unites?)$/);
   if (pack) return `${pack[1]} units`;
   // A packaged item measured in grams/litres is still one retail unit in this catalog.
@@ -414,6 +414,26 @@ export function parseDcwHtml(html: string, source: PublicSourceConfig): ScrapedP
   const output: ScrapedPrice[] = [];
   for (const row of rows) {
     const cells = [...row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((cell) => htmlCellText(cell[1]));
+    if (cells.length === 3) {
+      const [labelAndUnit, , retail] = cells;
+      const price = parseMoney(retail);
+      if (!price) continue;
+      const tokens = labelAndUnit.split(/\s+/).filter(Boolean);
+      for (let boundary = 1; boundary <= tokens.length; boundary += 1) {
+        const label = tokens.slice(0, boundary).join(' ');
+        const slug = productSlug(label);
+        if (!slug) continue;
+        const product = products.get(slug);
+        if (!product) continue;
+        const unit = tokens.slice(boundary).join(' ');
+        const quantity = quantityFor(unit, product.baseUnit);
+        if (!quantity) continue;
+        const rowPrice = toScraped(source.slug, source.url, observedAt, source.wilayaCode, label, quantity, price);
+        if (rowPrice) output.push(rowPrice);
+        break;
+      }
+      continue;
+    }
     if (cells.length < 4) continue;
     const [label, unit, , retail] = cells;
     const price = parseMoney(retail);
