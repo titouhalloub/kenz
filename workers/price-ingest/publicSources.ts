@@ -76,7 +76,6 @@ const sourceAliases: Record<string, string> = {
   'banane': 'banane',
   'bananes': 'banane',
   'datte': 'dattes-deglet-nour',
-  'grenade': 'grenade',
   'dattes': 'dattes-deglet-nour',
   'viande bovine locale': 'viande-bovine-locale',
   'viande ovine locale': 'viande-ovine',
