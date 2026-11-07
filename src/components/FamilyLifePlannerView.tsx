@@ -33,15 +33,17 @@ const readPlan = (userId: string, month: string): FamilyBudgetPlan => {
   try {
     const raw = localStorage.getItem(familyBudgetStorageKey(userId, month));
     if (!raw) return fallback;
-    return validateFamilyBudgetPlan(JSON.parse(raw), userId) || fallback;
+    const stored = validateFamilyBudgetPlan(JSON.parse(raw), userId);
+    return stored?.month === month ? stored : fallback;
   } catch { return fallback; }
 };
 
 const moneyInput = (minor: number) => (minor / 100).toFixed(2);
+const currentMonth = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; };
 
 export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, new Date().toISOString().slice(0, 7)));
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, currentMonth()));
   const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, new Date().toISOString().slice(0, 7)).monthlyIncomeMinor));
   const [adultsInput, setAdultsInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).adults));
   const [childrenInput, setChildrenInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).children));
