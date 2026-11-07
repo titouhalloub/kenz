@@ -5,6 +5,11 @@ on:
     - cron: '25 6 * * *'
   workflow_dispatch:
     inputs:
+      dry_run:
+        description: 'Fetch and parse sources without writing to Supabase'
+        required: false
+        default: false
+        type: boolean
       approve_run_id:
         description: 'Optional ingest run UUID to approve after checking its staged rows'
         required: false
@@ -53,10 +58,15 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Scrape public price bulletins into the pending review queue
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx tsx workers/price-ingest/run.ts
+
+      - name: Verify public scrapers without database writes
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        run: npx tsx workers/price-ingest/run.ts --dry-run
 
       - name: Approve reviewed observations and optionally enable a source
         if: ${{ github.event_name == 'workflow_dispatch' && (inputs.approve_run_id != '' || inputs.enable_source_slug != '') }}
