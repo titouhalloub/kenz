@@ -173,3 +173,15 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-family-category label{color:var(--kenz-muted);font-size:9px}
 .kenz-family-category input{height:39px;font-size:12px}
 @media(max-width:420px){.kenz-family-summary-grid{gap:6px}.kenz-family-summary-grid article{padding:9px}.kenz-family-summary-grid span{font-size:8px}.kenz-family-category-title{flex-wrap:wrap}.kenz-family-category-title small{font-size:8px}}
+
+
+/* Family planner nested navigation and meal planning */
+.kenz-family-subtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:5px;border:1px solid var(--kenz-line);border-radius:15px;background:#f5f1fc}
+.kenz-family-subtabs button{min-width:0;min-height:42px;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;border:0;border-radius:11px;background:transparent;color:var(--kenz-muted);font-size:10px;font-weight:750;cursor:pointer}
+.kenz-family-subtabs button svg{width:14px;height:14px;flex:0 0 auto}
+.kenz-family-subtabs button.active{background:#fff;color:#5b2cbd;box-shadow:0 2px 8px rgba(52,34,101,.09)}
+.kenz-family-inline-status{padding:10px 12px;border:1px solid #e4dafa;border-radius:12px;background:#f7f3ff;color:#5c36a9;font-size:11px;line-height:1.5}
+.kenz-family-living label{display:block;color:var(--kenz-muted);font-size:10px;font-weight:650}
+.kenz-family-living input,.kenz-family-living select,.kenz-family-living textarea{min-width:0;background:#fcfbff!important;border-color:#e7e1f1!important;color:var(--kenz-ink)!important}
+.kenz-family-living button:focus-visible{outline:3px solid rgba(103,62,210,.35);outline-offset:2px}
+@media(max-width:380px){.kenz-family-subtabs{gap:3px;padding:3px}.kenz-family-subtabs button{font-size:9px;gap:3px}.kenz-family-subtabs button svg{width:12px;height:12px}}
