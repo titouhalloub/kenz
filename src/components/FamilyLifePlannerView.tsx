@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { FamilyLivingPlannerView } from './FamilyLivingPlannerView';
 import { Home, Utensils, Sparkles, Shirt, Car, GraduationCap, HeartPulse, Wifi, Wrench, CreditCard, PiggyBank, Package, Users, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { UserProfile } from '../domain/types';
-import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
+import { formatMoney } from '../domain/financialCalculations';
 import {
   createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
   updateFamilyCategory, validateFamilyBudgetPlan, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
@@ -39,15 +40,22 @@ const readPlan = (userId: string, month: string): FamilyBudgetPlan => {
 };
 
 const moneyInput = (minor: number) => (minor / 100).toFixed(2);
+const parseBudgetInput = (value: string): number | null => {
+  const normalized = value.trim().replace(',', '.');
+  if (!/^\\d+(?:\\.\\d{0,2})?$/.test(normalized)) return null;
+  const amount = Math.round(Number(normalized) * 100);
+  return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
+};
 const currentMonth = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; };
 
 export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, currentMonth()));
-  const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, new Date().toISOString().slice(0, 7)).monthlyIncomeMinor));
+  const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, currentMonth()).monthlyIncomeMinor));
   const [adultsInput, setAdultsInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).adults));
   const [childrenInput, setChildrenInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).children));
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
+  const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
 
   useEffect(() => {
     const next = readPlan(profile.id, selectedMonth);
@@ -71,13 +79,13 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
     catch { setSaveState('error'); }
   };
   const setIncome = () => {
-    const amount = parseToMinorUnits(incomeInput);
-    if (amount < 0 || !Number.isSafeInteger(amount)) return;
+    const amount = parseBudgetInput(incomeInput);
+    if (amount === null) { setIncomeInput(moneyInput(plan.monthlyIncomeMinor)); return; }
     setPlan((current) => ({ ...current, monthlyIncomeMinor: amount, updatedAt: new Date().toISOString() }));
   };
   const setHousehold = () => {
     const adults = Number(adultsInput); const children = Number(childrenInput);
-    if (!Number.isInteger(adults) || !Number.isInteger(children) || adults < 0 || children < 0 || adults + children < 1 || adults > 30 || children > 30) return;
+    if (!Number.isInteger(adults) || !Number.isInteger(children) || adults < 0 || children < 0 || adults + children < 1 || adults > 30 || children > 30) { setAdultsInput(String(plan.adults)); setChildrenInput(String(plan.children)); return; }
     setPlan((current) => ({ ...current, adults, children, updatedAt: new Date().toISOString() }));
   };
 
@@ -92,6 +100,13 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
         </div>
       </header>
 
+      <div className="kenz-family-subtabs">
+        <button onClick={() => setActiveSection('budget')} className={activeSection === 'budget' ? 'active' : ''}>{t(profile, 'Budget complet', 'الميزانية الكاملة', 'Full budget')}</button>
+        <button onClick={() => setActiveSection('living')} className={activeSection === 'living' ? 'active' : ''}>{t(profile, 'Repas & maison', 'الوجبات والمنزل', 'Meals & home')}</button>
+      </div>
+      {activeSection === 'living' ? (
+        <FamilyLivingPlannerView profile={profile} month={selectedMonth} householdSize={Math.max(1, plan.adults + plan.children)} />
+      ) : <>
       <div className="kenz-family-summary-grid">
         <article><span>{t(profile, 'Revenu mensuel', 'الدخل الشهري', 'Monthly income')}</span><strong>{formatMoney(summary.incomeMinor, profile.preferredCurrency, profile.locale)}</strong></article>
         <article><span>{t(profile, 'Budget planifié', 'الميزانية المخططة', 'Planned budget')}</span><strong>{formatMoney(summary.plannedMinor, profile.preferredCurrency, profile.locale)}</strong></article>
@@ -123,14 +138,15 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
             return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
               <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small></div>
               <div className="grid grid-cols-2 gap-2">
-                <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => updatePlan('plannedMinor', row.id, Math.max(0, parseToMinorUnits(e.target.value)))} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
-                <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input inputMode="decimal" defaultValue={moneyInput(row.actualMinor)} onBlur={(e) => updatePlan('actualMinor', row.id, Math.max(0, parseToMinorUnits(e.target.value)))} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" defaultValue={moneyInput(row.plannedMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.plannedMinor); else updatePlan('plannedMinor', row.id, amount); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
+                <label>{t(profile, 'Réel', 'فعلي', 'Actual')}<input key={selectedMonth + '-' + row.id + '-actual'} inputMode="decimal" defaultValue={moneyInput(row.actualMinor)} onBlur={(e) => { const amount = parseBudgetInput(e.target.value); if (amount === null) e.currentTarget.value = moneyInput(row.actualMinor); else updatePlan('actualMinor', row.id, amount); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
               </div>
             </article>;
           })}
         </div>
       </div>
       <p className="text-[11px] text-slate-500">{t(profile, 'Les données familiales sont privées et restent locales sur cet appareil dans cette première étape. La synchronisation multi-appareils sera ajoutée après validation du modèle.', 'بيانات الأسرة خاصة ومحفوظة محلياً على هذا الجهاز في هذه المرحلة. ستضاف المزامنة بين الأجهزة بعد اعتماد النموذج.', 'Family data is private and stays on this device in this first stage. Multi-device sync will follow after the model is validated.')}</p>
+      </>}
     </section>
   );
 };
