@@ -81,7 +81,7 @@ returns void
 language plpgsql
 security invoker
 set search_path = ''
-as $
+as $refresh$
 declare
   v_window_days integer := greatest(1, least(coalesce(p_window_days, 14), 90));
 begin
@@ -167,7 +167,7 @@ begin
     last_observed, source_tiers, now()
   from aggregates;
 end;
-$;
+$refresh$;
 
 revoke all on function public.refresh_price_stats(integer) from public, anon, authenticated;
 grant execute on function public.refresh_price_stats(integer) to service_role;
