@@ -199,7 +199,7 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
 
     lines.push({
       productId: item.productId, name: item.name, category: item.category,
-      quantityBaseUnits: quantity, baseUnit: item.baseUnit, cost,
+      quantityMilliUnits: quantity, baseUnit: item.baseUnit, cost,
       data: {
         nObservations: price.nObservations, nContributors: price.nContributors,
         lastObserved: price.lastObserved, ageDays, stale, thin, areaLevel: price.areaLevel,
