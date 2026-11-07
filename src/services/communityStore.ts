@@ -193,6 +193,10 @@ export async function createCommunityPost(input: {
       await supabase.from('community_posts').delete().eq('id', postId);
       throw error;
     }
+    // A public handle is exposed only after the complete post and its structured rows succeeded.
+    await supabase.from('community_profiles').update({
+      is_public: true, locale: input.locale, wilaya_code: input.wilayaCode,
+    }).eq('user_id', auth.user.id);
     return { success: true, data: postId };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unable to publish post.' };
