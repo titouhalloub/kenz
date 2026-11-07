@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { extractPdfLinks, parseDcwHtml, parseMadrpText, robotsAllows, scrapePublicSource } from './publicSources';
+import { extractPdfLinks, parseDcwHtml, parseDcwPlainHtml, parseMadrpText, robotsAllows, scrapePublicSource } from './publicSources';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -56,6 +56,30 @@ describe('public price source adapters', () => {
     expect(rows[0].normalized.wilayaCode).toBe('15');
     expect(rows[1].productSlug).toBe('oeufs');
     expect(rows[1].normalized.unitPriceMinor).toBe(1650);
+  });
+
+
+  it('parses Jijel plain-text rows, including products without an explicit unit column', () => {
+    const html = `
+      <html><body>
+      <p>Journée du 06-08-2026</p>
+      <p>Pommes de terre 1kg 70 90</p>
+      <p>Oeufs 15 17</p>
+      <p>Viande blanche (poulet) 1kg 470 490</p>
+      </body></html>`;
+    const rows = parseDcwPlainHtml(html, {
+      slug: 'dcw-jijel-daily',
+      kind: 'dcw-html',
+      url: 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ',
+      wilayaCode: '18',
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows[0].productSlug).toBe('pomme-de-terre');
+    expect(rows[0].normalized.unitPriceMinor).toBe(9000);
+    expect(rows[1].productSlug).toBe('oeufs');
+    expect(rows[1].normalized.unitPriceMinor).toBe(1700);
+    expect(rows[2].productSlug).toBe('poulet-frais');
+    expect(rows[2].normalized.unitPriceMinor).toBe(49000);
   });
 
   it('parses official MADRP bulletin text as national average observations', () => {
