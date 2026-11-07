@@ -41,7 +41,6 @@ export interface FamilyLivingPlan {
   meals: PlannedMeal[];
   pantry: PantryItem[];
   recipes: FamilyRecipe[];
-  purchasedKeys: string[];
   updatedAt: string;
 }
 
@@ -116,7 +115,7 @@ export const ingredientKey = (name: string, unit: IngredientUnit) =>
   name.trim().toLocaleLowerCase().replace(/\s+/g, ' ') + '::' + unit;
 
 export function createFamilyLivingPlan(userId: string, month: string): FamilyLivingPlan {
-  return { version: 1, userId, month, meals: [], pantry: [], recipes: [], purchasedKeys: [], updatedAt: new Date().toISOString() };
+  return { version: 1, userId, month, meals: [], pantry: [], recipes: [], updatedAt: new Date().toISOString() };
 }
 
 export function scaleIngredient(quantityMilli: number, baseServings: number, servings: number): number {
@@ -159,7 +158,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   const row = value as Partial<FamilyLivingPlan>;
   if (row.version !== 1 || row.userId !== userId || row.month !== month || !validMonth(row.month) ||
       !Array.isArray(row.meals) || !Array.isArray(row.pantry) || !Array.isArray(row.recipes) ||
-      !Array.isArray(row.purchasedKeys) || row.meals.length > 400 || row.pantry.length > 500 || row.recipes.length > 500 ||
+      row.meals.length > 400 || row.pantry.length > 500 || row.recipes.length > 500 ||
       !row.meals.every((meal) => meal && validText(meal.id, 120) && typeof meal.date === 'string' &&
         /^\d{4}-\d{2}-\d{2}$/.test(meal.date) && meal.date.slice(0, 7) === month &&
         (meal.slot === 'breakfast' || meal.slot === 'lunch' || meal.slot === 'dinner') &&
@@ -175,7 +174,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
         Array.isArray(recipe.steps) && recipe.steps.length <= 30 &&
         recipe.steps.every((step) => validText(step, 500)) &&
         (recipe.origin === 'community' || recipe.origin === 'builtin')) ||
-      !row.purchasedKeys.every((key) => validText(key, 180))) return null;
+) return null;
 
   const recipeIds = new Set([...BUILTIN_FAMILY_RECIPES, ...row.recipes].map((recipe) => recipe.id));
   if (new Set(row.meals.map((meal) => meal.id)).size !== row.meals.length ||
