@@ -22,23 +22,28 @@ export interface PublicSourceConfig {
 
 const MADRP_LISTING = 'https://madr.gov.dz/mercuriale-des-prix/';
 const TIZI_OUZOU_URL = 'https://www.dcwtiziouzou.dz/fr/index.php?Itemid=77&id=76&option=com_content&view=article';
+const JIJEL_URL = 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ';
 export const PUBLIC_PRICE_SOURCES: PublicSourceConfig[] = [
   { slug: 'madrp-mercuriale', kind: 'madrp-pdf', url: MADRP_LISTING },
   { slug: 'dcw-tizi-ouzou-daily', kind: 'dcw-html', url: TIZI_OUZOU_URL, wilayaCode: '15' },
+  { slug: 'dcw-jijel-daily', kind: 'dcw-html', url: JIJEL_URL, wilayaCode: '18' },
 ];
 
 const products = new Map(PRODUCT_CATALOG.map((product) => [product.slug, product]));
 const sourceAliases: Record<string, string> = {
+  'semoule superieure': 'semoule-ordinaire',
   'semoule superieure': 'semoule-ordinaire',
   'semoule ordinaire': 'semoule-ordinaire',
   'semoule fine': 'semoule-fine',
   'farine superieure': 'farine-ble-tendre',
   'farine ordinaire conditionne subventionne': 'farine-ble-tendre',
   'farine de ble tendre': 'farine-ble-tendre',
+  'farine': 'farine-ble-tendre',
   'pates alimentaires': 'pates-spaghetti',
   'huile alimentaire': 'huile-table',
   'huiles alimentaires': 'huile-table',
   'huile de table': 'huile-table',
+  'huiles alimentaire': 'huile-table',
   'lait de vache': 'lait-sachet',
   'oeufs': 'oeufs',
   'oeuf': 'oeufs',
@@ -46,6 +51,7 @@ const sourceAliases: Record<string, string> = {
   'oeuf unite': 'oeufs',
   'lait de vache litre': 'lait-sachet',
   'pomme de terre': 'pomme-de-terre',
+  'pommes de terre': 'pomme-de-terre',
   'tomate fraiche': 'tomate',
   'tomate': 'tomate',
   'oignon sec': 'oignon',
@@ -63,14 +69,17 @@ const sourceAliases: Record<string, string> = {
   'chou fleur': 'chou-fleur',
   'navet': 'navet',
   'pomme locale': 'pomme',
+  'pommes locales': 'pomme',
   'pomme': 'pomme',
   'orange': 'orange',
   'banane': 'banane',
+  'bananes': 'banane',
   'dattes': 'dattes-deglet-nour',
   'viande bovine locale': 'viande-bovine-locale',
   'viande ovine locale': 'viande-ovine',
   'viande ovine': 'viande-ovine',
   'viande blanche poulet': 'poulet-frais',
+  'poisson sardine': 'sardines',
   'poulet de chair': 'poulet-frais',
   'poulet': 'poulet-frais',
   'sardines': 'sardines',
@@ -78,6 +87,7 @@ const sourceAliases: Record<string, string> = {
   'lentilles': 'lentilles',
   'pois chiches': 'pois-chiches',
   'haricot sec': 'haricots-blancs',
+  'haricots secs': 'haricots-blancs',
   'haricot rouge': 'haricots-blancs',
   'riz': 'riz',
   'couscous ordinaire': 'couscous',
@@ -346,11 +356,59 @@ export function parseDcwHtml(html: string, source: PublicSourceConfig): ScrapedP
   return output;
 }
 
+export function parseDcwPlainHtml(html: string, source: PublicSourceConfig): ScrapedPrice[] {
+  const text = decodeEntities(html
+    .replace(/<br\\s*\\/?\\s*>/gi, '\\n')
+    .replace(/<\\/(?:p|div|tr|li|h[1-6])\\s*>/gi, '\\n')
+    .replace(/<\\/t[dh]\\s*>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' '));
+  const observedAt = dateFromText(text);
+  if (!observedAt) throw new Error('Could not find a publication date on the Directorate price page');
+  const output: ScrapedPrice[] = [];
+
+  for (const rawLine of text.split(/\\r?\\n/)) {
+    const tokens = rawLine.trim().replace(/\\s+/g, ' ').split(' ');
+    if (tokens.length < 3) continue;
+    const wholesale = parseMoney(tokens[tokens.length - 2]);
+    const retail = parseMoney(tokens[tokens.length - 1]);
+    if (!wholesale || !retail) continue;
+
+    let matched: ScrapedPrice | null = null;
+    // Try every label/unit boundary; source rows vary in spaces and use forms such as 25kg, 1Kg or 500 grs.
+    for (let boundary = 1; boundary < tokens.length - 2; boundary += 1) {
+      const label = tokens.slice(0, boundary).join(' ');
+      const slug = productSlug(label);
+      if (!slug) continue;
+      const product = products.get(slug);
+      if (!product) continue;
+      const unit = tokens.slice(boundary, tokens.length - 2).join(' ');
+      const quantity = quantityFor(unit, product.baseUnit);
+      if (!quantity) continue;
+      matched = toScraped(source.slug, source.url, observedAt, source.wilayaCode, label, quantity, retail);
+      if (matched) break;
+    }
+
+    if (!matched) {
+      const label = tokens.slice(0, -2).join(' ');
+      const slug = productSlug(label);
+      const product = slug ? products.get(slug) : undefined;
+      if (product?.baseUnit === 'unit') {
+        matched = toScraped(source.slug, source.url, observedAt, source.wilayaCode, label, '1 unit', retail);
+      }
+    }
+    if (matched) output.push(matched);
+  }
+  return output;
+}
+
 export async function scrapePublicSource(source: PublicSourceConfig): Promise<ScrapedPrice[]> {
   const sourceUrl = new URL(source.url);
   const response = await fetchPublic(sourceUrl);
   if (source.kind === 'dcw-html') {
-    return parseDcwHtml(await response.text(), source);
+    const html = await response.text();
+    const tableRows = parseDcwHtml(html, source);
+    return tableRows.length > 0 ? tableRows : parseDcwPlainHtml(html, source);
   }
 
   const listing = await response.text();
