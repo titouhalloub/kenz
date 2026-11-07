@@ -160,7 +160,7 @@ For offline-first behavior, persist local edits immediately, queue sync operatio
 ### Delivered to the main branch (implementation stage; runtime verification pending)
 
 - Added the family budget foundation to Kenz Planning, with monthly household income, adult/child counts, 13 editable envelopes, planned-versus-actual amounts, and surplus/shortfall calculations.
-- Added month-specific offline storage, user scoping, strict amount validation, and safe-integer overflow checks.
+- Added month-specific offline storage, user scoping, strict amount validation, safe-integer overflow checks, and a priority-weighted budget draft that preserves existing allocations and requires explicit apply.
 - Added a family meal calendar with five starter recipes, recipe instructions, serving scaling, and an optional seven-day breakfast/lunch/dinner suggestion action that does not overwrite existing meals.
 - Added a consolidated grocery list that merges repeated ingredients and subtracts pantry stock.
 - Added Arabic/French/English ingredient aliases for common starter ingredients so pantry entries can match recipe ingredients across those languages.
