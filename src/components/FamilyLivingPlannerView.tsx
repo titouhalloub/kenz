@@ -118,14 +118,15 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       const meals = [...current.meals];
       const start = new Date(mealDate + 'T12:00:00');
       const householdServings = Math.max(1, Math.min(40, householdSize));
-      for (let day = 0; day < 7; day++) {
+      for (let day = 0; day < 7 && meals.length < 400; day++) {
         const date = new Date(start);
         date.setDate(start.getDate() + day);
         if (date.getMonth() + 1 !== Number(month.slice(5, 7)) || date.getFullYear() !== Number(month.slice(0, 4))) break;
         const dateKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
-        (['lunch', 'dinner'] as MealSlot[]).forEach((slot, slotIndex) => {
+        (['breakfast', 'lunch', 'dinner'] as MealSlot[]).forEach((slot, slotIndex) => {
           if (meals.some((meal) => meal.date === dateKey && meal.slot === slot)) return;
-          const recipe = BUILTIN_FAMILY_RECIPES[(day * 2 + slotIndex) % BUILTIN_FAMILY_RECIPES.length];
+          if (meals.length >= 400) return;
+          const recipe = slot === 'breakfast' ? BUILTIN_FAMILY_RECIPES.find((item) => item.id === 'dz-omelette')! : BUILTIN_FAMILY_RECIPES[(day * 2 + slotIndex) % BUILTIN_FAMILY_RECIPES.length];
           meals.push({ id: makeId('meal'), date: dateKey, slot, recipeId: recipe.id, servings: householdServings });
           added++;
         });
@@ -137,6 +138,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
 
   const addMeal = () => {
     const count = Number(servings);
+    if (plan.meals.length >= 400) { setStatus(tr(profile, 'Limite de repas atteinte pour ce mois.', 'تم بلوغ الحد الأقصى للوجبات لهذا الشهر.', 'The monthly meal limit has been reached.')); return; }
     if (!isValidCalendarDate(mealDate) || mealDate.slice(0, 7) !== month ||
         !Number.isInteger(count) || count < 1 || count > 40 || !selectedRecipe) {
       setStatus(tr(profile, 'Vérifiez la date et le nombre de portions.', 'تحقق من التاريخ وعدد الحصص.', 'Check the date and serving count.'));
@@ -159,6 +161,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       return;
     }
     const existingStock = plan.pantry.find((item) => ingredientKey(item.name, item.unit) === ingredientKey(name, pantryUnit));
+    if (!existingStock && plan.pantry.length >= 500) { setStatus(tr(profile, 'Limite de stock atteinte.', 'تم بلوغ حد عناصر المخزون.', 'Pantry item limit reached.')); return; }
     if (existingStock && !Number.isSafeInteger(existingStock.quantityMilli + quantityMilli)) {
       setStatus(tr(profile, 'Quantité totale trop élevée.', 'الكمية الإجمالية كبيرة جداً.', 'Combined quantity is too large.'));
       return;
@@ -178,7 +181,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const addNeed = () => {
     const name = needName.trim();
     const plannedMinor = parseMoneyMinor(needPlanned);
-    if (!name || name.length > 100 || plannedMinor === null || (needMember.trim().length > 80) || (needDate && (!isValidCalendarDate(needDate) || needDate.slice(0, 7) !== month))) {
+    if (!name || name.length > 100 || plannedMinor === null || (needMember.trim().length > 80) || (needCategory === 'clothing' && needSize.trim().length > 40) || plan.needs.length >= 1000 || (needDate && (!isValidCalendarDate(needDate) || needDate.slice(0, 7) !== month))) {
       setStatus(tr(profile, 'Vérifiez le nom, le montant et la date.', 'تحقق من الاسم والمبلغ والتاريخ.', 'Check the name, amount and date.'));
       return;
     }
@@ -206,7 +209,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
 
   const importRecipe = () => {
     try {
-      if (importText.length > 100000) throw new Error('too large');
+      if (importText.length > 100000 || plan.recipes.length >= 500) throw new Error('too large');
       const parsed = JSON.parse(importText);
       const recipe = parseCommunityRecipe(parsed, makeId('community-recipe'));
       if (!recipe) throw new Error('invalid');
