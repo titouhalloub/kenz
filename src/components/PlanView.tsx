@@ -54,6 +54,15 @@ import {
   calculateSafeToSpend,
 } from '../domain/financialCalculations';
 
+const getBudgetCategoryIcon = (name?: string) => {
+  const icons: Record<string, React.ElementType> = {
+    ShoppingBag, Home, Zap, Car, Heart, Users, Briefcase, TrendingUp,
+    Utensils, Gamepad2, GraduationCap, Shirt, Plane, Coffee, PawPrint, Fuel, Landmark,
+  };
+  return icons[name || ''] || CircleHelp;
+};
+
+
 const getLocalDateString = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
