@@ -34,7 +34,7 @@ function isPrice(value: unknown): value is SimulatorPrice {
     ['neighborhood', 'commune', 'wilaya', 'national'].includes(String(row.areaLevel));
 }
 
-function readCache(slugs: string[], wilayaCode?: string | null): MarketPriceLoadResult | null {
+export function readCachedMarketPrices(slugs: string[], wilayaCode?: string | null): MarketPriceLoadResult | null {
   try {
     const raw = globalThis.localStorage?.getItem(cacheKey(slugs, wilayaCode));
     if (!raw) return null;
@@ -51,7 +51,7 @@ function readCache(slugs: string[], wilayaCode?: string | null): MarketPriceLoad
   }
 }
 
-function writeCache(
+export function writeCachedMarketPrices(
   slugs: string[],
   wilayaCode: string | null | undefined,
   pricesBySlug: Record<string, SimulatorPrice>,
@@ -72,7 +72,7 @@ function unavailable(
   slugs: string[],
   wilayaCode?: string | null,
 ): MarketPriceLoadResult {
-  return readCache(slugs, wilayaCode) || { pricesBySlug: {}, unavailableReason: reason };
+  return readCachedMarketPrices(slugs, wilayaCode) || { pricesBySlug: {}, unavailableReason: reason };
 }
 
 /** Reads public market aggregates only; no personal budget data is accepted or sent. */
@@ -124,7 +124,7 @@ export async function loadMarketPrices(productSlugs: string[], wilayaCode?: stri
       };
     }
     if (Object.keys(pricesBySlug).length === 0) return unavailable('no_data', slugs, wilayaCode);
-    const fetchedAt = writeCache(slugs, wilayaCode, pricesBySlug);
+    const fetchedAt = writeCachedMarketPrices(slugs, wilayaCode, pricesBySlug);
     return { pricesBySlug, source: 'live', fetchedAt };
   } catch {
     return unavailable('no_data', slugs, wilayaCode);
