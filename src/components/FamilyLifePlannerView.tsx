@@ -47,7 +47,7 @@ const readPlan = (userId: string, month: string): FamilyBudgetPlan => {
 const moneyInput = (minor: number) => (minor / 100).toFixed(2);
 const parseBudgetInput = (value: string): number | null => {
   const normalized = value.trim().replace(',', '.');
-  if (!/^\\d+(?:\\.\\d{0,2})?$/.test(normalized)) return null;
+  if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
   const amount = Math.round(Number(normalized) * 100);
   return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
 };
