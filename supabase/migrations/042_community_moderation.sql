@@ -255,8 +255,8 @@ begin
   values (v_user,p_kind,trim(p_title),coalesce(p_body,''),p_locale,p_wilaya_code,'published')
   returning id into v_id;
   insert into public.community_profiles(user_id,handle,locale,wilaya_code,is_public)
-  values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,true)
-  on conflict (user_id) do update set is_public=true,locale=excluded.locale,
+  values (v_user,'Kenz-' || upper(substr(md5(v_user::text),1,7)),p_locale,p_wilaya_code,false)
+  on conflict (user_id) do update set locale=excluded.locale,
     wilaya_code=excluded.wilaya_code,updated_at=now();
   return v_id;
 end;
