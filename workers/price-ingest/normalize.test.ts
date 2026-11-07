@@ -17,6 +17,16 @@ describe('normalizePriceRecord', () => {
     });
   });
 
+
+  it('handles space-separated thousands in public Directorate price tables', () => {
+    expect(normalizePriceRecord({
+      title: '1 kg',
+      priceText: '1 412 DA',
+      currency: 'DZD',
+      observedAt: '2026-11-07T10:00:00Z',
+    }, 'kg')?.unitPriceMinor).toBe(141200);
+  });
+
   it('supports Arabic price digits and units', () => {
     expect(normalizePriceRecord({
       title: '١ كغ',
