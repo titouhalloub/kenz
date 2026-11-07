@@ -122,14 +122,18 @@ function quantityFor(unit: string, baseUnit: BaseUnit): string | null {
   const value = key(raw);
   if (baseUnit === 'kg') {
     if (!value || value === 'kg' || value === '1 kg') return '1 kg';
-    if (/^\d+(?:\.\d+)?\s*(?:kg|kilo|kilos)$/.test(raw)) return raw;
-    if (/^\d+(?:\.\d+)?\s*(?:g|gr|gram|grammes?)$/.test(raw)) return raw.replace(/gr|grammes?/g, 'g');
+    const kgMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilos)$/);
+    if (kgMatch) return `${kgMatch[1]} kg`;
+    const gramMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:g|gr|gram|grammes?)$/);
+    if (gramMatch) return `${gramMatch[1]} g`;
     return null;
   }
   if (baseUnit === 'l') {
     if (!value || value === 'l' || value === '1 l') return '1 l';
-    if (/^\d+(?:\.\d+)?\s*(?:l|litre|litres)$/.test(raw)) return raw;
-    if (/^\d+(?:\.\d+)?\s*ml$/.test(raw)) return raw;
+    const litreMatch = raw.match(/^(\d+(?:\.\d+)?)\s*(?:l|litre|litres)$/);
+    if (litreMatch) return `${litreMatch[1]} l`;
+    const mlMatch = raw.match(/^(\d+(?:\.\d+)?)\s*ml$/);
+    if (mlMatch) return `${mlMatch[1]} ml`;
     return null;
   }
   if (!value || /^(?:unite|unites|piece|pieces|oeuf|oeufs)$/.test(value)) return '1 unit';
