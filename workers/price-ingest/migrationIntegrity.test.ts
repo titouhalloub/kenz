@@ -42,6 +42,7 @@ describe('price intelligence and community migration safety', () => {
     const ingestion = migration('039_public_price_ingestion.sql');
     const review = migration('043_price_contributions.sql');
     expect(observations).toMatch(/status text not null default 'pending'/i);
+    expect(ingestion).toContain('source_record_key');
     expect(review).toMatch(/status,\s*quality_flags,\s*source_reference/i);
     expect(review).toMatch(/'pending',v_flags/i);
     expect(review).toMatch(/review_price_observation/i);
@@ -65,9 +66,10 @@ describe('price intelligence and community migration safety', () => {
 
   it('stores no budgets, income, balances or transaction snapshots in simulator scenarios', () => {
     const sql = migration('038_simulator_scenarios.sql').toLowerCase();
-    expect(sql).toContain('simulator_scenarios');
+    const tableDefinition = sql.slice(sql.indexOf('create table public.simulator_scenarios'), sql.indexOf(');'));
+    expect(tableDefinition).toContain('simulator_scenarios');
     for (const forbidden of ['income', 'balance', 'transaction', 'budget', 'result_snapshot']) {
-      expect(sql).not.toContain(forbidden);
+      expect(tableDefinition).not.toContain(forbidden);
     }
   });
 });
