@@ -90,7 +90,7 @@ export async function loadMarketPrices(productSlugs: string[], wilayaCode?: stri
 
     const pricesResult = await supabase.rpc('get_area_prices', {
       p_product_ids: products.map((product) => product.id),
-      p_wilaya_code: wilayaCode && /^\\d{2,3}$/.test(wilayaCode) ? wilayaCode : null,
+      p_wilaya_code: wilayaCode && /^\d{2,3}$/.test(wilayaCode) ? wilayaCode : null,
       p_commune_id: null,
       p_geo_cell: null,
       p_window_days: 14,
