@@ -54,7 +54,7 @@ async function main() {
       if (!dryRun) {
         const sourceRecord = sourceBySlug.get(source.slug);
         if (!sourceRecord) {
-          console.warn(`Source ${source.slug} is not registered. Apply migration 039 before ingestion.`);
+          console.warn(`Source ${source.slug} is not registered. Apply migrations 039–040 before ingestion.`);
           failures += 1;
           continue;
         }
