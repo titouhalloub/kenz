@@ -48,6 +48,7 @@ describe('family budget foundation', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.monthlyIncomeMinor = 100;
     plan.categories[0].plannedMinor = 200;
+    plan.categories[0].plannedOverride = true;
     expect(suggestFamilyBudgetAllocations(plan)).toEqual(plan);
   });
 
