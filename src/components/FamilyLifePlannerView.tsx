@@ -100,7 +100,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
         </div>
       </header>
 
-      <div className="kenz-family-subtabs">
+      <div className="kenz-family-subtabs kenz-family-main-tabs">
         <button onClick={() => setActiveSection('budget')} className={activeSection === 'budget' ? 'active' : ''}>{t(profile, 'Budget complet', 'الميزانية الكاملة', 'Full budget')}</button>
         <button onClick={() => setActiveSection('living')} className={activeSection === 'living' ? 'active' : ''}>{t(profile, 'Repas & maison', 'الوجبات والمنزل', 'Meals & home')}</button>
       </div>
