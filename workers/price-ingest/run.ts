@@ -50,6 +50,21 @@ async function main() {
   let failures = 0;
   for (const source of PUBLIC_PRICE_SOURCES) {
     try {
+      let sourceId: string | null = null;
+      if (!dryRun) {
+        const sourceRecord = sourceBySlug.get(source.slug);
+        if (!sourceRecord) {
+          console.warn(`Source ${source.slug} is not registered. Apply migration 039 before ingestion.`);
+          failures += 1;
+          continue;
+        }
+        if (!sourceRecord.enabled || !sourceRecord.reviewed || !sourceRecord.termsReviewedAt) {
+          console.log(`${source.slug}: skipped; source is not yet reviewed and enabled by an operator.`);
+          continue;
+        }
+        sourceId = sourceRecord.id;
+      }
+
       const scraped = await scrapePublicSource(source);
       if (dryRun) {
         console.log(JSON.stringify({
@@ -67,20 +82,8 @@ async function main() {
         continue;
       }
 
-      const sourceRecord = sourceBySlug.get(source.slug);
-      if (!sourceRecord) {
-        console.warn(`Source ${source.slug} is not registered. Apply migration 039 before ingestion.`);
-        failures += 1;
-        continue;
-      }
-      if (!sourceRecord.enabled || !sourceRecord.reviewed || !sourceRecord.termsReviewedAt) {
-        console.log(`${source.slug}: skipped; source is not yet reviewed and enabled by an operator.`);
-        continue;
-      }
-      const sourceId = sourceRecord.id;
-
       const { data: run, error: runError } = await supabase!
-        .from('ingest_runs').insert({ source_id: sourceId, status: 'running' })
+        .from('ingest_runs').insert({ source_id: sourceId!, status: 'running' })
         .select('id').single();
       if (runError || !run) {
         console.error(`Cannot create ingest run for ${source.slug}: ${runError?.message || 'unknown error'}`);
@@ -102,7 +105,7 @@ async function main() {
           ]);
           return [{
             product_id: product.id,
-            source_id: sourceId,
+            source_id: sourceId!,
             unit_price_minor: row.normalized.unitPriceMinor,
             currency: 'DZD',
             observed_at: row.normalized.observedAt,
