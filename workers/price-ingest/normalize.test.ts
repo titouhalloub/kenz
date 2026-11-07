@@ -9,7 +9,7 @@ describe('normalizePriceRecord', () => {
       currency: 'DZD',
       observedAt: '2026-11-07T10:00:00Z',
       wilayaCode: '16',
-    }, 'g')).toMatchObject({
+    }, 'kg')).toMatchObject({
       unitPriceMinor: 25000,
       currency: 'DZD',
       quantityMilliUnits: 1000,
@@ -23,7 +23,7 @@ describe('normalizePriceRecord', () => {
       priceText: '٢٥٠ دج',
       currency: 'DZD',
       observedAt: '2026-11-07T10:00:00Z',
-    }, 'g')?.unitPriceMinor).toBe(25);
+    }, 'kg')?.unitPriceMinor).toBe(25000);
   });
 
   it('rejects missing currency, unsupported currency, invalid dates and ambiguous sizes', () => {
@@ -32,10 +32,10 @@ describe('normalizePriceRecord', () => {
       priceText: '250',
       observedAt: '2026-11-07T10:00:00Z',
     };
-    expect(normalizePriceRecord({ ...base, currency: '' }, 'g')).toBeNull();
-    expect(normalizePriceRecord({ ...base, currency: 'EUR' }, 'g')).toBeNull();
-    expect(normalizePriceRecord({ ...base, currency: 'DZD', observedAt: 'bad-date' }, 'g')).toBeNull();
-    expect(normalizePriceRecord({ ...base, currency: 'DZD', title: 'unknown pack' }, 'g')).toBeNull();
+    expect(normalizePriceRecord({ ...base, currency: '' }, 'kg')).toBeNull();
+    expect(normalizePriceRecord({ ...base, currency: 'EUR' }, 'kg')).toBeNull();
+    expect(normalizePriceRecord({ ...base, currency: 'DZD', observedAt: 'bad-date' }, 'kg')).toBeNull();
+    expect(normalizePriceRecord({ ...base, currency: 'DZD', title: 'unknown pack' }, 'kg')).toBeNull();
   });
 });
 
