@@ -64,7 +64,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
         run: npx tsx workers/price-ingest/run.ts --dry-run
 
-      - name: Approve reviewed observations and optionally enable a source
+      - name: Enable a source after explicit human review
         if: ${{ github.event_name == 'workflow_dispatch' && (inputs.enable_source_slug != '') }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
