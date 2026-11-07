@@ -77,6 +77,29 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     setStatus('');
   };
 
+  const suggestWeek = () => {
+    let added = 0;
+    updatePlan((current) => {
+      const meals = [...current.meals];
+      const start = new Date(mealDate + 'T12:00:00');
+      const householdServings = Math.max(1, Math.min(40, householdSize));
+      for (let day = 0; day < 7; day++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + day);
+        if (date.getMonth() + 1 !== Number(month.slice(5, 7)) || date.getFullYear() !== Number(month.slice(0, 4))) break;
+        const dateKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+        (['lunch', 'dinner'] as MealSlot[]).forEach((slot, slotIndex) => {
+          if (meals.some((meal) => meal.date === dateKey && meal.slot === slot)) return;
+          const recipe = BUILTIN_FAMILY_RECIPES[(day * 2 + slotIndex) % BUILTIN_FAMILY_RECIPES.length];
+          meals.push({ id: makeId('meal'), date: dateKey, slot, recipeId: recipe.id, servings: householdServings });
+          added++;
+        });
+      }
+      return { ...current, meals };
+    });
+    setStatus(added ? tr(profile, added + ' repas suggérés ont été ajoutés. Vous pouvez les modifier ou les supprimer.', 'تمت إضافة ' + added + ' وجبة مقترحة. يمكنك تعديلها أو حذفها.', added + ' suggested meals added. You can edit or remove them.') : tr(profile, 'Tous les repas de cette semaine sont déjà planifiés.', 'وجبات هذا الأسبوع مبرمجة بالفعل.', 'All meals for this week are already planned.'));
+  };
+
   const addMeal = () => {
     const count = Number(servings);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(mealDate) || mealDate.slice(0, 7) !== month ||
@@ -100,12 +123,16 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       setStatus(tr(profile, 'Saisissez un nom et une quantité valides.', 'أدخل اسماً وكمية صحيحة.', 'Enter a valid item name and quantity.'));
       return;
     }
+    const existingStock = plan.pantry.find((item) => ingredientKey(item.name, item.unit) === ingredientKey(name, pantryUnit));
+    if (existingStock && !Number.isSafeInteger(existingStock.quantityMilli + quantityMilli)) {
+      setStatus(tr(profile, 'Quantité totale trop élevée.', 'الكمية الإجمالية كبيرة جداً.', 'Combined quantity is too large.'));
+      return;
+    }
     updatePlan((current) => {
       const key = ingredientKey(name, pantryUnit);
       const existing = current.pantry.find((item) => ingredientKey(item.name, item.unit) === key);
       if (existing) {
         const total = existing.quantityMilli + quantityMilli;
-        if (!Number.isSafeInteger(total)) throw new RangeError('Pantry quantity is too large.');
         return { ...current, pantry: current.pantry.map((item) => item.id === existing.id ? { ...item, quantityMilli: total } : item) };
       }
       return { ...current, pantry: [...current.pantry, { id: makeId('stock'), name, unit: pantryUnit, quantityMilli }] };
@@ -115,6 +142,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
 
   const importRecipe = () => {
     try {
+      if (importText.length > 100000) throw new Error('too large');
       const parsed = JSON.parse(importText);
       const recipe = parseCommunityRecipe(parsed, makeId('community-recipe'));
       if (!recipe) throw new Error('invalid');
@@ -185,8 +213,10 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <p className="mt-1 text-xs text-violet-800">{recipeDescription(selectedRecipe)} · {selectedRecipe.prepMinutes} {tr(profile, 'min', 'د', 'min')}</p>
           <p className="mt-2 text-xs font-semibold text-violet-900">{tr(profile, 'Ingrédients pour', 'المكونات لـ', 'Ingredients for')} {servings || householdSize} {tr(profile, 'personnes', 'أشخاص', 'people')}</p>
           <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-violet-900">{selectedRecipe.ingredients.map((ingredient) => <li key={ingredient.name + ingredient.unit}>• {ingredient.name}: {formatQuantity(Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings), ingredient.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</li>)}</ul>
+          <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{selectedRecipe.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
         </div>}
         <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>
+        <button onClick={suggestWeek} className="w-full min-h-10 rounded-xl border border-violet-200 px-4 text-xs font-bold text-violet-700">{tr(profile, 'Suggérer les repas de 7 jours', 'اقترح وجبات 7 أيام', 'Suggest 7 days of meals')}</button>
         <div className="pt-2">
           <h3 className="mb-2 text-sm font-bold">{tr(profile, 'Repas prévus ce mois', 'وجبات هذا الشهر', 'Meals planned this month')} ({plannedMeals.length})</h3>
           {plannedMeals.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Aucun repas planifié. Commencez par ajouter une recette.', 'لا توجد وجبات مبرمجة. ابدأ بإضافة وصفة.', 'No meals planned yet. Add a recipe to get started.')}</p> : <div className="space-y-2">{plannedMeals.map((meal) => {
