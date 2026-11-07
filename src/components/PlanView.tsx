@@ -148,9 +148,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const foodEnvelope = categoryBudgets.find((item) =>
     item.categoryName.toLocaleLowerCase().includes('alimentation')
   );
+  const allActiveAccountsAreDzd = accounts.filter((account) => !account.isArchived).every((account) => account.currency === 'DZD');
   const simulatorAvailableBudgetMinor = foodEnvelope?.budgetMinor
     ? Math.max(0, foodEnvelope.remainingMinor)
-    : safeToSpend.safeToSpendMinor;
+    : allActiveAccountsAreDzd ? safeToSpend.safeToSpendMinor : 0;
 
   const handleCreateRecurring = (e: React.FormEvent) => {
     e.preventDefault();
