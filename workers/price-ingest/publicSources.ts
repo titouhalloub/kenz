@@ -259,6 +259,7 @@ export async function robotsAllows(url: URL): Promise<boolean> {
   let response: Response;
   try {
     response = await fetch(new URL('/robots.txt', url.origin), {
+      redirect: 'manual',
       headers: { 'User-Agent': 'KenzPriceBot/1.0 (+https://github.com/titouhalloub/kenz)' },
       signal: AbortSignal.timeout(10_000),
     });
@@ -266,6 +267,7 @@ export async function robotsAllows(url: URL): Promise<boolean> {
     return false;
   }
   if (response.status === 404) return true;
+  if (response.status >= 300 && response.status < 400) return false;
   if (!response.ok) return false;
   let robotsText: string;
   try { robotsText = await readLimitedText(response, 512 * 1024); } catch { return false; }
