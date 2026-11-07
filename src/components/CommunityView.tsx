@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Flag, Heart, MessageCircle, Plus, ShieldAlert, Users } from 'lucide-react';
+import { Bookmark, Flag, Heart, MessageCircle, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 import { loadMarketPrices } from '../services/priceStore';
 import {
-  addCommunityComment, blockCommunityUser, createCommunityPost, deleteMyPriceContributions, ensureCommunityProfile,
+  addCommunityComment, blockCommunityUser, createCommunityPost, deleteCommunityPost, deleteMyPriceContributions, ensureCommunityProfile,
   loadCommunityFeed, listVerifiedOwnedBusinesses, reportCommunityPost, submitCommunityPrice, submitMerchantPrice, toggleCommunityReaction,
   toggleCommunitySave, type CommunityKind, type CommunityPost, type VerifiedOwnedBusiness,
 } from '../services/communityStore';
@@ -399,6 +399,12 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
                   if (result.success) setPosts((current) => current.map((item) => item.id === post.id ? { ...item, savedByMe: result.data! } : item));
                   else setError(result.error || 'Action impossible.');
                 }} className="flex items-center gap-1 disabled:opacity-40"><Bookmark className={post.savedByMe ? 'h-4 w-4 fill-emerald-400 text-emerald-400' : 'h-4 w-4'} /> Enregistrer</button>
+                {userId && post.authorId === userId && <button onClick={async () => {
+                  if (!window.confirm('Supprimer cette publication et ses commentaires ?')) return;
+                  const result = await deleteCommunityPost(post.id, userId);
+                  if (result.success) setPosts((current) => current.filter((item) => item.id !== post.id));
+                  else setError(result.error || 'Suppression impossible.');
+                }} className="flex items-center gap-1 text-rose-300"><Trash2 className="h-4 w-4" /> Supprimer</button>}
                 <button disabled={!userId} onClick={async () => {
                   const result = await reportCommunityPost({ postId: post.id, reporterId: userId!, reason: 'other', details: 'Signalement depuis le fil communautaire.' });
                   setError(result.success ? 'Signalement transmis aux modérateurs.' : result.error || 'Signalement impossible.');
