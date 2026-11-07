@@ -224,5 +224,16 @@ on conflict (slug) do update set
  base_unit = excluded.base_unit, typical_pack_sizes = excluded.typical_pack_sizes,
  updated_at = now();
 
+-- Seed exact multilingual names as deterministic aliases; fuzzy matching stays review-only.
+insert into public.product_aliases (product_id, alias, locale, normalized_alias)
+select p.id, aliases.alias, aliases.locale,
+       lower(regexp_replace(btrim(aliases.alias), '\\s+', ' ', 'g'))
+from public.products p
+cross join lateral (values
+  ('fr'::text, p.name_fr), ('ar'::text, p.name_ar), ('en'::text, p.name_en)
+) as aliases(locale, alias)
+where p.is_active and btrim(aliases.alias) <> ''
+on conflict (locale, normalized_alias) do nothing;
+
 -- Commune rows are intentionally not seeded until the current official commune
 -- code/name dataset has been checked against the latest administrative register.
