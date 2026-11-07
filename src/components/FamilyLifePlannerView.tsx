@@ -28,10 +28,10 @@ const labels: Record<FamilyBudgetCategoryId, { fr: string; ar: string; en: strin
 const t = (profile: UserProfile, fr: string, ar: string, en: string) =>
   profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
 
-const readPlan = (userId: string): FamilyBudgetPlan => {
-  const fallback = createFamilyBudgetPlan(userId);
+const readPlan = (userId: string, month: string): FamilyBudgetPlan => {
+  const fallback = createFamilyBudgetPlan(userId, month);
   try {
-    const raw = localStorage.getItem(familyBudgetStorageKey(userId));
+    const raw = localStorage.getItem(familyBudgetStorageKey(userId, month));
     if (!raw) return fallback;
     return validateFamilyBudgetPlan(JSON.parse(raw), userId) || fallback;
   } catch { return fallback; }
@@ -40,27 +40,28 @@ const readPlan = (userId: string): FamilyBudgetPlan => {
 const moneyInput = (minor: number) => (minor / 100).toFixed(2);
 
 export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
-  const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id));
-  const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id).monthlyIncomeMinor));
-  const [adultsInput, setAdultsInput] = useState(String(readPlan(profile.id).adults));
-  const [childrenInput, setChildrenInput] = useState(String(readPlan(profile.id).children));
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, new Date().toISOString().slice(0, 7)));
+  const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, new Date().toISOString().slice(0, 7)).monthlyIncomeMinor));
+  const [adultsInput, setAdultsInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).adults));
+  const [childrenInput, setChildrenInput] = useState(String(readPlan(profile.id, new Date().toISOString().slice(0, 7)).children));
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
 
   useEffect(() => {
-    const next = readPlan(profile.id);
+    const next = readPlan(profile.id, selectedMonth);
     setPlan(next);
     setIncomeInput(moneyInput(next.monthlyIncomeMinor));
     setAdultsInput(String(next.adults));
     setChildrenInput(String(next.children));
-  }, [profile.id]);
+  }, [profile.id, selectedMonth]);
 
   useEffect(() => {
-    if (plan.userId !== profile.id) return;
+    if (plan.userId !== profile.id || plan.month !== selectedMonth) return;
     try {
-      localStorage.setItem(familyBudgetStorageKey(profile.id), JSON.stringify(plan));
+      localStorage.setItem(familyBudgetStorageKey(profile.id, plan.month), JSON.stringify(plan));
       setSaveState('saved');
     } catch { setSaveState('error'); }
-  }, [plan, profile.id]);
+  }, [plan, profile.id, selectedMonth]);
 
   const summary = useMemo(() => summarizeFamilyBudget(plan), [plan]);
   const updatePlan = (field: 'plannedMinor' | 'actualMinor', id: FamilyBudgetCategoryId, value: number) => {
@@ -97,6 +98,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile }) => {
 
       <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{t(profile, 'CONFIGURATION', 'الإعدادات', 'SETUP')}</span><h3>{t(profile, 'Votre foyer', 'أسرتك', 'Your household')}</h3></div><span className="text-xs text-slate-500">{saveState === 'saved' ? t(profile, 'Enregistré sur cet appareil', 'محفوظ على هذا الجهاز', 'Saved on this device') : t(profile, 'Stockage indisponible', 'التخزين غير متاح', 'Storage unavailable')}</span></div>
+        <label className="block text-xs text-slate-500">{t(profile, 'Mois à planifier', 'الشهر المراد تخطيطه', 'Planning month')}<input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
         <div className="grid grid-cols-3 gap-2">
           <label className="text-xs text-slate-500">{t(profile, 'Adultes', 'البالغون', 'Adults')}<input type="number" min="0" max="30" value={adultsInput} onChange={(e) => setAdultsInput(e.target.value)} onBlur={setHousehold} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label className="text-xs text-slate-500">{t(profile, 'Enfants', 'الأطفال', 'Children')}<input type="number" min="0" max="30" value={childrenInput} onChange={(e) => setChildrenInput(e.target.value)} onBlur={setHousehold} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
