@@ -278,3 +278,93 @@ export async function submitCommunityPrice(input: {
     return { success: false, error: error instanceof Error ? error.message : 'Unable to submit price.' };
   }
 }
+
+export interface CommunityModerationReport {
+  id: string;
+  targetType: 'post' | 'comment';
+  targetId: string;
+  reason: string;
+  details: string | null;
+  createdAt: string;
+  targetText: string;
+  authorId: string | null;
+}
+
+export async function loadCommunityModerationQueue(): Promise<CommunityResult<CommunityModerationReport[]>> {
+  try {
+    const supabase = requireClient();
+    const { data: reports, error } = await supabase.from('community_reports')
+      .select('id,target_type,target_id,reason,details,created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    if (!reports?.length) return { success: true, data: [] };
+    const postIds = reports.filter((row) => row.target_type === 'post').map((row) => row.target_id);
+    const commentIds = reports.filter((row) => row.target_type === 'comment').map((row) => row.target_id);
+    const [posts, comments] = await Promise.all([
+      postIds.length ? supabase.from('community_posts').select('id,title,body,author_id').in('id', postIds) : Promise.resolve({ data: [], error: null }),
+      commentIds.length ? supabase.from('community_comments').select('id,body,author_id').in('id', commentIds) : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (posts.error) throw posts.error;
+    if (comments.error) throw comments.error;
+    const postById = new Map((posts.data || []).map((row) => [row.id, row]));
+    const commentById = new Map((comments.data || []).map((row) => [row.id, row]));
+    return {
+      success: true,
+      data: reports.map((row) => {
+        const target = row.target_type === 'post' ? postById.get(row.target_id) : commentById.get(row.target_id);
+        return {
+          id: row.id,
+          targetType: row.target_type as 'post' | 'comment',
+          targetId: row.target_id,
+          reason: row.reason,
+          details: row.details,
+          createdAt: row.created_at,
+          targetText: row.target_type === 'post' && target && 'title' in target
+            ? target.title + '\\n' + target.body
+            : target && 'body' in target ? target.body : '[Contenu supprimé]',
+          authorId: target && 'author_id' in target ? target.author_id : null,
+        };
+      }),
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to load moderation queue.' };
+  }
+}
+
+export async function resolveCommunityReport(id: string, status: 'resolved' | 'dismissed', reason: string): Promise<CommunityResult<boolean>> {
+  try {
+    const { error } = await requireClient().rpc('resolve_community_report', {
+      p_report_id: id, p_status: status, p_reason: reason,
+    });
+    if (error) throw error;
+    return { success: true, data: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to resolve report.' };
+  }
+}
+
+export async function moderateCommunityPost(id: string, status: 'published' | 'hidden' | 'rejected', reason: string): Promise<CommunityResult<boolean>> {
+  try {
+    const { error } = await requireClient().rpc('moderate_community_post', {
+      p_post_id: id, p_status: status, p_reason: reason,
+    });
+    if (error) throw error;
+    return { success: true, data: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to moderate post.' };
+  }
+}
+
+export async function moderateCommunityComment(id: string, status: 'published' | 'hidden', reason: string): Promise<CommunityResult<boolean>> {
+  try {
+    const { error } = await requireClient().rpc('moderate_community_comment', {
+      p_comment_id: id, p_status: status, p_reason: reason,
+    });
+    if (error) throw error;
+    return { success: true, data: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to moderate comment.' };
+  }
+}
