@@ -4,7 +4,7 @@ import { FamilyLivingPlannerView } from './FamilyLivingPlannerView';
 import type { Category, RecurringItem, Transaction, UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import {
-  applyFamilyBudgetSources, createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
+  applyFamilyBudgetSources, countRecurringOccurrencesInMonth, createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
   updateFamilyCategory, validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
 } from '../domain/familyBudget';
 
@@ -105,21 +105,23 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const incomeSourceMinor = useMemo(() => {
     const incomeTransactions = monthTransactions.filter((tx) => tx.type === 'income');
     const transactionTotal = incomeTransactions.reduce((sum, tx) => sum + tx.amountMinor, 0);
-    const recurringIncome = recurringItems.filter((item) => {
-      if (item.userId !== profile.id || !item.isActive || item.type !== 'income' || item.currency !== profile.preferredCurrency) return false;
-      if (item.nextDueDate.slice(0, 7) !== selectedMonth) return false;
-      const alreadyRecorded = incomeTransactions.some((tx) =>
+    const recurringIncome = recurringItems.reduce((sum, item) => {
+      if (item.userId !== profile.id || !item.isActive || item.type !== 'income' || item.currency !== profile.preferredCurrency) return sum;
+      const dueCount = countRecurringOccurrencesInMonth(item.frequency, item.nextDueDate, selectedMonth, item.billingDayOfMonth);
+      if (dueCount === 0) return sum;
+      const recordedCount = incomeTransactions.filter((tx) =>
         tx.recurringItemId === item.id ||
         (!tx.recurringItemId && tx.amountMinor === item.amountMinor && (tx.description || '').trim().toLowerCase() === item.name.trim().toLowerCase())
-      );
-      return !alreadyRecorded;
-    }).reduce((sum, item) => sum + item.amountMinor, 0);
+      ).length;
+      return sum + item.amountMinor * Math.max(0, dueCount - recordedCount);
+    }, 0);
     return transactionTotal + recurringIncome;
   }, [monthTransactions, recurringItems, profile.id, profile.preferredCurrency, selectedMonth]);
 
   const hasIncomeSource = monthTransactions.some((tx) => tx.type === 'income') ||
     recurringItems.some((item) => item.userId === profile.id && item.isActive && item.type === 'income' &&
-      item.currency === profile.preferredCurrency && item.nextDueDate.slice(0, 7) === selectedMonth);
+      item.currency === profile.preferredCurrency &&
+      countRecurringOccurrencesInMonth(item.frequency, item.nextDueDate, selectedMonth, item.billingDayOfMonth) > 0);
   const monthlyIncomeMinor = plan.monthlyIncomeOverrideMinor != null
     ? plan.monthlyIncomeOverrideMinor
     : hasIncomeSource ? incomeSourceMinor : plan.monthlyIncomeMinor;
@@ -144,11 +146,12 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     const totals = new Map<FamilyBudgetCategoryId, number>();
     for (const item of recurringItems) {
       if (item.userId !== profile.id || !item.isActive || item.type !== 'expense' ||
-          item.currency !== profile.preferredCurrency || item.nextDueDate.slice(0, 7) !== selectedMonth) continue;
+          item.currency !== profile.preferredCurrency) continue;
+      const dueCount = countRecurringOccurrencesInMonth(item.frequency, item.nextDueDate, selectedMonth, item.billingDayOfMonth);
+      if (dueCount === 0) continue;
       const sourceCategory = categories.find((category) => category.id === item.categoryId);
       const familyId = familyCategoryFor(sourceCategory?.name || item.name);
-      const monthlyAmount = item.frequency === 'weekly' ? item.amountMinor * 4 :
-        item.frequency === 'biweekly' ? item.amountMinor * 2 : item.amountMinor;
+      const monthlyAmount = item.amountMinor * dueCount;
       totals.set(familyId, (totals.get(familyId) || 0) + monthlyAmount);
     }
     return totals;
