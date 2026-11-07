@@ -227,7 +227,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-slate-100 truncate">{item.name}</div>
               <div className="text-[10px] text-slate-500">{categoryLabels[item.category] || item.category} · {item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? 'g' : item.baseUnit === 'l' ? 'ml' : 'unité(s)'} / personne / jour</div>
-              <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${item.price?.lastObserved || ''}` : 'Prix saisi manuellement · non vérifié'}</div>
+              <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${(item.price.sourceTiers || []).join(', ') || 'source non précisée'} · ${item.price.lastObserved}` : 'Prix saisi manuellement · non vérifié'}</div>
             </div>
             <div className="text-right shrink-0">
               <div className="text-xs font-semibold text-slate-200">{formatMoney(item.price?.medianUnitPriceMinor || 0, 'DZD', profile.locale)} / {item.baseUnit}</div>
