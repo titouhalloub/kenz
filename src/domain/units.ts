@@ -38,7 +38,7 @@ export function parsePackQuantity(label: string, baseUnit: BaseUnit): number | n
 
   if (baseUnit === 'g') {
     if (hasKg) return Math.round(amount * 1000);
-    if (hasGram || (!hasLiter && !hasMl && !hasCount && !hasPackCount)) return Math.round(amount);
+    if (hasGram) return Math.round(amount);
     return null;
   }
   if (baseUnit === 'ml') {
