@@ -181,7 +181,7 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
       ? Math.max(0, Math.floor((now.getTime() - lastObserved.getTime()) / 86_400_000))
       : null;
     const stale = ageDays === null || ageDays > 14;
-    const thin = price.nObservations < 3 || price.nContributors < 3;
+    const thin = price.nObservations < 3;
     if (stale) staleProducts += 1;
     if (thin) thinProducts += 1;
 
@@ -224,11 +224,11 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
       ? Math.max(0, Math.floor(input.availableBudgetMinor / expectedDaily))
       : null,
     dataQuality: { staleProducts, thinProducts, pricedProducts },
-    cheapestSubstitutes: buildCheapestSubstitutes(input.items),
+    cheapestSubstitutes: buildCheapestSubstitutes(input.items, householdPermille, daysInMonth),
   };
 }
 
-function buildCheapestSubstitutes(items: SimulatorBasketItem[]): SimulatorResult['cheapestSubstitutes'] {
+function buildCheapestSubstitutes(items: SimulatorBasketItem[], householdPermille: bigint, daysInMonth: number): SimulatorResult['cheapestSubstitutes'] {
   const suggestions: SimulatorResult['cheapestSubstitutes'] = [];
   for (const item of items) {
     if (!item.price || item.quantityPerPersonPerDay <= 0) continue;
@@ -243,11 +243,12 @@ function buildCheapestSubstitutes(items: SimulatorBasketItem[]): SimulatorResult
       a.price!.medianUnitPriceMinor - b.price!.medianUnitPriceMinor
     )[0];
     if (!cheapest) continue;
-    const savingPerBaseUnit = item.price.medianUnitPriceMinor - cheapest.price!.medianUnitPriceMinor;
+    const savingPerBaseUnit = BigInt(item.price.medianUnitPriceMinor - cheapest.price!.medianUnitPriceMinor);
+    const monthlyQuantity = ceilDiv(BigInt(item.quantityPerPersonPerDay) * householdPermille * BigInt(daysInMonth), 1000n);
     suggestions.push({
       fromProductId: item.productId,
       toProductId: cheapest.productId,
-      estimatedSavingMinor: savingPerBaseUnit * item.quantityPerPersonPerDay,
+      estimatedSavingMinor: safeNumber(savingPerBaseUnit * monthlyQuantity),
     });
   }
   return suggestions;
