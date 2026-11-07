@@ -412,3 +412,13 @@ export async function submitMerchantPrice(input: {
     return { success: false, error: error instanceof Error ? error.message : 'Unable to submit merchant price.' };
   }
 }
+
+export async function deleteMyPriceContributions(): Promise<CommunityResult<number>> {
+  try {
+    const { data, error } = await requireClient().rpc('delete_my_price_contributions');
+    if (error || data === null || data === undefined) throw error || new Error('No contribution deletion result.');
+    return { success: true, data: Number(data) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unable to delete contributions.' };
+  }
+}
