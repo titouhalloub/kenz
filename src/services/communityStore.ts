@@ -12,6 +12,7 @@ export interface CommunityPost {
   title: string; body: string; locale: 'ar' | 'fr' | 'en'; wilayaCode: string | null;
   createdAt: string; likes: number; likedByMe: boolean; savedByMe: boolean;
   servings?: number; steps?: string; ingredients: CommunityIngredient[];
+  comments: Array<{ id: string; authorHandle: string; body: string; createdAt: string }>;
 }
 export interface CommunityResult<T> { success: boolean; data?: T; error?: string; }
 
@@ -60,16 +61,20 @@ export async function loadCommunityFeed(input: {
 
     const ids = rows.map((row) => row.id);
     const authorIds = [...new Set(rows.map((row) => row.author_id))];
-    const [profilesResult, recipesResult, ingredientsResult, itemsResult, reactionsResult] = await Promise.all([
+    const [recipesResult, ingredientsResult, itemsResult, reactionsResult, commentsResult] = await Promise.all([
       supabase.from('community_profiles').select('user_id,handle').in('user_id', authorIds),
       supabase.from('community_recipes').select('post_id,servings,steps').in('post_id', ids),
       supabase.from('community_recipe_ingredients').select('post_id,product_id,free_text,quantity_milli_units,base_unit').in('post_id', ids),
       supabase.from('community_shopping_items').select('post_id,product_id,label,quantity_milli_units,base_unit').in('post_id', ids),
       supabase.from('community_reactions').select('post_id,user_id').in('post_id', ids),
+      supabase.from('community_comments').select('id,post_id,author_id,body,created_at').eq('status','published').in('post_id', ids).order('created_at',{ascending:true}).limit(150),
     ]);
-    for (const result of [profilesResult, recipesResult, ingredientsResult, itemsResult, reactionsResult]) {
+    for (const result of [recipesResult, ingredientsResult, itemsResult, reactionsResult, commentsResult]) {
       if (result.error) throw result.error;
     }
+    const profileIds = [...new Set([...authorIds, ...(commentsResult.data || []).map((row) => row.author_id)])];
+    const profilesResult = await supabase.from('community_profiles').select('user_id,handle').in('user_id', profileIds);
+    if (profilesResult.error) throw profilesResult.error;
     const savesResult = input.userId
       ? await supabase.from('community_saves').select('post_id').eq('user_id', input.userId).in('post_id', ids)
       : { data: [], error: null };
@@ -109,6 +114,12 @@ export async function loadCommunityFeed(input: {
       ingredientsByPost.set(row.post_id, list);
     }
     const reactions = reactionsResult.data || [];
+    const commentsByPost = new Map<string, Array<{ id: string; authorHandle: string; body: string; createdAt: string }>>();
+    for (const row of commentsResult.data || []) {
+      const list = commentsByPost.get(row.post_id) || [];
+      list.push({ id: row.id, authorHandle: handleByUser.get(row.author_id) || 'Membre Kenz', body: row.body, createdAt: row.created_at });
+      commentsByPost.set(row.post_id, list);
+    }
     const savedIds = new Set((savesResult.data || []).map((row) => row.post_id));
     const posts = rows.map((row) => {
       const recipe = recipeByPost.get(row.id);
@@ -123,6 +134,7 @@ export async function loadCommunityFeed(input: {
         savedByMe: savedIds.has(row.id),
         ...(recipe ? { servings: recipe.servings, steps: recipe.steps } : {}),
         ingredients: ingredientsByPost.get(row.id) || [],
+        comments: commentsByPost.get(row.id) || [],
       } satisfies CommunityPost;
     });
     return { success: true, data: posts };
