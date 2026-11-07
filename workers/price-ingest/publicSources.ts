@@ -293,7 +293,7 @@ async function fetchPublic(url: URL, redirects = 0): Promise<Response> {
 
 export function extractPdfLinks(html: string, listingUrl: URL): URL[] {
   const links: URL[] = [];
-  for (const match of html.matchAll(/href\s*=\s*["']([^"']+\.pdf(?:\?[^"']*)?)["']/gi)) {
+  for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
     try {
       const linked = new URL(decodeEntities(match[1]), listingUrl);
       const embedded = linked.searchParams.get('file');
