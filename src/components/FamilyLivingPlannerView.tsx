@@ -25,7 +25,7 @@ const monthLastDay = (month: string) => { const [year, monthNumber] = month.spli
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 const parseMoneyMinor = (value: string): number | null => {
   const normalized = value.trim().replace(',', '.');
-  if (!/^\\d+(?:\\.\\d{0,2})?$/.test(normalized)) return null;
+  if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
   const amount = Math.round(Number(normalized) * 100);
   return Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
 };
@@ -49,7 +49,17 @@ const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
   try {
     const raw = localStorage.getItem(familyLivingStorageKey(userId, month));
     if (!raw) return fallback;
-    return validateFamilyLivingPlan(JSON.parse(raw), userId, month) || fallback;
+    const monthly = validateFamilyLivingPlan(JSON.parse(raw), userId, month) || fallback;
+    try {
+      const libraryRaw = localStorage.getItem('kenz_family_recipe_library_v1_' + encodeURIComponent(userId));
+      const library = libraryRaw ? JSON.parse(libraryRaw) : [];
+      if (Array.isArray(library)) {
+        const imported = library.map((item) => item && typeof item.id === 'string' ? parseCommunityRecipe(item, item.id) : null).filter((item): item is FamilyRecipe => !!item);
+        const combined = [...monthly.recipes, ...imported];
+        monthly.recipes = [...new Map(combined.map((recipe) => [recipe.id, recipe])).values()];
+      }
+    } catch { /* Keep the validated monthly collection if the shared library is damaged. */ }
+    return monthly;
   } catch { return fallback; }
 };
 
@@ -83,6 +93,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     if (plan.userId !== profile.id || plan.month !== month) return;
     try {
       localStorage.setItem(familyLivingStorageKey(profile.id, month), JSON.stringify({ ...plan, updatedAt: new Date().toISOString() }));
+      localStorage.setItem('kenz_family_recipe_library_v1_' + encodeURIComponent(profile.id), JSON.stringify(plan.recipes));
     } catch { setStatus(tr(profile, 'Stockage local indisponible.', 'التخزين المحلي غير متاح.', 'Local storage is unavailable.')); }
   }, [plan, profile.id, month, profile.locale]);
 
@@ -275,7 +286,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         </div>
       </header>
 
-      <div className="kenz-family-subtabs">
+      <div className="kenz-family-subtabs kenz-family-section-tabs">
         {([
           ['meals', CalendarDays, tr(profile, 'Repas', 'الوجبات', 'Meals')],
           ['shopping', ShoppingBasket, tr(profile, 'Courses', 'المشتريات', 'Shopping')],
