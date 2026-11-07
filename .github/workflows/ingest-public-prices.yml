@@ -1,0 +1,86 @@
+name: Ingest public Algerian prices
+
+on:
+  push:
+    branches: [feat/price-simulator-community]
+  schedule:
+    - cron: '25 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Fetch and parse sources without writing to Supabase'
+        required: false
+        default: false
+        type: boolean
+      enable_source_slug:
+        description: 'Optional source slug to enable after checking its public access and reuse terms'
+        required: false
+        type: string
+      terms_reviewed_at:
+        description: 'Date of the human source review (YYYY-MM-DD)'
+        required: false
+        type: string
+      confirm_source_review:
+        description: 'I reviewed the source terms and robots policy and confirm it may be used'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kenz-public-price-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install PDF text extraction
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Scrape public price bulletins into the pending review queue
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true) }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx workers/price-ingest/run.ts
+
+      - name: Verify public scrapers without database writes
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
+        run: npx tsx workers/price-ingest/run.ts --dry-run
+
+      - name: Enable a source after explicit human review
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.enable_source_slug != '') }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://qxbmrqxxqeoyezebftux.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ENABLE_SOURCE_SLUG: ${{ inputs.enable_source_slug }}
+          TERMS_REVIEWED_AT: ${{ inputs.terms_reviewed_at }}
+          CONFIRM_SOURCE_REVIEW: ${{ inputs.confirm_source_review }}
+        run: |
+          ARGS=()
+          if [ -n "$ENABLE_SOURCE_SLUG" ]; then
+            if [ "$CONFIRM_SOURCE_REVIEW" != "true" ]; then
+              echo "Source enabling requires explicit confirmation of the human source review."
+              exit 1
+            fi
+            ARGS+=(--enable-source "$ENABLE_SOURCE_SLUG" --terms-reviewed-at "$TERMS_REVIEWED_AT" --confirm-source-review)
+          fi
+          npx tsx workers/price-ingest/review.ts "${ARGS[@]}"

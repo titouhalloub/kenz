@@ -1,0 +1,183 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { extractPdfLinks, parseDcwHtml, parseDcwPlainHtml, parseMadrpText, robotsAllows, scrapePublicSource } from './publicSources';
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('public price source adapters', () => {
+  it('refuses a source URL that is not HTTPS', async () => {
+    await expect(scrapePublicSource({
+      slug: 'bad-source', kind: 'dcw-html', url: 'http://example.org/prices', wilayaCode: '15',
+    })).rejects.toThrow('Only HTTPS');
+  });
+
+  it('obeys robots disallow rules for the matching user-agent group', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
+      'User-agent: *\nDisallow: /private\nAllow: /private/public\n',
+      { status: 200 },
+    ))));
+    await expect(robotsAllows(new URL('https://example.org/private/prices'))).resolves.toBe(false);
+    await expect(robotsAllows(new URL('https://example.org/private/public/prices'))).resolves.toBe(true);
+  });
+
+  it('uses the Kenz-specific robots group when one is published', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
+      'User-agent: *\nDisallow: /\n\nUser-agent: KenzPriceBot\nAllow: /prices\n',
+      { status: 200 },
+    ))));
+    await expect(robotsAllows(new URL('https://example.org/prices/today'))).resolves.toBe(true);
+    await expect(robotsAllows(new URL('https://example.org/private'))).resolves.toBe(true);
+  });
+
+
+  it('extracts same-host PDF URLs embedded inside the official viewer page', () => {
+    const html = '<a href="/wp-content/plugins/embedpress/assets/pdf/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf">Bulletin</a>';
+    const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
+    expect(links).toHaveLength(1);
+    expect(links[0].pathname).toContain('prix_04_Nov_2026_MADRP.pdf');
+  });
+
+
+  it('extracts the MADRP PDF when its viewer is embedded in an iframe src', () => {
+    const html = '<iframe src="/wp-content/plugins/embedpress/assets/pdf/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf"></iframe>';
+    const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
+    expect(links).toHaveLength(1);
+    expect(links[0].pathname).toContain('prix_04_Nov_2026_MADRP.pdf');
+  });
+
+  it('extracts an embedded PDF when the viewer URL has trailing parameters', () => {
+    const html = '<a href="/viewer.html?file=https%3A%2F%2Fmadr.gov.dz%2Fwp-content%2Fuploads%2F2026%2F11%2Fprix_04_Nov_2026_MADRP.pdf&scrolling=0&selection_tool=0">Bulletin</a>';
+    const links = extractPdfLinks(html, new URL('https://madr.gov.dz/mercuriale-des-prix/'));
+    expect(links).toHaveLength(1);
+    expect(links[0].hostname).toBe('madr.gov.dz');
+  });
+
+
+  it('fails closed when robots.txt redirects to another location', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('', {
+      status: 302,
+      headers: { location: 'https://other.example/robots.txt' },
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await robotsAllows(new URL('https://madr.gov.dz/prices'))).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('parses a Directorate HTML table and normalizes pack quantities', () => {
+    const html = `
+      <html><body><p>Prix journaliers 07/11/2026</p><table>
+      <tr><th>Produit</th><th>Unité</th><th>Gros</th><th>Détail</th><th>Min</th><th>Max</th></tr>
+      <tr><td>Pomme de Terre</td><td>Kg</td><td>75</td><td>87,5</td><td>85</td><td>90</td></tr>
+      <tr><td>Oeufs</td><td>Unité</td><td>14,5</td><td>16,5</td><td>15</td><td>18</td></tr>
+      <tr><td>Tomate fraîche</td><td>Kg</td><td>/</td><td>/</td><td>/</td><td>/</td></tr>
+      </table></body></html>`;
+    const rows = parseDcwHtml(html, {
+      slug: 'dcw-tizi-ouzou-daily',
+      kind: 'dcw-html',
+      url: 'https://example.org/prices',
+      wilayaCode: '15',
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0].productSlug).toBe('pomme-de-terre');
+    expect(rows[0].normalized.unitPriceMinor).toBe(8750);
+    expect(rows[0].normalized.wilayaCode).toBe('15');
+    expect(rows[1].productSlug).toBe('oeufs');
+    expect(rows[1].normalized.unitPriceMinor).toBe(1650);
+  });
+
+
+  it('parses Jijel three-column rows with product and pack quantity in one cell', () => {
+    const html = `
+      <p>Journée du 25-10-2026</p>
+      <table>
+        <tr><th>PRODUITS</th><th>PRIX DE GROS</th><th>PRIX DE DETAIL</th></tr>
+        <tr><td>Semoule supérieure 25 kg</td><td>925</td><td>1000</td></tr>
+        <tr><td>Carotte 1kg</td><td>80</td><td>110</td></tr>
+        <tr><td>Oeufs 1Unite</td><td>15</td><td>17</td></tr>
+      </table>`;
+    const rows = parseDcwHtml(html, {
+      slug: 'dcw-jijel-daily', kind: 'dcw-html',
+      url: 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ', wilayaCode: '18',
+    });
+    expect(rows.map((row) => row.productSlug)).toEqual(['semoule-ordinaire', 'carotte', 'oeufs']);
+    expect(rows[0].normalized.unitPriceMinor).toBe(4000);
+    expect(rows[1].normalized.unitPriceMinor).toBe(11000);
+    expect(rows[2].normalized.unitPriceMinor).toBe(1700);
+  });
+
+  it('parses Jijel plain-text rows, including products without an explicit unit column', () => {
+    const html = `
+      <html><body>
+      <p>Journée du 06-08-2026</p>
+      <p>Pommes de terre 1kg 70 90</p>
+      <p>Oeufs 15 17</p>
+      <p>Viande blanche (poulet) 1kg 470 490</p>
+      </body></html>`;
+    const rows = parseDcwPlainHtml(html, {
+      slug: 'dcw-jijel-daily',
+      kind: 'dcw-html',
+      url: 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ',
+      wilayaCode: '18',
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows[0].productSlug).toBe('pomme-de-terre');
+    expect(rows[0].normalized.unitPriceMinor).toBe(9000);
+    expect(rows[1].productSlug).toBe('oeufs');
+    expect(rows[1].normalized.unitPriceMinor).toBe(1700);
+    expect(rows[2].productSlug).toBe('poulet-frais');
+    expect(rows[2].normalized.unitPriceMinor).toBe(49000);
+  });
+
+
+  it('uses the explicit daily bulletin date and parses the real Jijel row variants', () => {
+    const html = `
+      <html><body>
+      <p>Archive du 16/04/2017</p>
+      <p>Journée du 25-10-2026</p>
+      <p>Semoule supérieure 25 kg 925 1000</p>
+      <p>Huiles alimentaire 5l 600 640</p>
+      <p>Café 1kg 920 1000</p>
+      <p>Concentré de tomate 1g 265 295</p>
+      <p>Pommes de terre 1kg 70 90</p>
+      <p>Viande blanche (poulet) 1kg 470 490</p>
+      <p>Oeufs 15 17</p>
+      </body></html>`;
+    const rows = parseDcwPlainHtml(html, {
+      slug: 'dcw-jijel-daily',
+      kind: 'dcw-html',
+      url: 'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ',
+      wilayaCode: '18',
+    });
+    expect(rows.map((row) => row.productSlug)).toEqual([
+      'semoule-ordinaire', 'huile-table', 'cafe-moulu', 'pomme-de-terre', 'poulet-frais', 'oeufs',
+    ]);
+    expect(rows.every((row) => row.normalized.observedAt === '2026-10-25T00:00:00.000Z')).toBe(true);
+    expect(rows[0].normalized.unitPriceMinor).toBe(4000);
+    expect(rows[1].normalized.unitPriceMinor).toBe(12800);
+    expect(rows[5].normalized.unitPriceMinor).toBe(1700);
+  });
+
+  it('matches official PDF labels that contain extraction-inserted spaces', () => {
+    const text = [
+      'C a rotte 121 132 110',
+      'Pomme locale 422 522 321',
+      'Viande bovine locale 2224 2346 2101',
+    ].join('\n');
+    const rows = parseMadrpText(text, 'https://madr.gov.dz/prix_04_Nov_2026_MADRP.pdf', '2026-11-04T00:00:00.000Z');
+    expect(rows.map((row) => row.productSlug)).toEqual(['carotte', 'pomme', 'viande-bovine-locale']);
+  });
+
+  it('parses official MADRP bulletin text as national average observations', () => {
+    const text = [
+      'Pomme de terre 95 101 89 البطاطا',
+      'Tomate 138 153 123 الطماطم',
+      'Œufs (Unité) 22 23 21 البيض',
+      'Lait de vache (Litre) 94 100 88 الحليب',
+      'Légumes frais',
+    ].join('\n');
+    const rows = parseMadrpText(text, 'https://madr.gov.dz/prix_04_Nov_2026_MADRP.pdf', '2026-11-04T00:00:00.000Z');
+    expect(rows.map((row) => row.productSlug)).toEqual(['pomme-de-terre', 'tomate', 'oeufs', 'lait-sachet']);
+    expect(rows[0].normalized.unitPriceMinor).toBe(9500);
+    expect(rows[2].normalized.unitPriceMinor).toBe(2200);
+    expect(rows.every((row) => !row.normalized.wilayaCode)).toBe(true);
+  });
+});

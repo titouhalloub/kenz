@@ -32,3 +32,32 @@ Neighborhood document uploads are intentionally out of scope: Kenz must not coll
 Zakat and festive-budget writes still use best-effort retries from current in-memory state while the app is open; their durable outboxes are deferred. The budget outbox does not yet include durable delete tombstones or cross-device conflict resolution. A real authenticated signup/data round-trip test is still required before production readiness.
 
 The project database migrations are stored in `supabase/migrations`. The signup trigger and privileged AI metering implementation live in the non-exposed `private` schema; client roles cannot call the signup trigger directly.
+
+
+## Phase 4 price intelligence and community (migrations 036–043)
+
+Migrations 036 through 043 are present on the feature branch only. They have **not** been applied to production. Do not apply them until migration review and production-change approval are complete.
+
+The ingestion worker directly collects public HTTPS bulletins from the MADRP PDF index, the Tizi Ouzou Directorate of Commerce page, and the Jijel Directorate of Commerce page. It checks robots.txt at runtime, refuses cross-host redirects, rate-limits requests, caps response sizes, and stages all observations as pending. Public prices are never published automatically. CSV remains an optional manual fallback.
+
+To enable the scheduled worker after the migrations are approved and deployed:
+
+1. Add GitHub Actions secret SUPABASE_SERVICE_ROLE_KEY for this repository. Keep it in GitHub Secrets only; never put it in Vite variables, source files, APK configuration, or client storage.
+2. SUPABASE_URL may be set as a repository secret; the workflow has the project's existing URL as a fallback.
+3. Run the "Ingest public Algerian prices" workflow with dry_run=true first. Inspect source dates, product matches, units and sample rows in the workflow log.
+4. Run normal scheduled/manual ingestion only after the dry-run is correct. Each observation remains pending.
+5. A moderator reviews individual rows from Admin Dashboard → Prix & Sources. Accepted rows refresh the public aggregate; rejected rows are audited and excluded.
+
+The community feature uses pseudonymous handles, no public email, and opt-in wilaya sharing. Crowd and verified-merchant price contributions require explicit consent, are rate-limited and remain pending until moderator review. Users can delete their own price contributions and their own posts. The simulator never sends the viewer's budget, income, account balances or transactions to the price service or community feed.
+
+### Assigning the initial moderator
+
+No account is auto-promoted. After migrations are approved and applied, an authorized database administrator must insert the intended moderator's authenticated user UUID using this SQL:
+
+    insert into public.community_moderators (user_id, role)
+    values ('<AUTH_USER_UUID>', 'admin')
+    on conflict (user_id) do update set role = excluded.role;
+
+The UUID is the Supabase Auth user ID, not an email address. Keep this assignment restricted to trusted moderators. Without it, the community report queue and price review console correctly deny access.
+
+Commune rows are intentionally not seeded until official commune codes are checked. Until then, price fallback is wilaya → national; no commune or neighborhood price is fabricated.

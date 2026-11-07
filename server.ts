@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import { chatCompletionsEndpoint, resolveOpenAIBaseUrl } from './src/server/providerUrl.ts';
 
 dotenv.config();
 
@@ -157,42 +158,7 @@ async function sendMeteredAIResponse(
   });
 }
 
-function trimTrailingSlashes(value: string): string {
-  let result = value;
-  while (result.endsWith('/')) result = result.slice(0, -1);
-  return result;
-}
-
-function resolveOpenAIBaseUrl(
-  provider: string,
-  preset: { defaultBaseUrl: string },
-  requestedBaseUrl?: string,
-): string | null {
-  // Custom local model endpoints are allowed only in development. Never let a
-  // production server make requests to arbitrary client-supplied destinations.
-  if (provider === 'custom') {
-    if (process.env.NODE_ENV === 'production') return null;
-    try {
-      const url = new URL(requestedBaseUrl?.trim() || preset.defaultBaseUrl);
-      const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
-      if (url.protocol !== 'http:' || !localHosts.has(url.hostname) || url.username || url.password || url.search || url.hash) return null;
-      return trimTrailingSlashes(url.toString());
-    } catch { return null; }
-  }
-
-  // Preset providers are pinned to their official API origin/path. Ignore no
-  // user-supplied alternate host: reject it instead to prevent SSRF.
-  try {
-    const expected = new URL(preset.defaultBaseUrl);
-    if (requestedBaseUrl?.trim()) {
-      const requested = new URL(requestedBaseUrl.trim());
-      const expectedPath = trimTrailingSlashes(expected.pathname);
-      const requestedPath = trimTrailingSlashes(requested.pathname);
-      if (requested.origin !== expected.origin || requestedPath !== expectedPath || requested.username || requested.password || requested.search || requested.hash) return null;
-    }
-    return preset.defaultBaseUrl;
-  } catch { return null; }
-}
+// SSRF guard (resolveOpenAIBaseUrl) lives in src/server/providerUrl.ts and is unit tested.
 
 // Preset definitions for OpenAI-compatible providers
 const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defaultModel: string; label: string }> = {
@@ -290,9 +256,16 @@ ${JSON.stringify(financialContext || {}, null, 2)}`;
         });
       }
 
-      let base = (byokBaseUrl && byokBaseUrl.trim()) || preset.defaultBaseUrl;
-      base = base.replace(/\/+$/, '');
-      const endpoint = base.endsWith('/chat/completions') ? base : `${base}/chat/completions`;
+      // Never call a client-supplied destination: the URL must resolve to the
+      // provider's official endpoint (or loopback in development for `custom`).
+      const safeBase = resolveOpenAIBaseUrl(byokProvider, preset, byokBaseUrl);
+      if (!safeBase) {
+        return res.status(400).json({
+          success: false,
+          error: 'URL du fournisseur non autorisée.',
+        });
+      }
+      const endpoint = chatCompletionsEndpoint(safeBase);
       const model = byokModel || preset.defaultModel;
 
       const headers: Record<string, string> = {
@@ -544,9 +517,14 @@ app.post('/api/ai/test-key', rateLimitAi, requireAuthenticatedUser, async (req, 
     // Test OpenAI-compatible (DeepSeek, Groq, Mistral, OpenRouter, Perplexity, OpenAI, Custom)
     if (Object.hasOwn(OPENAI_COMPATIBLE_PROVIDERS, byokProvider)) {
       const preset = OPENAI_COMPATIBLE_PROVIDERS[byokProvider];
-      let base = (byokBaseUrl && byokBaseUrl.trim()) || preset.defaultBaseUrl;
-      base = base.replace(/\/+$/, '');
-      const endpoint = base.endsWith('/chat/completions') ? base : `${base}/chat/completions`;
+      const safeBase = resolveOpenAIBaseUrl(byokProvider, preset, byokBaseUrl);
+      if (!safeBase) {
+        return res.status(400).json({
+          success: false,
+          error: 'URL du fournisseur non autorisée.',
+        });
+      }
+      const endpoint = chatCompletionsEndpoint(safeBase);
       const model = byokModel || preset.defaultModel;
 
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -558,6 +536,7 @@ app.post('/api/ai/test-key', rateLimitAi, requireAuthenticatedUser, async (req, 
 
       const response = await fetch(endpoint, {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers,
         body: JSON.stringify({
           model,
@@ -594,6 +573,7 @@ app.post('/api/ai/test-key', rateLimitAi, requireAuthenticatedUser, async (req, 
       const model = byokModel || 'claude-3-5-haiku-20241022';
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': byokKey,

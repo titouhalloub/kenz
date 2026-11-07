@@ -2,9 +2,10 @@ name: Build Android APK (Capacitor)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feat/price-simulator-community ]
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:

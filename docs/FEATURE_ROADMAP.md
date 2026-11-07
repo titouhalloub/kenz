@@ -35,6 +35,18 @@ This roadmap tracks the eight approved product enhancements. Implement in small,
 7. **Shared Wallets** — invite-based membership, roles/permissions, shared expense records, and transparent contribution/split calculations.
 8. **Smart Financial Coach** — consent-based insights over the user's own financial data, explainable calculations, configurable AI provider, and privacy controls.
 
+## Phase 4 — Local price intelligence, budget simulator, community
+
+Full plan: `docs/PLAN_PRICE_SIMULATOR_COMMUNITY.md`. Source audit: `docs/PRICE_SOURCES.md`.
+
+9. **Local price intelligence** — price database fed by audited official sources, merchant submissions and opt-in crowd observations; queried by wilaya → commune → neighborhood with freshness and confidence. No third-party source is enabled before it passes the audit gate.
+10. **Monthly budget simulator** — projects a whole month against the user's Kenz budget using local prices; the user's budget never leaves their account.
+11. **Community channel** — recipes, shopping lists and tips, priced at the viewer's local prices and compared with the viewer's own budget; reporting, blocking and moderation are part of the MVP.
+
+Phase 4 implementation status (feature branch only): direct public-source scrapers, price normalization/review, monthly simulator with offline cache and private scenarios, text-first community feed, crowd/verified-merchant contributions, report/block tools and moderator queues are implemented in code. Migrations 036–043 are not deployed, official commune data is not seeded, and no live prices are public until a moderator accepts observations. No APK build is being run during this work.
+
+Phase 0 status: AI-route SSRF guard wired in and tested; source audit written; product catalog seeded (`src/domain/productCatalog.ts`).
+
 ## Definition of done
 
 - Database schema and RLS reviewed for every persisted feature.
