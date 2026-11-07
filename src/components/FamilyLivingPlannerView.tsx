@@ -14,6 +14,12 @@ type Section = 'meals' | 'shopping' | 'pantry' | 'recipes';
 const tr = (profile: UserProfile, fr: string, ar: string, en: string) =>
   profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
 const monthFirstDay = (month: string) => `${month}-01`;
+const isValidCalendarDate = (value: string) => {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
 const monthLastDay = (month: string) => { const [year, monthNumber] = month.split('-').map(Number); return `${month}-${String(new Date(year, monthNumber, 0).getDate()).padStart(2, '0')}`; };
 const makeId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 const parseQuantityMilli = (value: string) => {
@@ -78,6 +84,10 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   };
 
   const suggestWeek = () => {
+    if (!isValidCalendarDate(mealDate) || mealDate.slice(0, 7) !== month) {
+      setStatus(tr(profile, 'Choisissez une date valide dans le mois sélectionné.', 'اختر تاريخاً صحيحاً ضمن الشهر المحدد.', 'Choose a valid date in the selected month.'));
+      return;
+    }
     let added = 0;
     updatePlan((current) => {
       const meals = [...current.meals];
