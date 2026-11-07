@@ -12,7 +12,7 @@ describe('normalizePriceRecord', () => {
     }, 'g')).toMatchObject({
       unitPriceMinor: 25,
       currency: 'DZD',
-      baseQuantity: 1000,
+      quantityMilliUnits: 1000,
       baseUnit: 'g',
     });
   });
