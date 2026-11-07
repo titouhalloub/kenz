@@ -26,7 +26,7 @@ Stack facts this plan builds on: Vite + React 19 + TS, Tailwind 4, Express `serv
 
 **F1. Scraping alone will not give neighborhood-level prices in Algeria.** Much grocery buying is informal (souk, local épicerie) with no online price list. Online sources (classifieds, a few chains, official bulletins) mostly give wilaya-level or national reference prices. Decision: a **four-tier source model** — official reference → scraped retail → merchant-submitted (directory businesses) → crowd observations. Neighborhood precision comes mainly from tiers 3–4; the scraper supplies the baseline and the fallback.
 
-**F2. Every source needs a legal/technical audit before a scraper is written** (robots.txt, terms of service, licensing, data protection law 18-07). A source is only enabled when `price_sources.reviewed = true`. Prefer official/open data and partnerships over HTML scraping.
+**F2. Public price pages are collected directly under the project owner's instruction.** The scraper only accesses openly available HTTPS pages, checks robots.txt at runtime, does not bypass login/paywalls/CAPTCHAs, limits request rate and response size, and stages every observation for human review. Personal data in community profiles and contributions remains subject to a separate privacy review.
 
 **F3. Scraping runs outside the app server.** A separate scheduled worker (GitHub Actions cron or Supabase Edge Function + pg_cron) writes with a server-only credential. The service-role key never enters `VITE_*`, the client bundle or `server.ts`.
 
