@@ -191,6 +191,8 @@ for all to authenticated using (blocker_id = (select auth.uid()))
 with check (blocker_id = (select auth.uid()) and blocker_id <> blocked_id);
 create policy "Users can see blocks involving them" on public.community_user_blocks
 for select to authenticated using (blocked_id = (select auth.uid()));
+create policy "Users can see blocks involving them" on public.community_user_blocks
+for select to authenticated using (blocked_id = (select auth.uid()));
 create policy "Users submit reports" on public.community_reports
 for insert to authenticated with check (reporter_id = (select auth.uid()));
 create policy "Moderators read reports" on public.community_reports
