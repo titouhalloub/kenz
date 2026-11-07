@@ -31,7 +31,7 @@ values
   ('dcw-jijel-daily', 'Directorate of Commerce — Jijel daily price statement', 'official',
    'https://www.dcwjijel.dz/index.php/moy-prix/prix-journ',
    'Public daily price statement page. The collector checks robots.txt at runtime, parses the published retail-price column, and excludes observations older than 14 days.',
-   85, false, false, 'daily')
+   85, true, true, 'daily', now(), now(), 'Owner-approved collection of openly accessible public pages; robots.txt is checked at runtime; all observations remain pending review')
 on conflict (slug) do update set
   name = excluded.name,
   base_url = excluded.base_url,
