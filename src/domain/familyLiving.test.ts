@@ -14,7 +14,7 @@ describe('family living planner', () => {
   it('aggregates duplicate ingredients across meals and subtracts pantry stock once', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
     plan.meals = [
-      { id: 'm1', date: '2026-11-01', slot: 'lunch', recipeId: 'dz-tomato-pasta', servings: 4 },
+      { id: 'm1', date: '2026-10-01', slot: 'lunch', recipeId: 'dz-tomato-pasta', servings: 4 },
       { id: 'm2', date: '2026-11-02', slot: 'dinner', recipeId: 'dz-tomato-pasta', servings: 2 },
     ];
     plan.pantry = [{ id: 'p1', name: 'طماطم', unit: 'piece', quantityMilli: 3000 }];
@@ -34,7 +34,7 @@ describe('family living planner', () => {
 
   it('merges manual cleaning and grocery items into the recipe shopping list', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
-    plan.meals = [{ id: 'm1', date: '2026-11-01', slot: 'lunch', recipeId: 'dz-tomato-pasta', servings: 4 }];
+    plan.meals = [{ id: 'm1', date: '2026-10-01', slot: 'lunch', recipeId: 'dz-tomato-pasta', servings: 4 }];
     plan.shoppingExtras = [
       { id: 's1', name: 'tomate', unit: 'piece', quantityMilli: 1000, category: 'grocery' },
       { id: 's2', name: 'lessive', unit: 'ml', quantityMilli: 2000, category: 'cleaning' },
@@ -87,10 +87,10 @@ describe('family living planner', () => {
   });
   it('fills the entire selected month with three meals per day and preserves existing choices', () => {
     const existing = [
-      { id: 'keep-breakfast', date: '2026-11-01', slot: 'breakfast' as const, recipeId: 'dz-omelette', servings: 3 },
-      { id: 'keep-lunch', date: '2026-11-15', slot: 'lunch' as const, recipeId: 'dz-couscous-vegetables', servings: 4 },
+      { id: 'keep-breakfast', date: '2026-10-01', slot: 'breakfast' as const, recipeId: 'dz-omelette', servings: 3 },
+      { id: 'keep-lunch', date: '2026-10-15', slot: 'lunch' as const, recipeId: 'dz-couscous-vegetables', servings: 4 },
     ];
-    const result = suggestFamilyMonth(existing, '2026-11', 4);
+    const result = suggestFamilyMonth(existing, '2026-10', 4);
     expect(result).toHaveLength(31 * 3);
     expect(result.find((meal) => meal.id === 'keep-breakfast')).toMatchObject({ servings: 3, recipeId: 'dz-omelette' });
     expect(result.find((meal) => meal.id === 'keep-lunch')).toMatchObject({ servings: 4, recipeId: 'dz-couscous-vegetables' });
@@ -105,9 +105,9 @@ describe('family living planner', () => {
   });
 
   it('creates all three meals for a week for the household and preserves existing meals', () => {
-    const existing = [{ id: 'kept', date: '2026-11-01', slot: 'lunch' as const, recipeId: 'dz-couscous-vegetables', servings: 5 }];
-    const result = suggestFamilyWeek(existing, '2026-11-01', '2026-11', 5);
-    expect(result.filter((meal) => meal.date >= '2026-11-01' && meal.date <= '2026-11-07')).toHaveLength(21);
+    const existing = [{ id: 'kept', date: '2026-10-01', slot: 'lunch' as const, recipeId: 'dz-couscous-vegetables', servings: 5 }];
+    const result = suggestFamilyWeek(existing, '2026-10-01', '2026-11', 5);
+    expect(result.filter((meal) => meal.date >= '2026-10-01' && meal.date <= '2026-11-07')).toHaveLength(21);
     expect(result.find((meal) => meal.id === 'kept')).toBeDefined();
     expect(result.every((meal) => meal.servings === 5)).toBe(true);
   });
