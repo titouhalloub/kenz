@@ -290,6 +290,63 @@ export function suggestFamilyWeek(existing: PlannedMeal[], startDate: string, mo
   return result;
 }
 
+/**
+ * Fills every unplanned breakfast, lunch and dinner slot in the selected month.
+ * Existing meals are preserved; each generated slot is deterministic so the
+ * same plan remains stable until the user edits it.
+ */
+export function suggestFamilyMonth(
+  existing: PlannedMeal[],
+  month: string,
+  householdSize: number,
+  recipeCollection: FamilyRecipe[] = BUILTIN_FAMILY_RECIPES,
+): PlannedMeal[] {
+  if (!validMonth(month) || !Number.isInteger(householdSize) || householdSize < 1 || householdSize > 40) {
+    throw new Error('Invalid monthly meal suggestion input.');
+  }
+  const [year, monthNumber] = month.split('-').map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const uniqueRecipes = [...new Map(
+    [...BUILTIN_FAMILY_RECIPES, ...recipeCollection].map((recipe) => [recipe.id, recipe] as const),
+  ).values()];
+  if (uniqueRecipes.length === 0) return [...existing];
+
+  const preferredIds: Record<MealSlot, string[]> = {
+    breakfast: ['dz-omelette', 'dz-chickpea-salad'],
+    lunch: ['dz-couscous-vegetables', 'dz-tomato-pasta', 'dz-lentil-soup'],
+    dinner: ['dz-lentil-soup', 'dz-chickpea-salad', 'dz-tomato-pasta', 'dz-couscous-vegetables'],
+  };
+  const pools = (['breakfast', 'lunch', 'dinner'] as MealSlot[]).reduce((result, slot) => {
+    const preferred = preferredIds[slot]
+      .map((id) => uniqueRecipes.find((recipe) => recipe.id === id))
+      .filter((recipe): recipe is FamilyRecipe => !!recipe);
+    const community = uniqueRecipes.filter((recipe) => recipe.origin === 'community');
+    const fallback = preferred.length ? preferred : uniqueRecipes;
+    result[slot] = [...new Map([...fallback, ...community].map((recipe) => [recipe.id, recipe] as const)).values()];
+    return result;
+  }, {} as Record<MealSlot, FamilyRecipe[]>);
+
+  const result = [...existing];
+  const slots: MealSlot[] = ['breakfast', 'lunch', 'dinner'];
+  for (let day = 1; day <= daysInMonth && result.length < 400; day++) {
+    const dateKey = month + '-' + String(day).padStart(2, '0');
+    for (const slot of slots) {
+      if (result.length >= 400) break;
+      if (result.some((meal) => meal.date === dateKey && meal.slot === slot)) continue;
+      const pool = pools[slot];
+      const recipe = pool[(day - 1) % pool.length];
+      result.push({
+        id: 'suggested-' + dateKey + '-' + slot,
+        date: dateKey,
+        slot,
+        recipeId: recipe.id,
+        servings: householdSize,
+      });
+    }
+  }
+  return result;
+}
+
 export function familyLivingStorageKey(userId: string, month: string): string {
   return `kenz_family_living_v1_${encodeURIComponent(userId)}_${month}`;
 }
