@@ -3,7 +3,7 @@ import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, Shoppin
 import type { UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import {
-  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek,
+  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
   type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
@@ -129,6 +129,23 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       return { ...current, meals: nextMeals };
     });
     setStatus(added ? tr(profile, added + ' repas suggérés ont été ajoutés. Vous pouvez les modifier ou les supprimer.', 'تمت إضافة ' + added + ' وجبة مقترحة. يمكنك تعديلها أو حذفها.', added + ' suggested meals added. You can edit or remove them.') : tr(profile, 'Tous les repas de cette semaine sont déjà planifiés.', 'وجبات هذا الأسبوع مبرمجة بالفعل.', 'All meals for this week are already planned.'));
+  };
+
+  const suggestMonth = () => {
+    let added = 0;
+    updatePlan((current) => {
+      const nextMeals = suggestFamilyMonth(
+        current.meals,
+        month,
+        Math.max(1, Math.min(40, householdSize)),
+        recipes,
+      );
+      added = nextMeals.length - current.meals.length;
+      return { ...current, meals: nextMeals };
+    });
+    setStatus(added
+      ? tr(profile, added + ' repas ont été planifiés pour le mois complet. Vous pouvez modifier ou supprimer chaque repas.', added + ' وجبة تمت برمجتها للشهر كاملاً. يمكنك تعديل أو حذف كل وجبة.', added + ' meals were planned for the full month. You can edit or remove any meal.')
+      : tr(profile, 'Le calendrier mensuel est déjà complet.', 'تقويم الشهر مكتمل بالفعل.', 'The monthly calendar is already complete.'));
   };
 
   const addMeal = () => {
@@ -329,6 +346,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{recipeSteps(selectedRecipe).map((step, index) => <li key={index}>{step}</li>)}</ol>
         </div>}
         <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>
+        <button onClick={suggestMonth} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white">{tr(profile, 'Générer le planning du mois complet', 'إنشاء برنامج الشهر كاملاً', 'Generate the full-month plan')}</button>
         <button onClick={suggestWeek} className="w-full min-h-10 rounded-xl border border-violet-200 px-4 text-xs font-bold text-violet-700">{tr(profile, 'Suggérer les repas de 7 jours', 'اقترح وجبات 7 أيام', 'Suggest 7 days of meals')}</button>
         <div className="pt-2">
           <h3 className="mb-2 text-sm font-bold">{tr(profile, 'Repas prévus ce mois', 'وجبات هذا الشهر', 'Meals planned this month')} ({plannedMeals.length})</h3>
