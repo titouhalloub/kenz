@@ -95,7 +95,7 @@ describe('family living planner', () => {
     expect(result.find((meal) => meal.id === 'keep-breakfast')).toMatchObject({ servings: 3, recipeId: 'dz-omelette' });
     expect(result.find((meal) => meal.id === 'keep-lunch')).toMatchObject({ servings: 4, recipeId: 'dz-couscous-vegetables' });
     expect(new Set(result.map((meal) => meal.date + '::' + meal.slot)).size).toBe(31 * 3);
-    expect(result.filter((meal) => meal.servings === 4)).toHaveLength(31 * 3 - 2);
+    expect(result.filter((meal) => meal.servings === 4)).toHaveLength(31 * 3 - 1);
   });
 
   it('handles February and rejects invalid monthly planning inputs', () => {
