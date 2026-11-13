@@ -46,14 +46,17 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const [channelResult,feedResult] = await Promise.all([
+    const [channelResult,feedResult,liveResult] = await Promise.all([
       loadKenzChannels(userId),
       loadKenzChannelFeed(userId, tab === 'following'),
+      loadKenzLiveRooms(),
     ]);
     if (channelResult.success) setChannels(channelResult.data || []);
     else setError(channelResult.error || t.error);
     if (feedResult.success) setPosts(feedResult.data || []);
     else setError(feedResult.error || t.error);
+    if (liveResult.success) setLiveRooms(liveResult.data || []);
+    else if (userId) setError(liveResult.error || t.error);
     setLoading(false);
   }, [userId,tab,t.error]);
 
@@ -94,12 +97,12 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   };
   const onPublish = async () => {
     if (!userId) { setError(t.signIn); return; }
-    if (!composerChannel || !postBody.trim()) return;
+    if (!composerChannel || (!postBody.trim() && !mediaFile)) return;
     setBusy(true);
-    const result = await publishKenzChannelPost(composerChannel,userId,postBody);
+    const result = await publishKenzChannelPost(composerChannel,userId,postBody,mediaFile);
     setBusy(false);
     if (!result.success) { setError(result.error || t.error); return; }
-    setPostBody(''); setComposerChannel('');
+    setPostBody(''); setComposerChannel(''); setMediaFile(null);
     setToast(t.posted); await refresh();
   };
   const onLike = async (post: KenzChannelPost) => {
