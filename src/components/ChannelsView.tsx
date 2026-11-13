@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Radio, Search, Plus, Users, Heart, MessageCircle, Send, X, RadioTower, Sparkles, Compass, RefreshCw, Video, ImagePlus, Play, Square, UploadCloud } from 'lucide-react';
+import { Radio, Search, Plus, Users, Heart, MessageCircle, Send, X, RadioTower, Sparkles, Compass, RefreshCw, Video, ImagePlus, Play } from 'lucide-react';
 import type { UserProfile } from '../services/authStore';
 import {
   addKenzPostComment, createKenzChannel, followKenzChannel, loadKenzChannelFeed, loadKenzChannels,
