@@ -5,7 +5,8 @@ import type { UserProfile } from '../services/authStore';
 
 type Channel = { id: string; owner_id: string; name: string; slug: string; description: string; category: string; created_at: string; is_following?: boolean };
 type ChannelPost = { id: string; channel_id: string; author_id: string; body: string; media_kind: 'none'|'image'|'video'; created_at: string; likes: number; liked: boolean; channel_name?: string; comments: Array<{id:string;author_id:string;body:string;created_at:string}> };
-type ChannelReport = { id: string; post_id: string; reason: string; details: string; status: 'open'|'reviewed'|'actioned'; created_at: string };\ntype Props = { user: UserProfile; locale: 'ar'|'fr'|'en' };
+type ChannelReport = { id: string; post_id: string; reason: string; details: string; status: 'open'|'reviewed'|'actioned'; created_at: string };
+type Props = { user: UserProfile; locale: 'ar'|'fr'|'en' };
 const copy = {
   ar: { title:'قنوات Kenz', subtitle:'اكتشف المبدعين وتابع القنوات التي تهمك', discover:'اكتشف', following:'أتابعها', mine:'قنواتي', create:'إنشاء قناة', name:'اسم القناة', slug:'المعرّف', desc:'وصف القناة', category:'التصنيف', createNow:'إنشاء', follow:'متابعة', unfollow:'إلغاء المتابعة', publish:'نشر منشور', postPlaceholder:'شارك فكرة أو وصفة أو نصيحة…', empty:'لا توجد قنوات بعد. كن أول من ينشئ قناة!', noPosts:'لا توجد منشورات بعد.', comment:'اكتب تعليقاً…', send:'إرسال', delete:'حذف', followers:'متابع', likes:'إعجاب', signIn:'سجّل الدخول لاستخدام القنوات.', owner:'قناتك', all:'الكل', cooking:'طبخ', family:'العائلة', savings:'توفير', tips:'نصائح', status:'تم التحديث', peer:'الوسائط عبر P2P: لا تُخزّن ملفات الصور والفيديو في خوادم Kenz.', report:'إبلاغ', reports:'بلاغات المنشورات', review:'تمت المراجعة' },
   fr: { title:'Kenz Channels', subtitle:'Découvrez des créateurs et suivez les chaînes qui vous intéressent', discover:'Découvrir', following:'Abonnements', mine:'Mes chaînes', create:'Créer une chaîne', name:'Nom de la chaîne', slug:'Identifiant', desc:'Description', category:'Catégorie', createNow:'Créer', follow:'Suivre', unfollow:'Ne plus suivre', publish:'Publier', postPlaceholder:'Partagez une idée, recette ou astuce…', empty:'Aucune chaîne. Soyez le premier créateur !', noPosts:'Aucune publication.', comment:'Écrire un commentaire…', send:'Envoyer', delete:'Supprimer', followers:'abonnés', likes:'J’aime', signIn:'Connectez-vous pour utiliser les chaînes.', owner:'Votre chaîne', all:'Tout', cooking:'Cuisine', family:'Famille', savings:'Économie', tips:'Conseils', status:'Mis à jour', peer:'Médias P2P : les fichiers photo/vidéo ne sont pas stockés sur les serveurs Kenz.', report:'Signaler', reports:'Signalements', review:'Marquer comme traité' },
@@ -19,7 +20,8 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   const [channels,setChannels] = useState<Channel[]>([]);
   const [selected,setSelected] = useState<Channel|null>(null);
   const [posts,setPosts] = useState<ChannelPost[]>([]);
-  const [feedPosts,setFeedPosts] = useState<ChannelPost[]>([]);\n  const [reports,setReports] = useState<ChannelReport[]>([]);
+  const [feedPosts,setFeedPosts] = useState<ChannelPost[]>([]);
+  const [reports,setReports] = useState<ChannelReport[]>([]);
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState('');
