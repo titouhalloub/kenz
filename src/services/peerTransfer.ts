@@ -116,7 +116,7 @@ export class PeerTransferSession {
   private async handleSignal(payload: Record<string, unknown>) {
     if (this.closed) return;
     try {
-      if (payload.type === 'offer' && this.role === 'receiver') {
+      if (payload.type === 'ready' && this.role === 'sender' && this.peer.localDescription) {\n        await this.signal({ type: 'offer', description: this.peer.localDescription.toJSON() });\n      } else if (payload.type === 'offer' && this.role === 'receiver') {
         const description = payload.description as RTCSessionDescriptionInit;
         await this.peer.setRemoteDescription(description);
         const answer = await this.peer.createAnswer();
