@@ -50,7 +50,7 @@ Kenz does not integrate with WhatsApp. The initial implementation uses WebRTC Da
 - Session topics contain a high-entropy UUID and a 10-minute expiry. The channel code is a bearer capability and must only be shared with the intended recipient.
 - A database migration adds authenticated-only RLS policies for the short-lived `kenz-p2p` topics. The Supabase project's Realtime setting must also disable public channel access for private-channel enforcement.
 - Files are sent in bounded chunks over the WebRTC DataChannel (DTLS-encrypted by WebRTC), with a 25 MB initial cap and transfer progress. The receiver reconstructs the file locally.
-- The initial ICE configuration uses STUN only. Some NAT/firewall combinations will fail; a TURN relay is intentionally not configured yet because it relays traffic and has cost/privacy implications.
+- The initial ICE configuration uses STUN only. Some NAT/firewall combinations will fail; a TURN relay is intentionally not configured yet because it relays traffic and has cost/privacy implications. STUN can expose the participants' public network IP addresses to each other, so direct transfers should be limited to people who know and trust each other. A relay-only design should be evaluated before enabling transfers between strangers.
 - The current UI is a direct file-transfer panel, not yet an embedded video post/player in the community feed. Both peers must be online and signed in.
 
 Do not build an always-on background relay or silently transfer files. Require an explicit sender action and receiver acceptance. Show file size, transfer progress, cancellation and expiry. Do not persist media blobs. Small post metadata (caption, creator, timestamps, moderation state, content hash) can remain in the database.
