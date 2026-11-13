@@ -4,7 +4,7 @@ import { getSupabaseClient } from '../services/supabase';
 import type { UserProfile } from '../services/authStore';
 
 type Channel = { id: string; owner_id: string; name: string; slug: string; description: string; category: string; created_at: string; is_following?: boolean };
-type ChannelPost = { id: string; channel_id: string; author_id: string; body: string; media_kind: 'none'|'image'|'video'; created_at: string; likes: number; liked: boolean; comments: Array<{id:string;author_id:string;body:string;created_at:string}> };
+type ChannelPost = { id: string; channel_id: string; author_id: string; body: string; media_kind: 'none'|'image'|'video'; created_at: string; likes: number; liked: boolean; channel_name?: string; comments: Array<{id:string;author_id:string;body:string;created_at:string}> };
 type Props = { user: UserProfile; locale: 'ar'|'fr'|'en' };
 const copy = {
   ar: { title:'قنوات Kenz', subtitle:'اكتشف المبدعين وتابع القنوات التي تهمك', discover:'اكتشف', following:'أتابعها', mine:'قنواتي', create:'إنشاء قناة', name:'اسم القناة', slug:'المعرّف', desc:'وصف القناة', category:'التصنيف', createNow:'إنشاء', follow:'متابعة', unfollow:'إلغاء المتابعة', publish:'نشر منشور', postPlaceholder:'شارك فكرة أو وصفة أو نصيحة…', empty:'لا توجد قنوات بعد. كن أول من ينشئ قناة!', noPosts:'لا توجد منشورات بعد.', comment:'اكتب تعليقاً…', send:'إرسال', delete:'حذف', followers:'متابع', likes:'إعجاب', signIn:'سجّل الدخول لاستخدام القنوات.', owner:'قناتك', all:'الكل', cooking:'طبخ', family:'العائلة', savings:'توفير', tips:'نصائح', status:'تم التحديث', peer:'الوسائط عبر P2P: لا تُخزّن ملفات الصور والفيديو في خوادم Kenz.' },
@@ -19,6 +19,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   const [channels,setChannels] = useState<Channel[]>([]);
   const [selected,setSelected] = useState<Channel|null>(null);
   const [posts,setPosts] = useState<ChannelPost[]>([]);
+  const [feedPosts,setFeedPosts] = useState<ChannelPost[]>([]);
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState('');
@@ -68,8 +69,39 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     setPosts(rows.map(r=>({ ...r, likes:(reactions.data||[]).filter(x=>x.post_id===r.id).length, liked:(reactions.data||[]).some(x=>x.post_id===r.id&&x.user_id===user.id), comments:(commentsResult.data||[]).filter(x=>x.post_id===r.id) })));
   },[client,user.id]);
 
+  const loadFollowingFeed = useCallback(async () => {
+    if (!client || !signedIn || tab !== 'following') { setFeedPosts([]); return; }
+    const channelIds = channels.map(channel => channel.id);
+    if (!channelIds.length) { setFeedPosts([]); return; }
+    setLoading(true);
+    try {
+      const { data, error } = await client.from('kenz_channel_posts')
+        .select('id,channel_id,author_id,body,media_kind,created_at')
+        .in('channel_id', channelIds).order('created_at', { ascending: false }).limit(80);
+      if (error) throw error;
+      const rows = data || [];
+      const ids = rows.map(row => row.id);
+      const [reactionResult, commentResult] = await Promise.all([
+        ids.length ? client.from('kenz_channel_post_reactions').select('post_id,user_id').in('post_id', ids) : Promise.resolve({ data: [], error: null }),
+        ids.length ? client.from('kenz_channel_post_comments').select('id,post_id,author_id,body,created_at').in('post_id', ids).order('created_at', { ascending: true }) : Promise.resolve({ data: [], error: null })
+      ]);
+      if (reactionResult.error) throw reactionResult.error;
+      if (commentResult.error) throw commentResult.error;
+      const channelNames = new Map(channels.map(channel => [channel.id, channel.name]));
+      setFeedPosts(rows.map(row => ({
+        ...row, channel_name: channelNames.get(row.channel_id) || 'Kenz channel',
+        likes: (reactionResult.data || []).filter(item => item.post_id === row.id).length,
+        liked: (reactionResult.data || []).some(item => item.post_id === row.id && item.user_id === user.id),
+        comments: (commentResult.data || []).filter(item => item.post_id === row.id)
+      })));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not load your following feed.');
+    } finally { setLoading(false); }
+  }, [client, signedIn, tab, channels, user.id]);
+
   useEffect(()=>{void refresh();},[refresh]);
   useEffect(()=>{if(selected) void loadPosts(selected); else setPosts([]);},[selected?.id,loadPosts]);
+  useEffect(()=>{void loadFollowingFeed();},[loadFollowingFeed]);
   useEffect(()=>{
     if(!client||!signedIn)return;
     const channel=client.channel('kenz-channels-live')
@@ -163,6 +195,14 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       {!posts.length&&!loading&&<p className="rounded-2xl bg-white p-5 text-center text-xs text-slate-500">{t.noPosts}</p>}
       {posts.map(post=><article key={post.id} className="space-y-3 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm"><div className="flex items-center justify-between text-[10px] text-slate-400"><span>{selected.name}</span><time>{dateLabel(post.created_at)}</time></div><p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{post.body}</p><div className="flex items-center gap-4 border-t border-slate-100 pt-2"><button onClick={()=>void react(post)} className={post.liked?'flex items-center gap-1 text-xs text-rose-600':'flex items-center gap-1 text-xs text-slate-500'}><Heart size={17} fill={post.liked?'currentColor':'none'}/>{post.likes} {t.likes}</button><span className="flex items-center gap-1 text-xs text-slate-400"><MessageCircle size={16}/>{post.comments.length}</span>{post.author_id===user.id&&<button onClick={()=>void deletePost(post)} className="ms-auto text-xs text-rose-600">{t.delete}</button>}</div>
       <div className="space-y-2">{post.comments.map(c=><div key={c.id} className="rounded-xl bg-slate-50 p-2 text-xs"><p className="text-[10px] text-violet-700">{c.author_id===user.id?'You':'Kenz member'}</p><p className="whitespace-pre-wrap text-slate-700">{c.body}</p></div>)}<div className="flex gap-2"><input value={comments[post.id]||''} onChange={e=>setComments(v=>({...v,[post.id]:e.target.value}))} maxLength={2000} placeholder={t.comment} className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-xs"/><button onClick={()=>void comment(post)} className="rounded-xl bg-violet-100 px-3 text-violet-800"><Send size={16}/></button></div></div></article>)}
+    </section>:tab==='following'?<section className="space-y-3">
+      {loading&&<p className="p-4 text-center text-xs text-slate-500">Loading your feed…</p>}
+      {!loading&&!feedPosts.length&&<p className="rounded-2xl border border-dashed border-violet-200 bg-white p-7 text-center text-sm text-slate-500">{t.noPosts}</p>}
+      {feedPosts.map(post=><article key={post.id} className="space-y-2 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm">
+        <button onClick={()=>{const channel=channels.find(item=>item.id===post.channel_id);if(channel)setSelected(channel);}} className="flex w-full items-center justify-between text-start text-xs font-bold text-violet-700"><span>{post.channel_name}</span><time className="font-normal text-slate-400">{dateLabel(post.created_at)}</time></button>
+        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{post.body}</p>
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-500"><span className="flex items-center gap-1"><Heart size={15}/>{post.likes} {t.likes}</span><span className="flex items-center gap-1"><MessageCircle size={15}/>{post.comments.length}</span><button className="ms-auto font-semibold text-violet-700" onClick={()=>{const channel=channels.find(item=>item.id===post.channel_id);if(channel)setSelected(channel);}}>Open channel</button></div>
+      </article>)}
     </section>:<section className="space-y-3">
       {loading&&<p className="p-4 text-center text-xs text-slate-500">Loading channels…</p>}
       {!loading&&!filtered.length&&<p className="rounded-2xl border border-dashed border-violet-200 bg-white p-7 text-center text-sm text-slate-500">{t.empty}</p>}
