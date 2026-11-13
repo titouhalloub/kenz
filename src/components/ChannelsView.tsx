@@ -3,7 +3,7 @@ import { Bell, Check, Compass, Heart, MessageCircle, Plus, Radio, Send, Trash2, 
 import { getSupabaseClient } from '../services/supabase';
 import type { UserProfile } from '../services/authStore';
 
-type Channel = { id: string; owner_id: string; name: string; slug: string; description: string; category: string; created_at: string; follower_count: number; is_following?: boolean };
+type Channel = { id: string; owner_id: string; name: string; slug: string; description: string; category: string; created_at: string; is_following?: boolean };
 type ChannelPost = { id: string; channel_id: string; author_id: string; body: string; media_kind: 'none'|'image'|'video'; created_at: string; likes: number; liked: boolean; comments: Array<{id:string;author_id:string;body:string;created_at:string}> };
 type Props = { user: UserProfile; locale: 'ar'|'fr'|'en' };
 const copy = {
@@ -42,18 +42,12 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       if (channelRows.error) throw channelRows.error;
       if (followRows.error) throw followRows.error;
       const rows = channelRows.data || [];
-      const ids = rows.map(r=>r.id);
-      const [counts, mine] = await Promise.all([
-        ids.length ? client.from('kenz_channel_follower_counts').select('channel_id,follower_count').in('channel_id',ids) : Promise.resolve({data:[],error:null}),
-        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('owner_id',user.id).order('created_at',{ascending:false}),
-      ]);
+      const mine = await client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('owner_id',user.id).order('created_at',{ascending:false});
       if (mine.error) throw mine.error;
-      if (counts.error) throw counts.error;
-      const countMap = new Map((counts.data||[]).map(r=>[r.channel_id,Number(r.follower_count)]));
       const followSet = new Set((followRows.data||[]).map(r=>r.channel_id));
-      let visible = rows.map(r=>({...r,follower_count:countMap.get(r.id)||0,is_following:followSet.has(r.id)}));
+      let visible = rows.map(r=>({...r,is_following:followSet.has(r.id)}));
       if (tab==='following') visible=visible.filter(r=>r.is_following);
-      if (tab==='mine') visible=(mine.data||[]).map(r=>({...r,follower_count:countMap.get(r.id)||0,is_following:false}));
+      if (tab==='mine') visible=(mine.data||[]).map(r=>({...r,is_following:false}));
       setChannels(visible);
       if (selected && !visible.some(r=>r.id===selected.id) && tab!=='mine') setSelected(null);
     } catch (error) { setMessage(error instanceof Error?error.message:'Could not load channels.'); }
@@ -163,7 +157,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     {message&&<p role="status" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">{message}</p>}
     {selected?<section className="space-y-3">
       <button onClick={()=>setSelected(null)} className="text-xs font-semibold text-violet-700">← {t.discover}</button>
-      <div className="rounded-2xl border border-violet-100 bg-white p-4"><div className="flex items-start gap-3"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-100 text-lg font-black text-violet-700">#{selected.slug.slice(0,1).toUpperCase()}</div><div className="min-w-0 flex-1"><h2 className="font-extrabold text-slate-900">{selected.name}</h2><p className="text-xs text-slate-500">@{selected.slug} · {selected.follower_count||0} {t.followers}</p><p className="mt-2 text-sm text-slate-600">{selected.description}</p></div>{selected.owner_id===user.id?<button onClick={()=>void deleteChannel(selected)} className="rounded-lg p-2 text-rose-600"><Trash2 size={18}/></button>:<button disabled={busy} onClick={()=>void follow(selected)} className="rounded-xl bg-violet-700 px-3 py-2 text-xs font-bold text-white">{selected.is_following?t.unfollow:t.follow}</button>}</div></div>
+      <div className="rounded-2xl border border-violet-100 bg-white p-4"><div className="flex items-start gap-3"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-100 text-lg font-black text-violet-700">#{selected.slug.slice(0,1).toUpperCase()}</div><div className="min-w-0 flex-1"><h2 className="font-extrabold text-slate-900">{selected.name}</h2><p className="text-xs text-slate-500">@{selected.slug} · @{selected.slug}</p><p className="mt-2 text-sm text-slate-600">{selected.description}</p></div>{selected.owner_id===user.id?<button onClick={()=>void deleteChannel(selected)} className="rounded-lg p-2 text-rose-600"><Trash2 size={18}/></button>:<button disabled={busy} onClick={()=>void follow(selected)} className="rounded-xl bg-violet-700 px-3 py-2 text-xs font-bold text-white">{selected.is_following?t.unfollow:t.follow}</button>}</div></div>
       {selected.owner_id===user.id&&<section className="rounded-2xl border border-violet-100 bg-white p-3"><button onClick={()=>setShowComposer(v=>!v)} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet-700 text-xs font-bold text-white"><Plus size={16}/>{t.publish}</button>{showComposer&&<div className="mt-3 space-y-2"><textarea value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} rows={4} placeholder={t.postPlaceholder} className="w-full rounded-xl border border-slate-200 p-3 text-sm"/><button disabled={busy||!draft.trim()} onClick={()=>void publish()} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-xs font-bold text-white"><Send size={15}/>{t.publish}</button></div>}</section>}
       {loading&&<p className="p-4 text-center text-xs text-slate-500">Loading…</p>}
       {!posts.length&&!loading&&<p className="rounded-2xl bg-white p-5 text-center text-xs text-slate-500">{t.noPosts}</p>}
@@ -172,7 +166,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     </section>:<section className="space-y-3">
       {loading&&<p className="p-4 text-center text-xs text-slate-500">Loading channels…</p>}
       {!loading&&!filtered.length&&<p className="rounded-2xl border border-dashed border-violet-200 bg-white p-7 text-center text-sm text-slate-500">{t.empty}</p>}
-      <div className="grid gap-3 sm:grid-cols-2">{filtered.map(channel=><article key={channel.id} className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Users size={21}/></div><div className="min-w-0 flex-1"><h3 className="truncate font-bold text-slate-900">{channel.name}</h3><p className="text-[10px] text-slate-400">@{channel.slug} · {categoryLabel(channel.category)}</p><p className="mt-1 line-clamp-2 text-xs text-slate-600">{channel.description}</p><p className="mt-2 text-[10px] text-slate-400">{channel.follower_count||0} {t.followers}</p></div></div><div className="mt-3 flex gap-2"><button onClick={()=>openChannel(channel)} className="min-h-10 flex-1 rounded-xl border border-violet-200 text-xs font-bold text-violet-700">Open channel</button>{channel.owner_id!==user.id&&<button disabled={busy} onClick={()=>void follow(channel)} className="min-h-10 rounded-xl bg-violet-700 px-3 text-xs font-bold text-white">{channel.is_following?<Check size={16}/>:t.follow}</button>}</div></article>)}</div>
+      <div className="grid gap-3 sm:grid-cols-2">{filtered.map(channel=><article key={channel.id} className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Users size={21}/></div><div className="min-w-0 flex-1"><h3 className="truncate font-bold text-slate-900">{channel.name}</h3><p className="text-[10px] text-slate-400">@{channel.slug} · {categoryLabel(channel.category)}</p><p className="mt-1 line-clamp-2 text-xs text-slate-600">{channel.description}</p></div></div><div className="mt-3 flex gap-2"><button onClick={()=>openChannel(channel)} className="min-h-10 flex-1 rounded-xl border border-violet-200 text-xs font-bold text-violet-700">Open channel</button>{channel.owner_id!==user.id&&<button disabled={busy} onClick={()=>void follow(channel)} className="min-h-10 rounded-xl bg-violet-700 px-3 text-xs font-bold text-white">{channel.is_following?<Check size={16}/>:t.follow}</button>}</div></article>)}</div>
     </section>}
     <p className="rounded-xl bg-violet-50 p-3 text-[10px] leading-5 text-violet-800">{t.peer}</p>
   </div>;
