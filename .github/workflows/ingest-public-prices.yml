@@ -2,9 +2,9 @@ name: Ingest public Algerian prices
 
 on:
   push:
-    branches: [feat/price-simulator-community]
+    branches: [main, feature/unified-family-budget]
   schedule:
-    - cron: '25 6 * * *'
+    - cron: '25 6 * * 1'
   workflow_dispatch:
     inputs:
       dry_run:

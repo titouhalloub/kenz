@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
-  validateFamilyBudgetPlan, FAMILY_BUDGET_DEFAULTS, suggestFamilyBudgetAllocations,
+  applyFamilyBudgetSources, countRecurringOccurrencesInMonth, createFamilyBudgetPlan, summarizeFamilyBudget, updateFamilyCategory,
+  validateFamilyBudgetPlan, FAMILY_BUDGET_DEFAULTS, suggestFamilyBudgetAllocations, normalizeLegacyAutoAllocation,
 } from './familyBudget';
 
 describe('family budget foundation', () => {
@@ -32,7 +32,7 @@ describe('family budget foundation', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.monthlyIncomeMinor = 100000;
     plan.categories.forEach((row) => {
-      if (row.id !== 'housing' && row.id !== 'food') row.plannedMinor = 1;
+      if (row.id !== 'housing' && row.id !== 'food') { row.plannedMinor = 1; row.plannedOverride = true; }
     });
     plan.categories.find((row) => row.id === 'housing')!.priority = 5;
     plan.categories.find((row) => row.id === 'food')!.priority = 1;
@@ -48,6 +48,7 @@ describe('family budget foundation', () => {
     const plan = createFamilyBudgetPlan('user-a', '2026-11');
     plan.monthlyIncomeMinor = 100;
     plan.categories[0].plannedMinor = 200;
+    plan.categories[0].plannedOverride = true;
     expect(suggestFamilyBudgetAllocations(plan)).toEqual(plan);
   });
 
@@ -86,5 +87,93 @@ describe('family budget foundation', () => {
     expect(validateFamilyBudgetPlan({ ...plan, monthlyIncomeMinor: -1 }, 'user-a')).toBeNull();
     expect(validateFamilyBudgetPlan({ ...plan, categories: [plan.categories[0], plan.categories[0], ...plan.categories.slice(2)] }, 'user-a')).toBeNull();
     expect(validateFamilyBudgetPlan({ ...plan, categories: plan.categories.slice(1) }, 'user-a')).toBeNull();
+  });
+
+
+  it('counts weekly and biweekly recurring items within a selected month', () => {
+    expect(countRecurringOccurrencesInMonth('weekly', '2026-11-02', '2026-11')).toBe(5);
+    expect(countRecurringOccurrencesInMonth('biweekly', '2026-11-02', '2026-11')).toBe(3);
+    expect(countRecurringOccurrencesInMonth('weekly', '2026-12-01', '2026-11')).toBe(0);
+  });
+
+  it('counts monthly, quarterly and yearly commitments on their schedule', () => {
+    expect(countRecurringOccurrencesInMonth('monthly', '2026-10-15', '2026-11', 15)).toBe(1);
+    expect(countRecurringOccurrencesInMonth('quarterly', '2026-08-15', '2026-11', 15)).toBe(1);
+    expect(countRecurringOccurrencesInMonth('quarterly', '2026-08-15', '2026-10', 15)).toBe(0);
+    expect(countRecurringOccurrencesInMonth('yearly', '2025-11-30', '2026-11', 31)).toBe(1);
+  });
+
+  it('keeps explicit zero and positive allocations as user overrides', () => {
+    const base = createFamilyBudgetPlan('user-a', '2026-11');
+    const zero = updateFamilyCategory(base, 'housing', 'plannedMinor', 0);
+    const positive = updateFamilyCategory(base, 'food', 'plannedMinor', 10_000);
+    expect(zero.categories.find((row) => row.id === 'housing')?.plannedOverride).toBe(true);
+    expect(positive.categories.find((row) => row.id === 'food')?.plannedOverride).toBe(true);
+  });
+
+  it('does not auto-allocate a category the user explicitly set to zero', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100_000;
+    const withZeroHousing = updateFamilyCategory(plan, 'housing', 'plannedMinor', 0);
+    const suggested = suggestFamilyBudgetAllocations(withZeroHousing);
+    expect(suggested.categories.find((row) => row.id === 'housing')?.plannedMinor).toBe(0);
+    expect(suggested.categories.find((row) => row.id === 'housing')?.plannedOverride).toBe(true);
+  });
+
+  it('keeps generated allocations automatic instead of freezing them as manual overrides', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100_000;
+    const suggested = suggestFamilyBudgetAllocations(plan);
+    expect(suggested.allocationMode).toBe('automatic');
+    expect(suggested.categories.every((row) => row.plannedOverride === false)).toBe(true);
+  });
+
+  it('migrates the previous auto-generated equal-weight split out of manual overrides', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 100_000;
+    const weightTotal = plan.categories.reduce((sum, row) => sum + row.priority, 0);
+    let assigned = 0;
+    const legacyShares = plan.categories.map((row) => {
+      const amount = Math.floor(plan.monthlyIncomeMinor * row.priority / weightTotal);
+      assigned += amount;
+      return { ...row, plannedMinor: amount, plannedOverride: true };
+    });
+    let remainder = plan.monthlyIncomeMinor - assigned;
+    for (const row of legacyShares) { if (remainder-- > 0) row.plannedMinor += 1; }
+    const legacy = { ...plan, categories: legacyShares, allocationMode: undefined };
+    const restored = normalizeLegacyAutoAllocation(legacy);
+    expect(restored.allocationMode).toBe('automatic');
+    expect(restored.categories.every((row) => row.plannedOverride === false)).toBe(true);
+  });
+
+  it('scales the food share with household consumption and recalculates old automatic amounts', () => {
+    const small = createFamilyBudgetPlan('user-a', '2026-11');
+    small.monthlyIncomeMinor = 750_000;
+    small.adults = 1;
+    const large = { ...small, adults: 2, children: 3 };
+    const smallFood = suggestFamilyBudgetAllocations(small).categories.find((row) => row.id === 'food')!.plannedMinor;
+    const largeFood = suggestFamilyBudgetAllocations(large).categories.find((row) => row.id === 'food')!.plannedMinor;
+    expect(largeFood).toBeGreaterThan(smallFood);
+    const recalculated = suggestFamilyBudgetAllocations({ ...large,
+      categories: suggestFamilyBudgetAllocations(small).categories,
+    });
+    expect(recalculated.categories.find((row) => row.id === 'food')!.plannedMinor).toBe(largeFood);
+  });
+
+  it('keeps a genuinely manual food amount fixed while recalculating automatic categories', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 750_000;
+    const manual = updateFamilyCategory(plan, 'food', 'plannedMinor', 100_000);
+    const recalculated = suggestFamilyBudgetAllocations({ ...manual, allocationMode: 'automatic' });
+    expect(recalculated.categories.find((row) => row.id === 'food')!.plannedMinor).toBe(100_000);
+    expect(recalculated.categories.find((row) => row.id === 'food')!.plannedOverride).toBe(true);
+  });
+
+  it('persists an editable income override through validation', () => {
+    const plan = createFamilyBudgetPlan('user-a', '2026-11');
+    plan.monthlyIncomeMinor = 7_500_000;
+    plan.monthlyIncomeOverrideMinor = 6_400_000;
+    const restored = validateFamilyBudgetPlan(JSON.parse(JSON.stringify(plan)), 'user-a');
+    expect(restored?.monthlyIncomeOverrideMinor).toBe(6_400_000);
   });
 });

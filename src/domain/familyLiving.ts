@@ -17,6 +17,7 @@ export interface FamilyRecipe {
   steps: string[];
   origin: 'builtin' | 'community';
   author?: string;
+  imageUrl?: string;
 }
 
 export interface PlannedMeal {
@@ -82,7 +83,7 @@ export interface ShoppingRequirement {
 
 export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
   {
-    id: 'dz-lentil-soup', title: 'شوربة العدس', description: 'شوربة دافئة واقتصادية للغداء أو العشاء',
+    id: 'dz-lentil-soup', imageUrl: 'https://images.rawpixel.com/image_social_landscape/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI1LTA0L3NyLWltYWdlLTA4MDQyNS1rbmEwNy1zLTI3NV8xLmpwZw.jpg', title: 'شوربة العدس', description: 'شوربة دافئة واقتصادية للغداء أو العشاء',
     baseServings: 4, prepMinutes: 35, origin: 'builtin',
     ingredients: [
       { name: 'عدس', quantityMilli: 300000, unit: 'g' }, { name: 'بصل', quantityMilli: 2000, unit: 'piece' },
@@ -92,7 +93,7 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     steps: ['اغسل العدس وقطّع الخضروات.', 'شوّح البصل والجزر والثوم بقليل من الزيت.', 'أضف العدس والطماطم والماء والتوابل واتركه حتى ينضج.', 'اخلط جزءاً من الشوربة إذا رغبت وقدّمها ساخنة.'],
   },
   {
-    id: 'dz-couscous-vegetables', title: 'كسكس بالخضار', description: 'طبق عائلي بالخضروات الموسمية',
+    id: 'dz-couscous-vegetables', imageUrl: 'https://comerbeber.com/archivos/imagen/2023/02/cocina-aregelina-as_353624679_1200.jpg', title: 'كسكس بالخضار', description: 'طبق عائلي بالخضروات الموسمية',
     baseServings: 4, prepMinutes: 60, origin: 'builtin',
     ingredients: [
       { name: 'كسكس', quantityMilli: 500000, unit: 'g' }, { name: 'جزر', quantityMilli: 3000, unit: 'piece' },
@@ -103,7 +104,7 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     steps: ['حضّر مرق الخضار والحمص حتى يقترب من النضج.', 'فَوّر الكسكس حسب تعليمات العبوة.', 'أضف الكوسة واترك الخضار حتى تنضج.', 'قدّم الكسكس مع المرق والخضار.'],
   },
   {
-    id: 'dz-omelette', title: 'عجة البيض بالخضار', description: 'وجبة سريعة للفطور أو العشاء',
+    id: 'dz-omelette', imageUrl: 'https://images.rawpixel.com/image_social_landscape/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI1LTA0L3NyLWltYWdlLTA4MDQyNS1rbmEwNy1zLTI3NV8xLmpwZw.jpg', title: 'عجة البيض بالخضار', description: 'وجبة سريعة للفطور أو العشاء',
     baseServings: 2, prepMinutes: 15, origin: 'builtin',
     ingredients: [
       { name: 'بيض', quantityMilli: 4000, unit: 'piece' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
@@ -112,7 +113,7 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     steps: ['قطّع البصل والطماطم.', 'اطههما قليلاً في مقلاة.', 'أضف البيض المخفوق واتركه حتى ينضج.'],
   },
   {
-    id: 'dz-tomato-pasta', title: 'معكرونة بصلصة الطماطم', description: 'طبق بسيط بمكونات متوفرة غالباً',
+    id: 'dz-tomato-pasta', imageUrl: 'https://comerbeber.com/archivos/imagen/2023/02/cocina-aregelina-as_353624679_1200.jpg', title: 'معكرونة بصلصة الطماطم', description: 'طبق بسيط بمكونات متوفرة غالباً',
     baseServings: 4, prepMinutes: 25, origin: 'builtin',
     ingredients: [
       { name: 'معكرونة', quantityMilli: 400000, unit: 'g' }, { name: 'طماطم', quantityMilli: 4000, unit: 'piece' },
@@ -122,7 +123,7 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     steps: ['اسلق المعكرونة في الماء.', 'حضّر صلصة الطماطم مع البصل والثوم والزيت.', 'اخلط المعكرونة مع الصلصة وقدّمها.'],
   },
   {
-    id: 'dz-chickpea-salad', title: 'سلطة الحمص', description: 'وجبة خفيفة ومشبعة ويمكن تحضيرها مسبقاً',
+    id: 'dz-chickpea-salad', imageUrl: 'https://res.cloudinary.com/hv9ssmzrz/image/fetch/c_fill%2Cf_auto%2Ch_844%2Cq_auto%3Aeco%2Cw_1500/https%3A/s3-eu-west-1.amazonaws.com/images-ca-1-0-1-eu/recipe_photos/original/205483/open-uri20210102-52-2ua12m', title: 'سلطة الحمص', description: 'وجبة خفيفة ومشبعة ويمكن تحضيرها مسبقاً',
     baseServings: 3, prepMinutes: 15, origin: 'builtin',
     ingredients: [
       { name: 'حمص مطبوخ', quantityMilli: 300000, unit: 'g' }, { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
@@ -239,6 +240,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
   const recipesValid = row.recipes.every((recipe) => recipe && validText(recipe.id, 120) &&
     validText(recipe.title, 100) && validText(recipe.description, 240) &&
     (recipe.author === undefined || validText(recipe.author, 80)) &&
+    (recipe.imageUrl === undefined || (validText(recipe.imageUrl, 1000) && /^https:\/\//.test(recipe.imageUrl))) &&
     Number.isInteger(recipe.baseServings) && recipe.baseServings >= 1 && recipe.baseServings <= 40 &&
     Number.isInteger(recipe.prepMinutes) && recipe.prepMinutes >= 0 && recipe.prepMinutes <= 600 &&
     Array.isArray(recipe.ingredients) && recipe.ingredients.length >= 1 && recipe.ingredients.length <= 100 &&
@@ -261,6 +263,88 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
       row.recipes.some((recipe) => BUILTIN_FAMILY_RECIPES.some((builtin) => builtin.id === recipe.id)) ||
       new Set(row.pantry.map((item) => ingredientKey(item.name, item.unit))).size !== row.pantry.length) return null;
   return { ...row, shoppingExtras, needs } as FamilyLivingPlan;
+}
+
+
+export function suggestFamilyWeek(existing: PlannedMeal[], startDate: string, month: string, householdSize: number): PlannedMeal[] {
+  if (!validDate(startDate) || startDate.slice(0, 7) !== month || !Number.isInteger(householdSize) || householdSize < 1 || householdSize > 40) {
+    throw new Error('Invalid weekly meal suggestion input.');
+  }
+  const result = [...existing];
+  const pools: Record<MealSlot, FamilyRecipe[]> = {
+    breakfast: [BUILTIN_FAMILY_RECIPES[2], BUILTIN_FAMILY_RECIPES[4]],
+    lunch: [BUILTIN_FAMILY_RECIPES[1], BUILTIN_FAMILY_RECIPES[3], BUILTIN_FAMILY_RECIPES[0]],
+    dinner: [BUILTIN_FAMILY_RECIPES[0], BUILTIN_FAMILY_RECIPES[4], BUILTIN_FAMILY_RECIPES[3], BUILTIN_FAMILY_RECIPES[1]],
+  };
+  const start = new Date(startDate + 'T12:00:00');
+  for (let day = 0; day < 7 && result.length < 400; day++) {
+    const date = new Date(start); date.setDate(start.getDate() + day);
+    const dateKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    if (dateKey.slice(0, 7) !== month) break;
+    (['breakfast', 'lunch', 'dinner'] as MealSlot[]).forEach((slot) => {
+      if (result.length >= 400 || result.some((meal) => meal.date === dateKey && meal.slot === slot)) return;
+      const pool = pools[slot];
+      result.push({ id: 'suggested-' + dateKey + '-' + slot, date: dateKey, slot, recipeId: pool[day % pool.length].id, servings: householdSize });
+    });
+  }
+  return result;
+}
+
+/**
+ * Fills every unplanned breakfast, lunch and dinner slot in the selected month.
+ * Existing meals are preserved; each generated slot is deterministic so the
+ * same plan remains stable until the user edits it.
+ */
+export function suggestFamilyMonth(
+  existing: PlannedMeal[],
+  month: string,
+  householdSize: number,
+  recipeCollection: FamilyRecipe[] = BUILTIN_FAMILY_RECIPES,
+): PlannedMeal[] {
+  if (!validMonth(month) || !Number.isInteger(householdSize) || householdSize < 1 || householdSize > 40) {
+    throw new Error('Invalid monthly meal suggestion input.');
+  }
+  const [year, monthNumber] = month.split('-').map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const uniqueRecipes = [...new Map(
+    [...BUILTIN_FAMILY_RECIPES, ...recipeCollection].map((recipe) => [recipe.id, recipe] as const),
+  ).values()];
+  if (uniqueRecipes.length === 0) return [...existing];
+
+  const preferredIds: Record<MealSlot, string[]> = {
+    breakfast: ['dz-omelette', 'dz-chickpea-salad'],
+    lunch: ['dz-couscous-vegetables', 'dz-tomato-pasta', 'dz-lentil-soup'],
+    dinner: ['dz-lentil-soup', 'dz-chickpea-salad', 'dz-tomato-pasta', 'dz-couscous-vegetables'],
+  };
+  const pools = (['breakfast', 'lunch', 'dinner'] as MealSlot[]).reduce((result, slot) => {
+    const preferred = preferredIds[slot]
+      .map((id) => uniqueRecipes.find((recipe) => recipe.id === id))
+      .filter((recipe): recipe is FamilyRecipe => !!recipe);
+    const community = uniqueRecipes.filter((recipe) => recipe.origin === 'community');
+    const fallback = preferred.length ? preferred : uniqueRecipes;
+    result[slot] = [...new Map([...fallback, ...community].map((recipe) => [recipe.id, recipe] as const)).values()];
+    return result;
+  }, {} as Record<MealSlot, FamilyRecipe[]>);
+
+  const result = [...existing];
+  const slots: MealSlot[] = ['breakfast', 'lunch', 'dinner'];
+  for (let day = 1; day <= daysInMonth && result.length < 400; day++) {
+    const dateKey = month + '-' + String(day).padStart(2, '0');
+    for (const slot of slots) {
+      if (result.length >= 400) break;
+      if (result.some((meal) => meal.date === dateKey && meal.slot === slot)) continue;
+      const pool = pools[slot];
+      const recipe = pool[(day - 1) % pool.length];
+      result.push({
+        id: 'suggested-' + dateKey + '-' + slot,
+        date: dateKey,
+        slot,
+        recipeId: recipe.id,
+        servings: householdSize,
+      });
+    }
+  }
+  return result;
 }
 
 export function familyLivingStorageKey(userId: string, month: string): string {
@@ -293,5 +377,6 @@ export function exportCommunityRecipe(recipe: FamilyRecipe): string {
     title: recipe.title, description: recipe.description, baseServings: recipe.baseServings,
     prepMinutes: recipe.prepMinutes, ingredients: recipe.ingredients, steps: recipe.steps,
     ...(recipe.author ? { author: recipe.author } : {}),
+    ...(recipe.imageUrl ? { imageUrl: recipe.imageUrl } : {}),
   }, null, 2);
 }

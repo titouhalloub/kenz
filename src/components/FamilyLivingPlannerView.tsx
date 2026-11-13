@@ -3,7 +3,7 @@ import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, Shoppin
 import type { UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import {
-  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
+  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
   type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
@@ -124,25 +124,28 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     }
     let added = 0;
     updatePlan((current) => {
-      const meals = [...current.meals];
-      const start = new Date(mealDate + 'T12:00:00');
-      const householdServings = Math.max(1, Math.min(40, householdSize));
-      for (let day = 0; day < 7 && meals.length < 400; day++) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + day);
-        if (date.getMonth() + 1 !== Number(month.slice(5, 7)) || date.getFullYear() !== Number(month.slice(0, 4))) break;
-        const dateKey = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
-        (['breakfast', 'lunch', 'dinner'] as MealSlot[]).forEach((slot, slotIndex) => {
-          if (meals.some((meal) => meal.date === dateKey && meal.slot === slot)) return;
-          if (meals.length >= 400) return;
-          const recipe = slot === 'breakfast' ? BUILTIN_FAMILY_RECIPES.find((item) => item.id === 'dz-omelette')! : BUILTIN_FAMILY_RECIPES[(day * 2 + slotIndex) % BUILTIN_FAMILY_RECIPES.length];
-          meals.push({ id: makeId('meal'), date: dateKey, slot, recipeId: recipe.id, servings: householdServings });
-          added++;
-        });
-      }
-      return { ...current, meals };
+      const nextMeals = suggestFamilyWeek(current.meals, mealDate, month, Math.max(1, Math.min(40, householdSize)));
+      added = nextMeals.length - current.meals.length;
+      return { ...current, meals: nextMeals };
     });
     setStatus(added ? tr(profile, added + ' repas suggérés ont été ajoutés. Vous pouvez les modifier ou les supprimer.', 'تمت إضافة ' + added + ' وجبة مقترحة. يمكنك تعديلها أو حذفها.', added + ' suggested meals added. You can edit or remove them.') : tr(profile, 'Tous les repas de cette semaine sont déjà planifiés.', 'وجبات هذا الأسبوع مبرمجة بالفعل.', 'All meals for this week are already planned.'));
+  };
+
+  const suggestMonth = () => {
+    let added = 0;
+    updatePlan((current) => {
+      const nextMeals = suggestFamilyMonth(
+        current.meals,
+        month,
+        Math.max(1, Math.min(40, householdSize)),
+        recipes,
+      );
+      added = nextMeals.length - current.meals.length;
+      return { ...current, meals: nextMeals };
+    });
+    setStatus(added
+      ? tr(profile, added + ' repas ont été planifiés pour le mois complet. Vous pouvez modifier ou supprimer chaque repas.', added + ' وجبة تمت برمجتها للشهر كاملاً. يمكنك تعديل أو حذف كل وجبة.', added + ' meals were planned for the full month. You can edit or remove any meal.')
+      : tr(profile, 'Le calendrier mensuel est déjà complet.', 'تقويم الشهر مكتمل بالفعل.', 'The monthly calendar is already complete.'));
   };
 
   const addMeal = () => {
@@ -336,13 +339,14 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <label className="col-span-2">{tr(profile, 'Nombre de portions', 'عدد الحصص', 'Servings')}<input type="number" min="1" max="40" value={servings} onChange={(e) => setServings(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
         </div>
         {selectedRecipe && <div className="rounded-xl bg-violet-50 p-3">
-          <strong className="text-sm text-violet-950">{recipeTitle(selectedRecipe)}</strong>
+          {selectedRecipe.imageUrl && <img src={selectedRecipe.imageUrl} alt={recipeTitle(selectedRecipe)} loading="lazy" className="mb-3 h-36 w-full rounded-lg object-cover" />}<strong className="text-sm text-violet-950">{recipeTitle(selectedRecipe)}</strong>
           <p className="mt-1 text-xs text-violet-800">{recipeDescription(selectedRecipe)} · {selectedRecipe.prepMinutes} {tr(profile, 'min', 'د', 'min')}</p>
           <p className="mt-2 text-xs font-semibold text-violet-900">{tr(profile, 'Ingrédients pour', 'المكونات لـ', 'Ingredients for')} {servings || householdSize} {tr(profile, 'personnes', 'أشخاص', 'people')}</p>
           <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-violet-900">{selectedRecipe.ingredients.map((ingredient) => <li key={ingredient.name + ingredient.unit}>• {ingredientLabel(ingredient.name)}: {formatQuantity(Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings), ingredient.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</li>)}</ul>
           <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{recipeSteps(selectedRecipe).map((step, index) => <li key={index}>{step}</li>)}</ol>
         </div>}
         <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>
+        <button onClick={suggestMonth} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white">{tr(profile, 'Générer le planning du mois complet', 'إنشاء برنامج الشهر كاملاً', 'Generate the full-month plan')}</button>
         <button onClick={suggestWeek} className="w-full min-h-10 rounded-xl border border-violet-200 px-4 text-xs font-bold text-violet-700">{tr(profile, 'Suggérer les repas de 7 jours', 'اقترح وجبات 7 أيام', 'Suggest 7 days of meals')}</button>
         <div className="pt-2">
           <h3 className="mb-2 text-sm font-bold">{tr(profile, 'Repas prévus ce mois', 'وجبات هذا الشهر', 'Meals planned this month')} ({plannedMeals.length})</h3>
@@ -422,7 +426,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       </div>}
       {section === 'recipes' && <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'COLLECTION', 'مجموعة الوصفات', 'COLLECTION')}</span><h3>{tr(profile, 'Recettes familiales', 'وصفات عائلية', 'Family recipes')}</h3></div><span className="text-xs text-slate-500">{recipes.length}</span></div>
-        <div className="space-y-2">{recipes.map((recipe) => <article key={recipe.id} className="rounded-xl border border-violet-100 p-3"><div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{recipeTitle(recipe)}</strong><p className="mt-1 text-[10px] text-slate-500">{recipeDescription(recipe)}</p><span className="mt-1 inline-block text-[10px] text-violet-700">{recipe.origin === 'community' ? tr(profile, 'Partagée par la communauté', 'مشاركة من المجتمع', 'Community shared') : tr(profile, 'Recette Kenz', 'وصفة كينز', 'Kenz recipe')}{recipe.author ? ' · ' + recipe.author : ''} · {recipe.prepMinutes} min</span></div><button onClick={() => setShareText(exportCommunityRecipe(recipe))} aria-label={tr(profile, 'Exporter la recette', 'تصدير الوصفة', 'Export recipe')} className="rounded-lg p-2 text-violet-700"><Download className="h-4 w-4" /></button></div></article>)}</div>
+        <div className="space-y-2">{recipes.map((recipe) => <article key={recipe.id} className="overflow-hidden rounded-xl border border-violet-100 p-3">{recipe.imageUrl && <img src={recipe.imageUrl} alt={recipeTitle(recipe)} loading="lazy" className="mb-3 h-40 w-full rounded-lg object-cover" />}<div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{recipeTitle(recipe)}</strong><p className="mt-1 text-[10px] text-slate-500">{recipeDescription(recipe)}</p><span className="mt-1 inline-block text-[10px] text-violet-700">{recipe.origin === 'community' ? tr(profile, 'Partagée par la communauté', 'مشاركة من المجتمع', 'Community shared') : tr(profile, 'Recette Kenz', 'وصفة كينز', 'Kenz recipe')}{recipe.author ? ' · ' + recipe.author : ''} · {recipe.prepMinutes} min</span></div><button onClick={() => setShareText(exportCommunityRecipe(recipe))} aria-label={tr(profile, 'Exporter la recette', 'تصدير الوصفة', 'Export recipe')} className="rounded-lg p-2 text-violet-700"><Download className="h-4 w-4" /></button></div></article>)}</div>
         {shareText && <div className="space-y-2"><label>{tr(profile, 'Code de partage (JSON)', 'رمز المشاركة (JSON)', 'Share code (JSON)')}<textarea readOnly value={shareText} rows={7} className="mt-1 w-full rounded-xl border p-3 text-xs" /></label><button onClick={() => copyText(shareText)} className="min-h-10 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700">{tr(profile, 'Copier le code', 'نسخ الرمز', 'Copy code')}</button></div>}
         <div className="border-t border-violet-100 pt-3 space-y-2"><h4 className="text-xs font-bold">{tr(profile, 'Importer une recette partagée', 'استيراد وصفة مشتركة', 'Import a shared recipe')}</h4><p className="text-[10px] text-slate-500">{tr(profile, 'Collez le JSON reçu. La recette sera enregistrée localement dans votre collection.', 'ألصق JSON الذي تلقيته. سيتم حفظ الوصفة محلياً في مجموعتك.', 'Paste the JSON you received. The recipe is saved locally in your collection.')}</p><textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={6} placeholder='{"title":"...","ingredients":[],"steps":[]}' className="w-full rounded-xl border p-3 text-xs" /><button onClick={importRecipe} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Upload className="inline mr-2 h-4 w-4" />{tr(profile, 'Importer la recette', 'استيراد الوصفة', 'Import recipe')}</button></div>
       </div>}
