@@ -7,7 +7,7 @@ Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS") return new Response("ok",{headers:cors});
  if(req.method!=="POST") return respond(405,{error:"Method not allowed"});
  try {
-  const bearer=req.headers.get("Authorization")?.match(/^Bearer\\s+(.+)$/i)?.[1];
+  const bearer=req.headers.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   if(!bearer) return respond(401,{error:"Sign in is required."});
   const supabaseUrl=Deno.env.get("SUPABASE_URL"), anonKey=Deno.env.get("SUPABASE_ANON_KEY");
   const livekitUrl=Deno.env.get("LIVEKIT_URL"), apiKey=Deno.env.get("LIVEKIT_API_KEY"), apiSecret=Deno.env.get("LIVEKIT_API_SECRET");
