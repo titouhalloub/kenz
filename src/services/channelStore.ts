@@ -7,7 +7,7 @@ export interface KenzChannel {
 }
 export interface KenzChannelPost {
   id: string; channel_id: string; author_id: string; body: string;
-  media_kind: 'none' | 'image' | 'video'; media_name: string | null;
+  media_kind: 'none' | 'image' | 'video'; media_name: string | null; media_path?: string | null; media_mime_type?: string | null; media_url?: string | null;
   created_at: string; channel_name: string; channel_slug: string;
   owner_id: string; likes: number; comments: number; liked_by_me: boolean;
 }
@@ -64,7 +64,7 @@ export async function loadKenzChannelFeed(userId: string, followingOnly = false)
       if (!channelIds.length) return { success: true, data: [] };
     }
     let query = db.from('kenz_channel_posts')
-      .select('id,channel_id,author_id,body,media_kind,media_name,created_at,kenz_channels!inner(id,name,slug,owner_id,is_public)')
+      .select('id,channel_id,author_id,body,media_kind,media_name,media_path,media_mime_type,created_at,kenz_channels!inner(id,name,slug,owner_id,is_public)')
       .order('created_at', { ascending: false }).limit(80);
     if (channelIds) query = query.in('channel_id', channelIds);
     const { data, error } = await query;
@@ -72,6 +72,10 @@ export async function loadKenzChannelFeed(userId: string, followingOnly = false)
     const posts = data || [];
     if (!posts.length) return { success: true, data: [] };
     const postIds = posts.map((p) => p.id);
+    const mediaPaths = [...new Set(posts.map((p: any) => p.media_path).filter((path: unknown): path is string => typeof path === 'string' && path.length > 0))];
+    const signedMedia = mediaPaths.length ? await db.storage.from('kenz-channel-media').createSignedUrls(mediaPaths, 3600) : { data: [], error: null };
+    if (signedMedia.error) throw signedMedia.error;
+    const mediaUrlMap = new Map((signedMedia.data || []).map((item: any) => [item.path, item.signedUrl]));
     const [reactions, comments, mine] = await Promise.all([
       db.from('kenz_channel_post_reactions').select('post_id,user_id').in('post_id', postIds),
       db.from('kenz_channel_post_comments').select('post_id').in('post_id', postIds),
@@ -84,7 +88,7 @@ export async function loadKenzChannelFeed(userId: string, followingOnly = false)
       const channel = Array.isArray(p.kenz_channels) ? p.kenz_channels[0] : p.kenz_channels;
       return {
         id: p.id, channel_id: p.channel_id, author_id: p.author_id, body: p.body,
-        media_kind: p.media_kind, media_name: p.media_name, created_at: p.created_at,
+        media_kind: p.media_kind, media_name: p.media_name, media_path: p.media_path, media_mime_type: p.media_mime_type, media_url: p.media_path ? mediaUrlMap.get(p.media_path) || null : null, created_at: p.created_at,
         channel_name: channel?.name || 'Kenz Channel', channel_slug: channel?.slug || '',
         owner_id: channel?.owner_id || '', likes: (reactions.data || []).filter((r) => r.post_id === p.id).length,
         comments: (comments.data || []).filter((r) => r.post_id === p.id).length,
@@ -125,17 +129,95 @@ export async function followKenzChannel(channelId: string, userId: string, follo
   }
 }
 
-export async function publishKenzChannelPost(channelId: string, userId: string, body: string): Promise<ChannelResult<boolean>> {
+export async function publishKenzChannelPost(channelId: string, userId: string, body: string, file?: File | null): Promise<ChannelResult<boolean>> {
+  const db = client();
+  let uploadedPath: string | null = null;
   try {
     const text = body.trim();
-    if (!text || text.length > 5000) throw new Error('اكتب منشوراً من 1 إلى 5000 حرف.');
-    const { error } = await client().from('kenz_channel_posts').insert({
-      channel_id: channelId, author_id: userId, body: text, media_kind: 'none',
+    if (!text && !file) throw new Error('أضف نصاً أو صورة أو فيديو للمنشور.');
+    if (text.length > 5000) throw new Error('المنشور يتجاوز 5000 حرف.');
+    if (file) {
+      const allowed = ['image/jpeg','image/png','image/webp','image/avif','video/mp4','video/webm','video/quicktime'];
+      if (!allowed.includes(file.type)) throw new Error('نوع الملف غير مدعوم. استخدم صورة أو فيديو MP4/WebM.');
+      if (file.size > 200 * 1024 * 1024) throw new Error('الحد الأقصى لحجم الملف 200 ميغابايت.');
+      const extension = (file.name.split('.').pop() || (file.type.startsWith('image/') ? 'jpg' : 'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,8);
+      uploadedPath = channelId + '/' + userId + '/' + crypto.randomUUID() + '.' + extension;
+      const { error: uploadError } = await db.storage.from('kenz-channel-media').upload(uploadedPath, file, {
+        contentType: file.type, cacheControl: '3600', upsert: false,
+      });
+      if (uploadError) throw uploadError;
+    }
+    const { error } = await db.from('kenz_channel_posts').insert({
+      channel_id: channelId, author_id: userId, body: text,
+      media_kind: !file ? 'none' : file.type.startsWith('image/') ? 'image' : 'video',
+      media_name: file?.name || null, media_mime_type: file?.type || null,
+      media_size_bytes: file?.size || null, media_path: uploadedPath,
     });
     if (error) throw error;
     return { success: true, data: true };
   } catch (error) {
+    if (uploadedPath) await db.storage.from('kenz-channel-media').remove([uploadedPath]).catch(() => undefined);
     return { success: false, error: error instanceof Error ? error.message : 'تعذر نشر المحتوى.' };
+  }
+}
+
+export interface KenzLiveRoom {
+  id: string; channel_id: string; host_id: string; room_name: string;
+  title: string; status: 'live' | 'ended'; started_at: string;
+  channel_name: string; channel_slug: string;
+}
+export interface KenzLiveToken {
+  token: string; serverUrl: string; role: 'host' | 'viewer'; roomTitle: string;
+}
+export async function loadKenzLiveRooms(): Promise<ChannelResult<KenzLiveRoom[]>> {
+  try {
+    const { data, error } = await client().from('kenz_channel_live_rooms')
+      .select('id,channel_id,host_id,room_name,title,status,started_at,kenz_channels!inner(name,slug,is_public)')
+      .eq('status','live').order('started_at',{ascending:false}).limit(30);
+    if (error) throw error;
+    return { success:true, data:(data || []).map((row:any) => {
+      const channel = Array.isArray(row.kenz_channels) ? row.kenz_channels[0] : row.kenz_channels;
+      return { id:row.id,channel_id:row.channel_id,host_id:row.host_id,room_name:row.room_name,title:row.title,status:row.status,started_at:row.started_at,channel_name:channel?.name || 'Kenz',channel_slug:channel?.slug || '' };
+    }) };
+  } catch (error) {
+    return { success:false,error:error instanceof Error ? error.message : 'تعذر تحميل البث المباشر.' };
+  }
+}
+export async function createKenzLiveRoom(channelId:string, hostId:string, title:string):Promise<ChannelResult<KenzLiveRoom>> {
+  try {
+    const cleanTitle=title.trim().slice(0,120);
+    if (!cleanTitle) throw new Error('أدخل عنوان البث.');
+    const roomName='kenz-'+crypto.randomUUID();
+    const {data,error}=await client().from('kenz_channel_live_rooms')
+      .insert({channel_id:channelId,host_id:hostId,room_name:roomName,title:cleanTitle,status:'live'})
+      .select('id,channel_id,host_id,room_name,title,status,started_at,kenz_channels!inner(name,slug)')
+      .single();
+    if(error) throw error;
+    const channel=Array.isArray(data.kenz_channels)?data.kenz_channels[0]:data.kenz_channels;
+    return {success:true,data:{...data,channel_name:channel?.name || 'Kenz',channel_slug:channel?.slug || ''}};
+  } catch(error) {
+    return {success:false,error:error instanceof Error?error.message:'تعذر بدء البث.'};
+  }
+}
+export async function requestKenzLiveToken(roomId:string, role:'host'|'viewer'):Promise<ChannelResult<KenzLiveToken>> {
+  try {
+    const {data,error}=await client().functions.invoke('kenz-livekit-token',{body:{roomId,role}});
+    if(error) throw error;
+    if(!data?.token || !data?.serverUrl) throw new Error(data?.error || 'خادم البث غير جاهز.');
+    return {success:true,data};
+  } catch(error) {
+    return {success:false,error:error instanceof Error?error.message:'تعذر الاتصال بخادم البث.'};
+  }
+}
+export async function endKenzLiveRoom(roomId:string,hostId:string):Promise<ChannelResult<boolean>> {
+  try {
+    const {error}=await client().from('kenz_channel_live_rooms')
+      .update({status:'ended',ended_at:new Date().toISOString()})
+      .eq('id',roomId).eq('host_id',hostId);
+    if(error) throw error;
+    return {success:true,data:true};
+  } catch(error) {
+    return {success:false,error:error instanceof Error?error.message:'تعذر إنهاء البث.'};
   }
 }
 
@@ -188,6 +270,7 @@ export function subscribeToKenzChannels(onChange: () => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'kenz_channel_posts' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'kenz_channel_post_comments' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'kenz_channel_post_reactions' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'kenz_channel_live_rooms' }, onChange)
     .subscribe();
   return () => { void db.removeChannel(channel); };
 }
