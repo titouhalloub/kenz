@@ -1,0 +1,39 @@
+services:
+  livekit:
+    image: livekit/livekit-server:v1.9.0
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "7881:7881/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "50000-60000:50000-60000/udp"
+    expose:
+      - "7880"
+    networks:
+      - kenz-live
+
+  caddy:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    depends_on:
+      - livekit
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - kenz-live
+
+networks:
+  kenz-live:
+
+volumes:
+  caddy_data:
+  caddy_config:
