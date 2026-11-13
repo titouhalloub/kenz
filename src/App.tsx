@@ -525,6 +525,14 @@ export default function App() {
             {budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}
           </button>
           <button
+            onClick={() => setActiveTab('channels')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
+              activeTab === 'channels' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            {budgetState.profile.locale === 'ar' ? 'القنوات' : budgetState.profile.locale === 'en' ? 'Channels' : 'Chaînes'}
+          </button>
+          <button
             onClick={() => setActiveTab('debts')}
             className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
               activeTab === 'debts' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
