@@ -1,0 +1,5 @@
+# Copy to Caddyfile and replace the hostname.
+live.example.com {
+  encode zstd gzip
+  reverse_proxy livekit:7880
+}
