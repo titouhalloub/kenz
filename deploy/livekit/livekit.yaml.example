@@ -1,0 +1,21 @@
+# Copy this file to livekit.yaml and replace all example values.
+port: 7880
+log_level: info
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+
+# The built-in TURN service uses the same SFU and signed participant credentials.
+turn:
+  enabled: true
+  domain: turn.example.com
+  tls_port: 5349
+  udp_port: 3478
+  cert_file: /etc/letsencrypt/live/turn.example.com/fullchain.pem
+  key_file: /etc/letsencrypt/live/turn.example.com/privkey.pem
+
+keys:
+  REPLACE_WITH_LIVEKIT_API_KEY: REPLACE_WITH_LONG_RANDOM_API_SECRET
