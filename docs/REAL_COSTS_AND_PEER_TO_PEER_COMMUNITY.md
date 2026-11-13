@@ -72,3 +72,11 @@ Do not build an always-on background relay or silently transfer files. Require a
 - P2P: transfer works between two real Android devices on different networks, with consent, cancellation, timeout, and fallback tests; no media blob is written to Supabase.
 - Community: moderation, blocking, deletion, privacy, low-bandwidth and accessibility checks pass.
 - Only after those gates: produce and test a signed/release APK.
+
+## Live blocker found during implementation
+
+A read-only check of the connected production project on 13 Nov 2026 found 83 catalog products, 30 price observations (all pending, observed 2–4 Nov 2026), zero approved observations, and zero rows in `price_stats`. This is why the live price RPC returns no prices.
+
+The scheduled GitHub Actions ingestion run on 12 Nov 2026 failed before scraping because `SUPABASE_SERVICE_ROLE_KEY` was empty/not configured. The push-triggered run on 13 Nov passed its scraper dry-run, but correctly skipped database writes. Its workflow log confirms the missing secret. The source adapters themselves have a separate dry-run success path; no production price rows were written during this check.
+
+**Required operator step:** add the Supabase service-role secret to the repository's GitHub Actions secrets (never to Vite env vars, source code, or an APK), then rerun the scheduled/manual ingestion path. Keep the review gate: new observations must remain pending until a moderator checks them. After approval, refresh `price_stats` and verify `get_area_prices` returns current DZD values. Do not approve the existing 30 pending rows in bulk without checking their provenance, dates, units, and source records.
