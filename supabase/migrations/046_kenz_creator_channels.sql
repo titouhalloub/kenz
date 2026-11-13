@@ -10,7 +10,8 @@ create table if not exists public.kenz_channels (
   avatar_url text,
   is_public boolean not null default true,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  follower_count bigint not null default 0 check (follower_count >= 0)
 );
 create index if not exists kenz_channels_owner_created_idx on public.kenz_channels(owner_id, created_at desc);
 create index if not exists kenz_channels_public_created_idx on public.kenz_channels(is_public, created_at desc);
@@ -22,6 +23,31 @@ create table if not exists public.kenz_channel_follows (
   primary key(channel_id, follower_id)
 );
 create index if not exists kenz_channel_follows_follower_idx on public.kenz_channel_follows(follower_id, created_at desc);
+
+create or replace function public.kenz_adjust_channel_follower_count()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $
+begin
+  if tg_op = 'INSERT' then
+    update public.kenz_channels set follower_count = follower_count + 1 where id = new.channel_id;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.kenz_channels set follower_count = greatest(0, follower_count - 1) where id = old.channel_id;
+    return old;
+  end if;
+  return null;
+end;
+$;
+drop trigger if exists kenz_channel_follower_count_insert on public.kenz_channel_follows;
+create trigger kenz_channel_follower_count_insert after insert on public.kenz_channel_follows
+for each row execute function public.kenz_adjust_channel_follower_count();
+drop trigger if exists kenz_channel_follower_count_delete on public.kenz_channel_follows;
+create trigger kenz_channel_follower_count_delete after delete on public.kenz_channel_follows
+for each row execute function public.kenz_adjust_channel_follower_count();
+
 
 create table if not exists public.kenz_channel_posts (
   id uuid primary key default gen_random_uuid(),
@@ -121,7 +147,12 @@ for select to authenticated using (exists (
 ));
 drop policy if exists "Users react as themselves" on public.kenz_channel_post_reactions;
 create policy "Users react as themselves" on public.kenz_channel_post_reactions
-for insert to authenticated with check (user_id = (select auth.uid()));
+for insert to authenticated with check (
+  user_id = (select auth.uid()) and exists (
+    select 1 from public.kenz_channel_posts p join public.kenz_channels c on c.id=p.channel_id
+    where p.id=post_id and c.is_public
+  )
+);
 drop policy if exists "Users remove own reactions" on public.kenz_channel_post_reactions;
 create policy "Users remove own reactions" on public.kenz_channel_post_reactions
 for delete to authenticated using (user_id = (select auth.uid()));
