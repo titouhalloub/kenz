@@ -156,7 +156,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
           setError(error instanceof Error ? error.message : 'تعذر إرسال الملف عبر WebRTC.');
         }
       } else {
-        setToast(locale==='ar'?'تم نشر بيانات المنشور فقط؛ لا يوجد اتصال P2P بالقناة حالياً.':'Post metadata published; no peer-to-peer channel is connected.');
+        setToast(locale==='ar'?'تم نشر بيانات المنشور فقط؛ لا يوجد اتصال SFU بالقناة حالياً.':'Post metadata published; no SFU channel is connected.');
       }
     } else {
       setToast(t.posted);
