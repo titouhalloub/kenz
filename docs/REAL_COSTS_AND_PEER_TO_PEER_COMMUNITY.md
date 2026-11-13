@@ -13,7 +13,7 @@ All monetary estimates must be traceable to a dated observation. Never turn a mi
 - The family meal planner now requests public market aggregates for its supported ingredient catalog and displays a per-ingredient estimate and meal total.
 - It only calculates a line when both the product mapping and measurement unit are compatible. Missing prices and incompatible units remain visibly unpriced; partial totals are marked with a lower-bound indicator.
 - It uses the user's wilaya code and the existing local cache/offline fallback in `priceStore`.
-- Community posts now have a WhatsApp share action that sends a text recipe/list summary. This is a share/export action, not a claim that WhatsApp exposes its private transport protocol or that Kenz stores media.
+- The WhatsApp action has been removed. Kenz community uses its own WebRTC-based direct transfer flow.
 
 ## Phase 1 — finish dependable meal and shopping prices
 
@@ -44,13 +44,16 @@ Create separate canonical catalogs rather than forcing services into food units.
 - Start with photos and short clips, upload/transfer limits, lazy loading, thumbnails, and a low-data mode.
 
 ### Peer-to-peer media transfer
-WhatsApp's end-to-end encrypted transport is not a public transport API for third-party apps. Kenz must not pretend to reuse WhatsApp's internal protocol.
+Kenz does not integrate with WhatsApp. The initial implementation uses WebRTC DataChannels for direct device-to-device file transfer.
 
-Use two honest sharing paths:
-1. WhatsApp share intent for text, recipe cards, and ordinary shareable links (already added for community posts).
-2. WebRTC DataChannels for optional direct device-to-device photo/clip transfer. Use Supabase Realtime only for short-lived offer/answer/ICE signaling, authenticate both peers, expire sessions quickly, and avoid persisting media blobs. Use a public STUN server for connection discovery and an optional TURN relay only as a connectivity fallback; disclose that TURN can relay data. If no direct connection is possible, fall back to WhatsApp's own share sheet or a normal opt-in upload.
+- Supabase Realtime private Broadcast channels carry only short-lived SDP offer/answer and ICE signaling messages. They are not media storage.
+- Session topics contain a high-entropy UUID and a 10-minute expiry. The channel code is a bearer capability and must only be shared with the intended recipient.
+- A database migration adds authenticated-only RLS policies for the short-lived `kenz-p2p` topics. The Supabase project's Realtime setting must also disable public channel access for private-channel enforcement.
+- Files are sent in bounded chunks over the WebRTC DataChannel (DTLS-encrypted by WebRTC), with a 25 MB initial cap and transfer progress. The receiver reconstructs the file locally.
+- The initial ICE configuration uses STUN only. Some NAT/firewall combinations will fail; a TURN relay is intentionally not configured yet because it relays traffic and has cost/privacy implications.
+- The current UI is a direct file-transfer panel, not yet an embedded video post/player in the community feed. Both peers must be online and signed in.
 
-Do not build an always-on background relay or silently transfer files. Require an explicit sender action and receiver acceptance. Show file size, estimated data use, transfer progress, cancel, and expiry. Keep media in temporary app cache only and clear it after transfer/expiry. Small metadata (caption, creator, timestamps, moderation state, content hash) can remain in the database.
+Do not build an always-on background relay or silently transfer files. Require an explicit sender action and receiver acceptance. Show file size, transfer progress, cancellation and expiry. Do not persist media blobs. Small post metadata (caption, creator, timestamps, moderation state, content hash) can remain in the database.
 
 ### Safety, moderation, and privacy
 - Report, block, delete, rate limits, spam detection, and human moderation before broad discovery.
