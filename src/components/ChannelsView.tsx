@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Radio, Search, Plus, Users, Heart, MessageCircle, Send, X, RadioTower, Sparkles, Compass, UserPlus, ChevronDown, RefreshCw } from 'lucide-react';
+import { Radio, Search, Plus, Users, Heart, MessageCircle, Send, X, RadioTower, Sparkles, Compass, RefreshCw, Video, ImagePlus, Play, Square, UploadCloud } from 'lucide-react';
 import type { UserProfile } from '../services/authStore';
 import {
   addKenzPostComment, createKenzChannel, followKenzChannel, loadKenzChannelFeed, loadKenzChannels,
   loadKenzPostComments, publishKenzChannelPost, subscribeToKenzChannels, toggleKenzPostLike,
-  type KenzChannel, type KenzChannelComment, type KenzChannelPost,
-} from '../services/channelStore';
+  createKenzLiveRoom, endKenzLiveRoom, loadKenzLiveRooms, requestKenzLiveToken,\n  type KenzLiveRoom, type KenzLiveToken, type KenzChannel, type KenzChannelComment, type KenzChannelPost,
+} from '../services/channelStore';\nimport { LiveRoomStage } from './LiveRoomStage';
 
 interface Props { user: UserProfile; locale: 'ar' | 'fr' | 'en'; }
 type Tab = 'discover' | 'following' | 'my';
@@ -35,7 +35,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   const [commentPost,setCommentPost] = useState('');
   const [comments,setComments] = useState<KenzChannelComment[]>([]);
   const [commentDraft,setCommentDraft] = useState('');
-  const [toast,setToast] = useState('');
+  const [toast,setToast] = useState('');\n  const [mediaFile,setMediaFile] = useState<File | null>(null);\n  const [liveRooms,setLiveRooms] = useState<KenzLiveRoom[]>([]);\n  const [liveChannel,setLiveChannel] = useState('');\n  const [liveTitle,setLiveTitle] = useState('');\n  const [liveSession,setLiveSession] = useState<{room:KenzLiveRoom; access:KenzLiveToken} | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -117,6 +117,42 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     if (refreshed.success) setComments(refreshed.data || []);
     await refresh();
   };
+  const onStartLive = async () => {
+    if (!userId || !liveChannel) { setError(t.signIn); return; }
+    setBusy(true);
+    const created = await createKenzLiveRoom(liveChannel,userId,liveTitle || (locale==='ar'?'بث مباشر جديد':'Live now'));
+    if (!created.success || !created.data) { setBusy(false); setError(created.error || t.error); return; }
+    const access = await requestKenzLiveToken(created.data.id,'host');
+    setBusy(false);
+    if (!access.success || !access.data) {
+      await endKenzLiveRoom(created.data.id,userId);
+      setError(access.error || t.error);
+      await refresh();
+      return;
+    }
+    setLiveSession({room:created.data,access:access.data});
+    await refresh();
+  };
+  const onJoinLive = async (room:KenzLiveRoom) => {
+    if (!userId) { setError(t.signIn); return; }
+    setBusy(true);
+    const access = await requestKenzLiveToken(room.id,'viewer');
+    setBusy(false);
+    if (!access.success || !access.data) { setError(access.error || t.error); return; }
+    setLiveSession({room,access:access.data});
+  };
+  const onCloseLive = async () => {
+    if (liveSession?.access.role === 'host' && userId) {
+      const ended = await endKenzLiveRoom(liveSession.room.id,userId);
+      if (!ended.success) setError(ended.error || t.error);
+    }
+    setLiveSession(null);
+    await refresh();
+  };
+  const onLiveReady = useCallback(() => {
+    setToast(locale==='ar'?'أنت الآن على الهواء مباشرة.':locale==='fr'?'Vous êtes en direct.':'You are live now.');
+  },[locale]);
+  const onLiveError = useCallback((message:string) => setError(message),[]);
   const dateLabel = (date: string) => new Intl.DateTimeFormat(locale === 'ar' ? 'ar-DZ' : locale === 'fr' ? 'fr-FR' : 'en', {dateStyle:'medium'}).format(new Date(date));
   const initials = (name: string) => name.trim().slice(0,1).toUpperCase() || 'K';
 
@@ -147,7 +183,8 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       <div className="flex flex-col gap-3 sm:flex-row">
         <select value={composerChannel} onChange={(e)=>setComposerChannel(e.target.value)} className="min-h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white"><option value="">{t.choose}</option>{myChannels.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <input value={postBody} onChange={(e)=>setPostBody(e.target.value)} maxLength={5000} placeholder={t.write} className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none"/>
-        <button disabled={busy || !composerChannel || !postBody.trim()} onClick={()=>void onPublish()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-slate-950 disabled:opacity-40"><Send size={16}/>{t.publish}</button>
+        <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-700 px-3 text-xs text-slate-300"><ImagePlus size={16}/>{mediaFile ? mediaFile.name : (locale==='ar'?'صورة / فيديو':'Photo / video')}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm,video/quicktime" className="hidden" onChange={e=>setMediaFile(e.target.files?.[0] || null)}/></label>
+        <button disabled={busy || !composerChannel || (!postBody.trim() && !mediaFile)} onClick={()=>void onPublish()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-slate-950 disabled:opacity-40"><Send size={16}/>{t.publish}</button>
       </div>
     </section>}
 
@@ -166,17 +203,46 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       </div>
     </section>}
 
+    {myChannels.length > 0 && <section className="rounded-2xl border border-rose-500/20 bg-slate-900/80 p-4">
+      <div className="mb-3 flex items-center gap-2 text-rose-300"><Video size={18}/><h2 className="font-bold text-white">{locale==='ar'?'ابدأ بثاً مباشراً':locale==='fr'?'Démarrer un direct':'Start a live stream'}</h2></div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <select value={liveChannel} onChange={e=>setLiveChannel(e.target.value)} className="min-h-11 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white"><option value="">{t.choose}</option>{myChannels.map(ch=><option key={ch.id} value={ch.id}>{ch.name}</option>)}</select>
+        <input value={liveTitle} onChange={e=>setLiveTitle(e.target.value)} maxLength={120} placeholder={locale==='ar'?'عنوان البث المباشر':'Live title'} className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white"/>
+        <button disabled={busy||!liveChannel||!userId} onClick={()=>void onStartLive()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 text-sm font-bold text-white disabled:opacity-40"><Radio size={16}/>{locale==='ar'?'ابدأ الآن':'Go live'}</button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{locale==='ar'?'يستخدم البث كاميرا وميكروفون جهازك عبر WebRTC. لن يظهر البث إلا بعد اتصالك.':'Your camera and microphone are sent over WebRTC. Viewers can join the public live room.'}</p>
+    </section>}
+
+    <section className="space-y-3">
+      <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-rose-500"/><h2 className="font-bold text-white">{locale==='ar'?'مباشر الآن':locale==='fr'?'En direct':'Live now'}</h2><span className="text-xs text-slate-500">({liveRooms.length})</span></div>
+      {liveRooms.length===0 && <p className="rounded-xl border border-dashed border-slate-800 p-4 text-center text-sm text-slate-500">{locale==='ar'?'لا توجد قنوات تبث الآن.':'No channels are live right now.'}</p>}
+      <div className="grid gap-3 sm:grid-cols-2">{liveRooms.map(room=><article key={room.id} className="flex items-center gap-3 rounded-2xl border border-rose-500/20 bg-slate-900 p-4">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/15 text-rose-300"><RadioTower size={20}/></span>
+        <div className="min-w-0 flex-1"><h3 className="truncate font-bold text-white">{room.title}</h3><p className="truncate text-xs text-slate-400">{room.channel_name}</p></div>
+        <button disabled={busy||!userId} onClick={()=>void onJoinLive(room)} className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-rose-500 px-3 text-xs font-bold text-white disabled:opacity-40"><Play size={14}/>{locale==='ar'?'مشاهدة':'Watch'}</button>
+      </article>)}</div>
+    </section>
+
     <section className="space-y-3">
       <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 font-bold text-white"><Radio size={17} className="text-emerald-400"/>{t.popular}</h2><span className="text-xs text-slate-500">{visiblePosts.length}</span></div>
       {loading && <p className="py-4 text-center text-sm text-slate-400">{t.loading}</p>}
       {!loading && visiblePosts.length===0 && <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">{tab==='following'?t.noFollowing:t.noPosts}</div>}
       {visiblePosts.map((post)=> <article key={post.id} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
         <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15 font-bold text-emerald-300">{initials(post.channel_name)}</div><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-white">{post.channel_name}</h3><p className="text-[11px] text-slate-500">{dateLabel(post.created_at)}</p></div><span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] text-slate-400">KENZ</span></div>
-        <div className="whitespace-pre-wrap break-words px-4 py-4 text-sm leading-7 text-slate-200">{post.body}</div>
+        {post.body && <div className="whitespace-pre-wrap break-words px-4 py-4 text-sm leading-7 text-slate-200">{post.body}</div>}
+        {post.media_url && post.media_kind==='image' && <img src={post.media_url} alt={post.media_name || 'Channel image'} loading="lazy" className="max-h-[520px] w-full bg-black object-contain"/>}
+        {post.media_url && post.media_kind==='video' && <video src={post.media_url} controls playsInline preload="metadata" className="max-h-[520px] w-full bg-black"/>}
         <div className="flex items-center gap-4 border-t border-slate-800 px-4 py-3"><button onClick={()=>void onLike(post)} className={post.liked_by_me?'inline-flex items-center gap-2 text-sm font-semibold text-rose-400':'inline-flex items-center gap-2 text-sm text-slate-400 hover:text-rose-300'}><Heart size={17} fill={post.liked_by_me?'currentColor':'none'}/>{post.likes}</button><button onClick={()=>void openComments(post)} className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-emerald-300"><MessageCircle size={17}/>{post.comments} {t.comments}</button></div>
       </article>)}
     </section>
 
+    {liveSession && <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-black/90 p-3 sm:p-6">
+      <section className="w-full max-w-5xl space-y-4 rounded-3xl border border-slate-700 bg-slate-950 p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2 text-rose-400"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-500"/><span className="text-xs font-black tracking-wider">LIVE</span></div><h2 className="truncate text-lg font-black text-white">{liveSession.room.title}</h2><p className="text-xs text-slate-400">{liveSession.room.channel_name}</p></div><button onClick={()=>void onCloseLive()} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-700 px-3 text-sm text-slate-200"><X size={16}/>{liveSession.access.role==='host'?(locale==='ar'?'إنهاء البث':'End live'):(locale==='ar'?'مغادرة':'Leave')}</button></div>
+        <LiveRoomStage token={liveSession.access.token} serverUrl={liveSession.access.serverUrl} role={liveSession.access.role} onReady={onLiveReady} onError={onLiveError}/>
+        <p className="text-xs text-slate-500">{locale==='ar'?'اتصال مباشر عبر WebRTC/SFU. لا تحفظ Kenz الفيديو المباشر تلقائياً.':'Live media is relayed by the WebRTC SFU. Streams are not recorded automatically.'}</p>
+      </section>
+    </div>}
     {createOpen && <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 sm:items-center" onClick={()=>setCreateOpen(false)}><section role="dialog" aria-modal="true" className="w-full max-w-lg space-y-4 rounded-3xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={e=>e.stopPropagation()}>
       <div className="flex items-center justify-between"><h2 className="text-lg font-black text-white">{t.createTitle}</h2><button onClick={()=>setCreateOpen(false)} aria-label="Close"><X/></button></div>
       <label className="block space-y-1 text-sm text-slate-300">{t.name}<input value={channelName} onChange={e=>setChannelName(e.target.value)} maxLength={48} className="min-h-11 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-white outline-none"/></label>
