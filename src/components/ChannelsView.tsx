@@ -4,8 +4,10 @@ import type { UserProfile } from '../services/authStore';
 import {
   addKenzPostComment, createKenzChannel, followKenzChannel, loadKenzChannelFeed, loadKenzChannels,
   loadKenzPostComments, publishKenzChannelPost, subscribeToKenzChannels, toggleKenzPostLike,
-  createKenzLiveRoom, endKenzLiveRoom, loadKenzLiveRooms, requestKenzLiveToken,\n  type KenzLiveRoom, type KenzLiveToken, type KenzChannel, type KenzChannelComment, type KenzChannelPost,
-} from '../services/channelStore';\nimport { LiveRoomStage } from './LiveRoomStage';
+  createKenzLiveRoom, endKenzLiveRoom, loadKenzLiveRooms, requestKenzLiveToken,
+  type KenzLiveRoom, type KenzLiveToken, type KenzChannel, type KenzChannelComment, type KenzChannelPost,
+} from '../services/channelStore';
+import { LiveRoomStage } from './LiveRoomStage';
 
 interface Props { user: UserProfile; locale: 'ar' | 'fr' | 'en'; }
 type Tab = 'discover' | 'following' | 'my';
@@ -35,7 +37,12 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   const [commentPost,setCommentPost] = useState('');
   const [comments,setComments] = useState<KenzChannelComment[]>([]);
   const [commentDraft,setCommentDraft] = useState('');
-  const [toast,setToast] = useState('');\n  const [mediaFile,setMediaFile] = useState<File | null>(null);\n  const [liveRooms,setLiveRooms] = useState<KenzLiveRoom[]>([]);\n  const [liveChannel,setLiveChannel] = useState('');\n  const [liveTitle,setLiveTitle] = useState('');\n  const [liveSession,setLiveSession] = useState<{room:KenzLiveRoom; access:KenzLiveToken} | null>(null);
+  const [toast,setToast] = useState('');
+  const [mediaFile,setMediaFile] = useState<File | null>(null);
+  const [liveRooms,setLiveRooms] = useState<KenzLiveRoom[]>([]);
+  const [liveChannel,setLiveChannel] = useState('');
+  const [liveTitle,setLiveTitle] = useState('');
+  const [liveSession,setLiveSession] = useState<{room:KenzLiveRoom; access:KenzLiveToken} | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
