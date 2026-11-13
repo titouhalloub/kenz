@@ -8,7 +8,7 @@ import {
   type KenzLiveRoom, type KenzLiveToken, type KenzChannel, type KenzChannelComment, type KenzChannelPost,
 } from '../services/channelStore';
 import { LiveRoomStage } from './LiveRoomStage';
-import { subscribeToKenzChannelMedia, type KenzChannelMediaRoom } from '../services/channelMediaPeer';
+import { connectKenzChannelMediaRoom, type KenzChannelMediaRoom } from '../services/channelMediaRoom';
 
 interface Props { user: UserProfile; locale: 'ar' | 'fr' | 'en'; }
 type Tab = 'discover' | 'following' | 'my';
@@ -65,16 +65,19 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => subscribeToKenzChannels(() => { void refresh(); }), [refresh]);
+  const mediaChannelIds = useMemo(
+    () => channels.filter((channel) => channel.is_following || channel.owner_id === userId).slice(0, 12).map((channel) => channel.id).join(','),
+    [channels,userId],
+  );
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !mediaChannelIds) return;
     let cancelled = false;
     const opened: KenzChannelMediaRoom[] = [];
     const connectMediaRooms = async () => {
-      const eligible = channels.filter((channel) => channel.is_following || channel.owner_id === userId).slice(0, 12);
       const next = new Map<string,KenzChannelMediaRoom>();
-      for (const channel of eligible) {
+      for (const channelId of mediaChannelIds.split(',').filter(Boolean)) {
         try {
-          const room = await subscribeToKenzChannelMedia(channel.id,userId,({postId,file}) => {
+          const room = await connectKenzChannelMediaRoom(channelId,({postId,file}) => {
             const url = URL.createObjectURL(file);
             setReceivedMedia((current) => {
               const previous = current[postId];
@@ -84,9 +87,9 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
           });
           if (cancelled) { room.close(); continue; }
           opened.push(room);
-          next.set(channel.id,room);
+          next.set(channelId,room);
         } catch (error) {
-          if (!cancelled) setError(error instanceof Error ? error.message : 'تعذر تجهيز نقل الملفات المباشر.');
+          if (!cancelled) setError(error instanceof Error ? error.message : 'تعذر تجهيز نقل الملفات عبر SFU.');
         }
       }
       if (!cancelled) setMediaRooms(next);
@@ -97,7 +100,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       opened.forEach((room) => room.close());
       setMediaRooms(new Map());
     };
-  }, [channels,userId]);
+  }, [mediaChannelIds,userId]);
 
   const myChannels = useMemo(() => channels.filter((c) => c.owner_id === userId), [channels,userId]);
   const visibleChannels = useMemo(() => channels.filter((c) => {
@@ -147,8 +150,8 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
         try {
           const transfer = await mediaRoom.sendFile(result.data,fileToSend);
           setToast(locale==='ar'
-            ? (transfer.sent ? `تم إرسال الملف إلى ${transfer.sent} من ${transfer.online} متابع متصل.` : 'تم نشر المنشور، لكن لا يوجد متابعون متصلون لاستلام الملف.')
-            : (transfer.sent ? `Media sent to ${transfer.sent} of ${transfer.online} online followers.` : 'Post published; no followers were online to receive the file.'));
+            ? (transfer.relayed ? `تم تمرير الملف عبر SFU إلى ${transfer.online} متابع متصل.` : 'تم نشر المنشور، لكن لا يوجد متابعون متصلون لاستلام الملف.')
+            : (transfer.relayed ? `Media relayed by the SFU to ${transfer.online} online followers.` : 'Post published; no followers were online to receive the file.'));
         } catch (error) {
           setError(error instanceof Error ? error.message : 'تعذر إرسال الملف عبر WebRTC.');
         }
@@ -298,7 +301,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
         {post.body && <div className="whitespace-pre-wrap break-words px-4 py-4 text-sm leading-7 text-slate-200">{post.body}</div>}
         {receivedMedia[post.id] && post.media_kind==='image' && <img src={receivedMedia[post.id]} alt={post.media_name || 'Channel image'} className="max-h-[520px] w-full bg-black object-contain"/>}
         {receivedMedia[post.id] && post.media_kind==='video' && <video src={receivedMedia[post.id]} controls playsInline preload="metadata" className="max-h-[520px] w-full bg-black"/>}
-        {post.media_kind!=='none' && !receivedMedia[post.id] && <div className="mx-4 my-3 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-4 text-center text-xs text-slate-400">{locale==='ar'?'ملف P2P غير متاح على هذا الجهاز. يجب أن يكون صاحب القناة والمتابع متصلين وقت الإرسال.':'P2P media is not cached on this device. The creator and follower must be online during transfer.'}</div>}
+        {post.media_kind!=='none' && !receivedMedia[post.id] && <div className="mx-4 my-3 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-4 text-center text-xs text-slate-400">{locale==='ar'?'ملف P2P غير متاح على هذا الجهاز. يجب أن يكون صاحب القناة والمتابع متصلين وقت الإرسال.':'Media is not cached on this device. The creator and follower must be online during the transfer.'}</div>}
         <div className="flex items-center gap-4 border-t border-slate-800 px-4 py-3"><button onClick={()=>void onLike(post)} className={post.liked_by_me?'inline-flex items-center gap-2 text-sm font-semibold text-rose-400':'inline-flex items-center gap-2 text-sm text-slate-400 hover:text-rose-300'}><Heart size={17} fill={post.liked_by_me?'currentColor':'none'}/>{post.likes}</button><button onClick={()=>void openComments(post)} className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-emerald-300"><MessageCircle size={17}/>{post.comments} {t.comments}</button></div>
       </article>)}
     </section>
