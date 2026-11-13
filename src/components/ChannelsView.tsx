@@ -42,7 +42,11 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       if (channelRows.error) throw channelRows.error;
       if (followRows.error) throw followRows.error;
       const rows = channelRows.data || [];
-      const mine = await client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('owner_id',user.id).order('created_at',{ascending:false});
+      const ids = rows.map(r=>r.id);
+      const [counts, mine] = await Promise.all([
+        ids.length ? client.from('kenz_channel_follower_counts').select('channel_id,follower_count').in('channel_id',ids) : Promise.resolve({data:[],error:null}),
+        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('owner_id',user.id).order('created_at',{ascending:false}),
+      ]);
       if (mine.error) throw mine.error;
       if (counts.error) throw counts.error;
       const countMap = new Map((counts.data||[]).map(r=>[r.channel_id,Number(r.follower_count)]));
