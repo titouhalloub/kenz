@@ -405,7 +405,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
               const price = slug ? marketPrices[slug] : undefined;
               const compatible = familyIngredientUnitMatches(ingredient.name, ingredient.unit);
               const quantity = Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings);
-              const cost = price && compatible ? Math.round(quantity * price.medianUnitPriceMinor / (ingredient.unit === 'piece' ? 1 : 1000)) : null;
+              const cost = price && compatible ? Math.round(quantity * price.medianUnitPriceMinor / (ingredient.unit === 'piece' ? 1000 : 1000000)) : null;
               return <div key={ingredient.name + ingredient.unit} className="mt-1 flex justify-between gap-2 text-[11px] text-violet-900"><span>{ingredientLabel(ingredient.name)}</span><span>{cost === null ? tr(profile, 'Prix indisponible', 'السعر غير متوفر', 'Price unavailable') : formatMoney(cost, 'DZD', profile.locale)}</span></div>;
             })}
             <p className="mt-2 text-[10px] text-amber-800">{tr(profile, 'المجموع تقديري حسب الأسعار المنشورة المتاحة؛ المواد غير المسعّرة لا تُحتسب. ≥ يعني أن المجموع جزئي.', 'المجموع تقديري حسب الأسعار المنشورة المتاحة؛ المواد غير المسعّرة لا تُحتسب.', 'Based on available published local prices. Unpriced ingredients are excluded; ≥ indicates a partial total.')}</p>
