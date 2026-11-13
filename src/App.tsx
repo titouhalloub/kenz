@@ -17,6 +17,7 @@ import {
   Moon,
   BarChart3,
   MessageCircle,
+  Radio,
 } from 'lucide-react';
 import {
   loadBudgetState,
@@ -84,6 +85,7 @@ import { TransactionsView } from './components/TransactionsView';
 import { PlanView } from './components/PlanView';
 import { DirectoryView } from './components/DirectoryView';
 import { CommunityView } from './components/CommunityView';
+import { ChannelsView } from './components/ChannelsView';
 import { SettingsView } from './components/SettingsView';
 import { DebtLedgerView } from './components/DebtLedgerView';
 import { FestiveZakatView } from './components/FestiveZakatView';
@@ -101,7 +103,7 @@ import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 import { kenzText } from './domain/i18n';
 
-type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'channels' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
@@ -523,6 +525,14 @@ export default function App() {
             {budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}
           </button>
           <button
+            onClick={() => setActiveTab('channels')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center gap-1 cursor-pointer ${
+              activeTab === 'channels' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Radio className="h-4 w-4" /> {budgetState.profile.locale === 'ar' ? 'القنوات' : budgetState.profile.locale === 'en' ? 'Channels' : 'Chaînes'}
+          </button>
+          <button
             onClick={() => setActiveTab('debts')}
             className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
               activeTab === 'debts' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
@@ -684,6 +694,10 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'channels' && (
+          <ChannelsView user={currentUser} locale={budgetState.profile.locale} />
+        )}
+
         {activeTab === 'debts' && (
           <DebtLedgerView
             debts={debts}
@@ -764,6 +778,7 @@ export default function App() {
                 ['transactions', budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
                 ['nearby', budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
                 ['community', budgetState.profile.locale === 'en' ? 'Community' : budgetState.profile.locale === 'ar' ? 'المجتمع' : 'Communauté', MessageCircle],
+                ['channels', budgetState.profile.locale === 'en' ? 'Channels' : budgetState.profile.locale === 'ar' ? 'القنوات' : 'Chaînes', Radio],
                 ['debts', 'Kredy', BookOpen], ['zakat', 'Zakat', Moon],
                 ['settings', budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],
                 ['profile', budgetState.profile.locale === 'en' ? 'Profile' : budgetState.profile.locale === 'ar' ? 'الملف الشخصي' : 'Profil', Sparkles],
