@@ -47,7 +47,7 @@ export class PeerTransferSession {
     topic: string,
   ) {
     this.peer = new RTCPeerConnection(RTC_CONFIGURATION);
-    this.realtime = client.channel(topic, { config: { private: true, broadcast: { ack: true, self: false } } });
+    this.realtime = client.channel(topic, { config: { private: false, broadcast: { ack: true, self: false } } });
   }
 
   static async connect(code: string, role: PeerTransferRole, callbacks: PeerTransferCallbacks = {}) {
