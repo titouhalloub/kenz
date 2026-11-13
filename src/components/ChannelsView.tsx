@@ -3,7 +3,7 @@ import { Bell, Check, Compass, Heart, MessageCircle, Plus, Radio, Send, Trash2, 
 import { getSupabaseClient } from '../services/supabase';
 import type { UserProfile } from '../services/authStore';
 
-type Channel = { id: string; owner_id: string; name: string; slug: string; description: string; category: string; created_at: string; follower_count?: number; is_following?: boolean };
+type Channel = { id: string; owner_id: string; name: string; slug: string; description: string; category: string; created_at: string; follower_count: number; is_following?: boolean };
 type ChannelPost = { id: string; channel_id: string; author_id: string; body: string; media_kind: 'none'|'image'|'video'; created_at: string; likes: number; liked: boolean; comments: Array<{id:string;author_id:string;body:string;created_at:string}> };
 type Props = { user: UserProfile; locale: 'ar'|'fr'|'en' };
 const copy = {
@@ -36,25 +36,19 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     setLoading(true);
     try {
       const [channelRows, followRows] = await Promise.all([
-        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('is_public',true).order('created_at',{ascending:false}).limit(100),
+        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at,follower_count').eq('is_public',true).order('created_at',{ascending:false}).limit(100),
         client.from('kenz_channel_follows').select('channel_id').eq('follower_id',user.id),
       ]);
       if (channelRows.error) throw channelRows.error;
       if (followRows.error) throw followRows.error;
       const rows = channelRows.data || [];
       const ids = rows.map(r=>r.id);
-      const [counts, mine] = await Promise.all([
-        ids.length ? client.from('kenz_channel_follows').select('channel_id').in('channel_id',ids) : Promise.resolve({data:[],error:null}),
-        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('owner_id',user.id).order('created_at',{ascending:false}),
-      ]);
-      if (counts.error) throw counts.error;
+      const mine = await client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at,follower_count').eq('owner_id',user.id).order('created_at',{ascending:false});
       if (mine.error) throw mine.error;
       const followSet = new Set((followRows.data||[]).map(r=>r.channel_id));
-      const countMap = new Map<string,number>();
-      for (const row of counts.data||[]) countMap.set(row.channel_id,(countMap.get(row.channel_id)||0)+1);
-      let visible = rows.map(r=>({...r,follower_count:countMap.get(r.id)||0,is_following:followSet.has(r.id)}));
+      let visible = rows.map(r=>({...r,is_following:followSet.has(r.id)}));
       if (tab==='following') visible=visible.filter(r=>r.is_following);
-      if (tab==='mine') visible=(mine.data||[]).map(r=>({...r,follower_count:countMap.get(r.id)||0,is_following:false}));
+      if (tab==='mine') visible=(mine.data||[]).map(r=>({...r,is_following:false}));
       setChannels(visible);
       if (selected && !visible.some(r=>r.id===selected.id) && tab!=='mine') setSelected(null);
     } catch (error) { setMessage(error instanceof Error?error.message:'Could not load channels.'); }
