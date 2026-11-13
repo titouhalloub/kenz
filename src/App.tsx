@@ -17,6 +17,7 @@ import {
   Moon,
   BarChart3,
   MessageCircle,
+  Radio,
 } from 'lucide-react';
 import {
   loadBudgetState,
