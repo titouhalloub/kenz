@@ -136,7 +136,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       .flatMap((recipe) => recipe.ingredients.map((ingredient) => familyIngredientSlug(ingredient.name))
         .filter((slug): slug is string => Boolean(slug))))];
     setPriceLoadState('loading');
-    loadMarketPrices(slugs, profile.wilaya?.match(/^\\s*(\\d{2,3})/)?.[1] || null)
+    loadMarketPrices(slugs, null)
       .then((result) => {
         if (!active) return;
         setMarketPrices(result.pricesBySlug);
@@ -144,7 +144,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       })
       .catch(() => { if (active) { setMarketPrices({}); setPriceLoadState('unavailable'); } });
     return () => { active = false; };
-  }, [plan.recipes, profile.wilaya]);
+  }, [plan.recipes]);
 
   const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
   const recipeMap = useMemo(() => new Map<string, FamilyRecipe>(recipes.map((recipe) => [recipe.id, recipe] as const)), [recipes]);
@@ -396,7 +396,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
                   const quantity = Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings);
                   return Math.round(quantity * price.medianUnitPriceMinor / (ingredient.unit === 'piece' ? 1000 : 1000000));
                 });
-                const total = rows.reduce((sum, value) => sum + (value ?? 0), 0);
+                const total = rows.reduce<number>((sum, value) => sum + (value ?? 0), 0);
                 return rows.every((value) => value !== null) ? formatMoney(total, 'DZD', profile.locale) : '≥ ' + formatMoney(total, 'DZD', profile.locale);
               })()}</strong>
             </div>
