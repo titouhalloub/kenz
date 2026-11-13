@@ -17,6 +17,20 @@ Deno.serve(async(req:Request)=>{
   const {data:authData,error:authError}=await supabase.auth.getUser(bearer);
   if(authError||!authData.user) return respond(401,{error:"Your session is invalid or expired."});
   const body=await req.json().catch(()=>({}));
+  if(typeof body.channelId==="string") {
+    const channelId=body.channelId;
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(channelId)) return respond(400,{error:"A valid channel is required."});
+    const {data:channel,error}=await supabase.from("kenz_channels").select("id,owner_id,is_public").eq("id",channelId).maybeSingle();
+    if(error||!channel||!channel.is_public) return respond(404,{error:"Public channel was not found."});
+    const isOwner=channel.owner_id===authData.user.id;
+    if(!isOwner) {
+      const {data:follow}=await supabase.from("kenz_channel_follows").select("channel_id").eq("channel_id",channelId).eq("follower_id",authData.user.id).maybeSingle();
+      if(!follow) return respond(403,{error:"Follow this channel before receiving its media."});
+    }
+    const token=new AccessToken(apiKey,apiSecret,{identity:authData.user.id,ttl:"1h"});
+    token.addGrant({roomJoin:true,room:"kenz-channel-media-"+channelId,canPublish:false,canSubscribe:true,canPublishData:isOwner});
+    return respond(200,{token:await token.toJwt(),serverUrl:livekitUrl,role:"media",canPublishData:isOwner});
+  }
   const roomId=typeof body.roomId==="string"?body.roomId:"";
   const role=body.role==="host"?"host":"viewer";
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(roomId)) return respond(400,{error:"A valid live room is required."});
