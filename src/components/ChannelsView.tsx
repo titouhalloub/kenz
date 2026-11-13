@@ -42,7 +42,6 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       if (channelRows.error) throw channelRows.error;
       if (followRows.error) throw followRows.error;
       const rows = channelRows.data || [];
-      const ids = rows.map(r=>r.id);
       const mine = await client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at,follower_count').eq('owner_id',user.id).order('created_at',{ascending:false});
       if (mine.error) throw mine.error;
       const followSet = new Set((followRows.data||[]).map(r=>r.channel_id));
