@@ -17,6 +17,7 @@ const copy = {
 };
 export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   const t = copy[locale] || copy.ar;
+  const tabLabels: Record<Tab, string> = { discover: t.discover, following: t.following, my: t.mine };
   const userId = isUuid(user.id) ? user.id : '';
   const [tab,setTab] = useState<Tab>('discover');
   const [channels,setChannels] = useState<KenzChannel[]>([]);
@@ -136,7 +137,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     {toast && <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-sm text-emerald-200">{toast}<button onClick={() => setToast('')}><X size={16}/></button></div>}
 
     <div className="flex flex-wrap items-center gap-2">
-      {(['discover','following','my'] as Tab[]).map((item) => <button key={item} onClick={() => setTab(item)} className={tab===item ? 'rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-slate-950' : 'rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-slate-500'}>{t[item]}</button>)}
+      {(['discover','following','my'] as Tab[]).map((item) => <button key={item} onClick={() => setTab(item)} className={tab===item ? 'rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-slate-950' : 'rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-slate-500'}>{tabLabels[item]}</button>)}
       <button onClick={() => void refresh()} className="ms-auto inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-700 px-3 text-xs text-slate-300 hover:bg-slate-800"><RefreshCw size={14}/>{t.refresh}</button>
     </div>
     <label className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 text-slate-400"><Search size={17}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder={t.search} className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"/></label>
@@ -151,7 +152,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     </section>}
 
     {(tab === 'discover' || tab === 'following' || tab === 'my') && <section className="space-y-3">
-      <div className="flex items-center gap-2"><Compass size={17} className="text-emerald-400"/><h2 className="font-bold text-white">{t[tab]}</h2><span className="text-xs text-slate-500">({visibleChannels.length})</span></div>
+      <div className="flex items-center gap-2"><Compass size={17} className="text-emerald-400"/><h2 className="font-bold text-white">{tabLabels[tab]}</h2><span className="text-xs text-slate-500">({visibleChannels.length})</span></div>
       {loading && <p className="py-5 text-center text-sm text-slate-400">{t.loading}</p>}
       {!loading && visibleChannels.length === 0 && <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">{tab==='following'?t.noFollowing:tab==='my'?t.noMine:t.empty}</div>}
       <div className="grid gap-3 sm:grid-cols-2">
