@@ -17,7 +17,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   const t = copy[locale] || copy.en;
   const client = getSupabaseClient();
   const signedIn = Boolean(client && user.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user.id));
-  const [tab,setTab] = useState<'discover'|'following'|'mine'>('discover');
+  const [tab,setTab] = useState<'discover'|'following'|'mine'>('following');
   const [channels,setChannels] = useState<Channel[]>([]);
   const [selected,setSelected] = useState<Channel|null>(null);
   const [posts,setPosts] = useState<ChannelPost[]>([]);
@@ -114,10 +114,13 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     if(!client||!signedIn)return;
     const channel=client.channel('kenz-channels-live')
       .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channels'},()=>void refresh())
+      .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channel_follows',filter:`follower_id=eq.${user.id}`},()=>void refresh())
       .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channel_posts'},()=>{if(selected)void loadPosts(selected);if(tab==='following')void loadFollowingFeed();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channel_post_reactions'},()=>{if(tab==='following')void loadFollowingFeed();})
+      .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channel_post_comments'},()=>{if(tab==='following')void loadFollowingFeed();})
       .subscribe();
     return()=>{void client.removeChannel(channel);};
-  },[client,signedIn,refresh,loadPosts,loadFollowingFeed,tab,selected?.id]);
+  },[client,signedIn,refresh,loadPosts,loadFollowingFeed,tab,selected?.id,user.id]);
 
   const createChannel = async () => {
     if(!client||!signedIn)return;
@@ -149,6 +152,15 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     setBusy(false);
     if(error){setMessage(error.message);return;}
     setDraft('');setShowComposer(false);await loadPosts(selected);
+  };
+
+  const reactFromFeed = async (post:ChannelPost) => {
+    if (!client || !signedIn) return;
+    const result = post.liked
+      ? await client.from('kenz_channel_post_reactions').delete().eq('post_id', post.id).eq('user_id', user.id)
+      : await client.from('kenz_channel_post_reactions').insert({ post_id: post.id, user_id: user.id });
+    if (result.error) { setMessage(result.error.message); return; }
+    await loadFollowingFeed();
   };
 
   const react = async (post:ChannelPost) => {
@@ -224,11 +236,15 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       <div className="space-y-2">{post.comments.map(c=><div key={c.id} className="rounded-xl bg-slate-50 p-2 text-xs"><p className="text-[10px] text-violet-700">{c.author_id===user.id?'You':'Kenz member'}</p><p className="whitespace-pre-wrap text-slate-700">{c.body}</p></div>)}<div className="flex gap-2"><input value={comments[post.id]||''} onChange={e=>setComments(v=>({...v,[post.id]:e.target.value}))} maxLength={2000} placeholder={t.comment} className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 px-3 text-xs"/><button onClick={()=>void comment(post)} className="rounded-xl bg-violet-100 px-3 text-violet-800"><Send size={16}/></button></div></div></article>)}
     </section>:tab==='following'?<section className="space-y-3">
       {loading&&<p className="p-4 text-center text-xs text-slate-500">Loading your feed…</p>}
-      {!loading&&!feedPosts.length&&<p className="rounded-2xl border border-dashed border-violet-200 bg-white p-7 text-center text-sm text-slate-500">{t.noPosts}</p>}
+      {!loading&&!feedPosts.length&&<div className="rounded-2xl border border-dashed border-violet-200 bg-white p-7 text-center"><p className="text-sm text-slate-500">{t.noPosts}</p><p className="mt-1 text-xs text-slate-400">Follow channels to see their new posts here automatically.</p><button onClick={()=>setTab('discover')} className="mt-3 rounded-xl bg-violet-700 px-4 py-2 text-xs font-bold text-white">{t.discover}</button></div>}
       {feedPosts.map(post=><article key={post.id} className="space-y-2 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm">
-        <button onClick={()=>{const channel=channels.find(item=>item.id===post.channel_id);if(channel)setSelected(channel);}} className="flex w-full items-center justify-between text-start text-xs font-bold text-violet-700"><span>{post.channel_name}</span><time className="font-normal text-slate-400">{dateLabel(post.created_at)}</time></button>
+        <button onClick={()=>{const channel=channels.find(item=>item.id===post.channel_id);if(channel)setSelected(channel);}} className="flex w-full items-center justify-between text-start text-xs font-bold text-violet-700"><span className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-violet-100"><Radio size={15}/></span>{post.channel_name}</span><time className="font-normal text-slate-400">{dateLabel(post.created_at)}</time></button>
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{post.body}</p>
-        <div className="flex items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-500"><span className="flex items-center gap-1"><Heart size={15}/>{post.likes} {t.likes}</span><span className="flex items-center gap-1"><MessageCircle size={15}/>{post.comments.length}</span><button className="ms-auto font-semibold text-violet-700" onClick={()=>{const channel=channels.find(item=>item.id===post.channel_id);if(channel)setSelected(channel);}}>Open channel</button></div>
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-500">
+          <button onClick={()=>void reactFromFeed(post)} className={post.liked?'flex items-center gap-1 text-rose-600':'flex items-center gap-1 text-slate-500'}><Heart size={15} fill={post.liked?'currentColor':'none'}/>{post.likes} {t.likes}</button>
+          <span className="flex items-center gap-1"><MessageCircle size={15}/>{post.comments.length}</span>
+          <button className="ms-auto font-semibold text-violet-700" onClick={()=>{const channel=channels.find(item=>item.id===post.channel_id);if(channel)setSelected(channel);}}>Open channel</button>
+        </div>
       </article>)}
     </section>:<section className="space-y-3">
       {loading&&<p className="p-4 text-center text-xs text-slate-500">Loading channels…</p>}
