@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local LiveKit credentials and server TLS material
+deploy/livekit/livekit.yaml
+deploy/livekit/Caddyfile
