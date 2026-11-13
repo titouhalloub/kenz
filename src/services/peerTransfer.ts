@@ -90,6 +90,7 @@ export class PeerTransferSession {
       this.attachDataChannel(this.peer.createDataChannel('kenz-file-transfer', { ordered: true }));
       const offer = await this.peer.createOffer();
       await this.peer.setLocalDescription(offer);
+      await this.waitForIceGathering();
       this.callbacks.onStatus?.('Waiting for the other device to join this channel.');
     } else {
       await this.signal({ type: 'ready' });
@@ -123,7 +124,8 @@ export class PeerTransferSession {
         await this.peer.setRemoteDescription(description);
         const answer = await this.peer.createAnswer();
         await this.peer.setLocalDescription(answer);
-        await this.signal({ type: 'answer', description: answer });
+        await this.waitForIceGathering();
+        await this.signal({ type: 'answer', description: this.peer.localDescription?.toJSON() || answer });
         await this.flushCandidates();
       } else if (payload.type === 'answer' && this.role === 'sender') {
         await this.peer.setRemoteDescription(payload.description as RTCSessionDescriptionInit);
@@ -136,6 +138,19 @@ export class PeerTransferSession {
     } catch (error) {
       this.callbacks.onStatus?.(error instanceof Error ? error.message : 'WebRTC signaling failed.');
     }
+  }
+
+  private async waitForIceGathering() {
+    if (this.peer.iceGatheringState === 'complete') return;
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        if (this.peer.iceGatheringState !== 'complete') return;
+        this.peer.removeEventListener('icegatheringstatechange', done);
+        resolve();
+      };
+      this.peer.addEventListener('icegatheringstatechange', done);
+      done();
+    });
   }
 
   private async flushCandidates() {
