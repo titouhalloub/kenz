@@ -445,10 +445,24 @@ export default function App() {
   const isRTL = budgetState.profile.locale === 'ar';
   useEffect(() => { document.documentElement.lang = budgetState.profile.locale; document.documentElement.dir = isRTL ? 'rtl' : 'ltr'; }, [budgetState.profile.locale, isRTL]);
   useEffect(() => {
-    const applyTranslations = () => translateKenzDOM(document.body, budgetState.profile.locale);
-    applyTranslations();
-    const observer = new MutationObserver(() => applyTranslations());
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+    const locale = budgetState.profile.locale;
+    translateKenzDOM(document.body, locale);
+    // Translate only newly inserted UI nodes. Re-scanning the entire application for
+    // every DOM mutation made the mobile Plus sheet trigger repeated full-tree walks.
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of Array.from(record.addedNodes)) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            translateKenzDOM(node as Element, locale);
+          } else if (node.nodeType === Node.TEXT_NODE && node.parentElement) {
+            const parent = node.parentElement;
+            const value = node.nodeValue?.trim() || '';
+            if (value) translateKenzDOM(parent, locale);
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [budgetState.profile.locale]);
 
