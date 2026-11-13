@@ -36,18 +36,20 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     setLoading(true);
     try {
       const [channelRows, followRows] = await Promise.all([
-        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at,follower_count').eq('is_public',true).order('created_at',{ascending:false}).limit(100),
+        client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('is_public',true).order('created_at',{ascending:false}).limit(100),
         client.from('kenz_channel_follows').select('channel_id').eq('follower_id',user.id),
       ]);
       if (channelRows.error) throw channelRows.error;
       if (followRows.error) throw followRows.error;
       const rows = channelRows.data || [];
-      const mine = await client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at,follower_count').eq('owner_id',user.id).order('created_at',{ascending:false});
+      const mine = await client.from('kenz_channels').select('id,owner_id,name,slug,description,category,created_at').eq('owner_id',user.id).order('created_at',{ascending:false});
       if (mine.error) throw mine.error;
+      if (counts.error) throw counts.error;
+      const countMap = new Map((counts.data||[]).map(r=>[r.channel_id,Number(r.follower_count)]));
       const followSet = new Set((followRows.data||[]).map(r=>r.channel_id));
-      let visible = rows.map(r=>({...r,is_following:followSet.has(r.id)}));
+      let visible = rows.map(r=>({...r,follower_count:countMap.get(r.id)||0,is_following:followSet.has(r.id)}));
       if (tab==='following') visible=visible.filter(r=>r.is_following);
-      if (tab==='mine') visible=(mine.data||[]).map(r=>({...r,is_following:false}));
+      if (tab==='mine') visible=(mine.data||[]).map(r=>({...r,follower_count:countMap.get(r.id)||0,is_following:false}));
       setChannels(visible);
       if (selected && !visible.some(r=>r.id===selected.id) && tab!=='mine') setSelected(null);
     } catch (error) { setMessage(error instanceof Error?error.message:'Could not load channels.'); }
