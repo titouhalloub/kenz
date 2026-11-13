@@ -16,6 +16,31 @@ services:
     networks:
       - kenz-live
 
+  coturn:
+    image: coturn/coturn:4.6.3
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3479
+      - --tls-listening-port=5350
+      - --realm=${TURN_HOST}
+      - --server-name=${TURN_HOST}
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SHARED_SECRET}
+      - --cert=/etc/letsencrypt/live/${TURN_HOST}/fullchain.pem
+      - --pkey=/etc/letsencrypt/live/${TURN_HOST}/privkey.pem
+      - --min-port=49160
+      - --max-port=49200
+      - --external-ip=${PUBLIC_IP}
+      - --no-cli
+      - --no-multicast-peers
+      - --no-loopback-peers
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
   caddy:
     image: caddy:2.10.2
     restart: unless-stopped
