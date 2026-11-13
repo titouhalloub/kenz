@@ -10,9 +10,8 @@ for select
 to authenticated
 using (
   extension = 'broadcast'
-  and realtime.topic() ~ '^kenz-p2p:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:[0-9]{10}$'
-  and split_part(realtime.topic(), ':', 3)::bigint > extract(epoch from now())::bigint
-  and split_part(realtime.topic(), ':', 3)::bigint <= extract(epoch from now() + interval '11 minutes')::bigint
+  and case
+    when realtime.topic() ~ '^kenz-p2p:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:[0-9]{10}
 );
 
 drop policy if exists "Kenz authenticated P2P session write" on realtime.messages;
@@ -25,4 +24,27 @@ with check (
   and realtime.topic() ~ '^kenz-p2p:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:[0-9]{10}$'
   and split_part(realtime.topic(), ':', 3)::bigint > extract(epoch from now())::bigint
   and split_part(realtime.topic(), ':', 3)::bigint <= extract(epoch from now() + interval '11 minutes')::bigint
+);
+
+    then split_part(realtime.topic(), ':', 3)::bigint > extract(epoch from now())::bigint
+      and split_part(realtime.topic(), ':', 3)::bigint <= extract(epoch from now() + interval '11 minutes')::bigint
+    else false
+  end
+);
+
+drop policy if exists "Kenz authenticated P2P session write" on realtime.messages;
+create policy "Kenz authenticated P2P session write"
+on realtime.messages
+for insert
+to authenticated
+with check (
+  extension = 'broadcast'
+  and case
+    when realtime.topic() ~ '^kenz-p2p:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:[0-9]{10}
+);
+
+    then split_part(realtime.topic(), ':', 3)::bigint > extract(epoch from now())::bigint
+      and split_part(realtime.topic(), ':', 3)::bigint <= extract(epoch from now() + interval '11 minutes')::bigint
+    else false
+  end
 );
