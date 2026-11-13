@@ -111,10 +111,10 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     if(!client||!signedIn)return;
     const channel=client.channel('kenz-channels-live')
       .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channels'},()=>void refresh())
-      .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channel_posts'},()=>{if(selected)void loadPosts(selected);})
+      .on('postgres_changes',{event:'*',schema:'public',table:'kenz_channel_posts'},()=>{if(selected)void loadPosts(selected);if(tab==='following')void loadFollowingFeed();})
       .subscribe();
     return()=>{void client.removeChannel(channel);};
-  },[client,signedIn,refresh,loadPosts,selected?.id]);
+  },[client,signedIn,refresh,loadPosts,loadFollowingFeed,tab,selected?.id]);
 
   const createChannel = async () => {
     if(!client||!signedIn)return;
