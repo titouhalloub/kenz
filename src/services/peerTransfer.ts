@@ -36,7 +36,6 @@ export class PeerTransferSession {
   private data: RTCDataChannel | null = null;
   private realtime: ReturnType<NonNullable<ReturnType<typeof getSupabaseClient>>['channel']>;
   private closed = false;
-  private pendingCandidates: RTCIceCandidateInit[] = [];
   private receivedParts: BlobPart[] = [];
   private incomingMeta: { name: string; mimeType: string; size: number } | null = null;
   private receivedBytes = 0;
@@ -64,9 +63,6 @@ export class PeerTransferSession {
   }
 
   private async start() {
-    this.peer.onicecandidate = ({ candidate }) => {
-      if (candidate) void this.signal({ type: 'candidate', candidate: candidate.toJSON() });
-    };
     this.peer.onconnectionstatechange = () => {
       const state = this.peer.connectionState;
       this.callbacks.onStatus?.(state === 'connected' ? 'Direct device connection established.' : `Connection: ${state}`);
@@ -126,14 +122,8 @@ export class PeerTransferSession {
         await this.peer.setLocalDescription(answer);
         await this.waitForIceGathering();
         await this.signal({ type: 'answer', description: this.peer.localDescription?.toJSON() || answer });
-        await this.flushCandidates();
       } else if (payload.type === 'answer' && this.role === 'sender') {
         await this.peer.setRemoteDescription(payload.description as RTCSessionDescriptionInit);
-        await this.flushCandidates();
-      } else if (payload.type === 'candidate') {
-        const candidate = payload.candidate as RTCIceCandidateInit;
-        if (this.peer.remoteDescription) await this.peer.addIceCandidate(candidate);
-        else this.pendingCandidates.push(candidate);
       }
     } catch (error) {
       this.callbacks.onStatus?.(error instanceof Error ? error.message : 'WebRTC signaling failed.');
@@ -151,10 +141,6 @@ export class PeerTransferSession {
       this.peer.addEventListener('icegatheringstatechange', done);
       done();
     });
-  }
-
-  private async flushCandidates() {
-    for (const candidate of this.pendingCandidates.splice(0)) await this.peer.addIceCandidate(candidate);
   }
 
   private handleData(data: unknown) {
