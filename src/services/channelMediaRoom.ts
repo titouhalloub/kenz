@@ -69,7 +69,6 @@ export async function connectKenzChannelMediaRoom(
     onlinePeers: () => room.remoteParticipants.size,
     sendFile: async (postId, file) => {
       if (file.size > 30 * 1024 * 1024) throw new Error('P2P media limit is 30 MB per file.');
-      if (!room.localParticipant.isConnected) throw new Error('Channel media relay is disconnected.');
       const online = room.remoteParticipants.size;
       if (!online) return { online: 0, relayed: false };
       const meta: TransferMeta = { kind: 'meta', postId, name: file.name, mime: file.type, size: file.size };
