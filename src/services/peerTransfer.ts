@@ -106,8 +106,8 @@ export class PeerTransferSession {
 
   private async signal(payload: Record<string, unknown>) {
     if (this.closed) return;
-    const { error } = await this.realtime.send({ type: 'broadcast', event: 'signal', payload });
-    if (error) throw error;
+    const status = await this.realtime.send({ type: 'broadcast', event: 'signal', payload });
+    if (status !== 'ok') throw new Error(`Realtime signaling send failed: ${status}`);
   }
 
   private async handleSignal(payload: Record<string, unknown>) {
@@ -150,10 +150,17 @@ export class PeerTransferSession {
         if (message.type === 'file-start') {
           this.receivedParts = [];
           this.receivedBytes = 0;
+          const size = Number(message.size) || 0;
+          const mimeType = String(message.mimeType || '');
+          if (size <= 0 || size > MAX_FILE_BYTES || (!mimeType.startsWith('image/') && !['video/mp4', 'video/webm'].includes(mimeType))) {
+            this.incomingMeta = null;
+            this.callbacks.onStatus?.('Rejected: unsupported file type or size.');
+            return;
+          }
           this.incomingMeta = {
-            name: String(message.name || 'kenz-file'),
-            mimeType: String(message.mimeType || 'application/octet-stream'),
-            size: Number(message.size) || 0,
+            name: String(message.name || 'kenz-file').replace(/[\\/\\\\]/g, '_').slice(0, 120),
+            mimeType,
+            size,
           };
           this.callbacks.onProgress?.(0, this.incomingMeta.size);
         } else if (message.type === 'file-end' && this.incomingMeta) {
@@ -179,6 +186,7 @@ export class PeerTransferSession {
 
   async sendFile(file: File) {
     if (file.size <= 0 || file.size > MAX_FILE_BYTES) throw new Error('Choose a file between 1 byte and 25 MB.');
+    if (!file.type.startsWith('image/') && !['video/mp4', 'video/webm'].includes(file.type)) throw new Error('Only image, MP4 or WebM files are supported.');
     if (!this.data || this.data.readyState !== 'open') throw new Error('The other device is not connected yet.');
     this.data.send(JSON.stringify({ type: 'file-start', name: file.name.slice(0, 120), mimeType: file.type || 'application/octet-stream', size: file.size }));
     let sent = 0;
