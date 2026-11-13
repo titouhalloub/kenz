@@ -1,6 +1,6 @@
 # Kenz LiveKit SFU + TURN deployment
 
-Kenz uses LiveKit as the WebRTC Selective Forwarding Unit (SFU) for live camera/microphone streams. LiveKit's embedded TURN handles SFU media connectivity. Channel photo/video attachments are not stored on Supabase: Kenz saves only the post metadata, then sends the actual file directly to currently online followers over peer-to-peer WebRTC DataChannels. A separate Coturn service provides authenticated TURN relay for those peer connections.
+Kenz uses LiveKit as the WebRTC Selective Forwarding Unit (SFU) for live camera/microphone streams and channel media delivery. LiveKit's embedded TURN handles relay connectivity. Channel photo/video attachments are not stored on Supabase: Kenz saves only post metadata, then sends the actual file as chunked WebRTC DataChannel messages through the channel's SFU room to followers who are online.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ In Supabase Dashboard → Edge Functions → Secrets, set:
 - `LIVEKIT_API_KEY` = the API key from `livekit.yaml`
 - `LIVEKIT_API_SECRET` = the matching API secret from `livekit.yaml`
 
-The deployed `kenz-livekit-token` Edge Function signs short-lived participant JWTs after checking the authenticated user's channel ownership or public live-room access. Do not put the API secret in Vite variables, the APK, or any client code.
+The deployed `kenz-livekit-token` Edge Function signs short-lived participant JWTs after checking the authenticated user's channel ownership, follow status, or public live-room access. Do not put the API secret in Vite variables, the APK, or any client code.
 
 ## Kenz client behavior
 
@@ -39,7 +39,7 @@ The deployed `kenz-livekit-token` Edge Function signs short-lived participant JW
 - Only the channel owner receives publish permission.
 - Ending the stream closes the room listing; the SFU room is closed when participants disconnect.
 - Image/video post metadata is stored in Postgres; the file itself is transferred directly over WebRTC DataChannels to up to eight currently online followers.
-- P2P transfer limit is 30 MB per file; accepted types are JPEG, PNG, WebP, AVIF, MP4, WebM and QuickTime.
+- SFU DataChannel transfer limit is 30 MB per file; accepted types are JPEG, PNG, WebP, AVIF, MP4, WebM and QuickTime.
 - Offline followers cannot retrieve an attachment later because Kenz intentionally does not keep a server copy.
 
 ## Important operational notes
