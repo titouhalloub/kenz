@@ -99,7 +99,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
     setBusy(false);
     if(result.error){setMessage(result.error.message);return;}
     await refresh();
-    if(selected?.id===channel.id)setSelected({...channel,is_following:!channel.is_following,follower_count:Math.max(0,(channel.follower_count||0)+(channel.is_following?-1:1))});
+    if(selected?.id===channel.id)setSelected({...channel,is_following:!channel.is_following});
   };
 
   const publish = async () => {
