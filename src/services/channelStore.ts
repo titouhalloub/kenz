@@ -180,7 +180,8 @@ export async function addKenzPostComment(postId: string, userId: string, body: s
 }
 
 export function subscribeToKenzChannels(onChange: () => void) {
-  const db = client();
+  const db = getSupabaseClient();
+  if (!db) return () => undefined;
   const channel = db.channel('kenz-public-channels-feed')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'kenz_channels' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'kenz_channel_follows' }, onChange)
