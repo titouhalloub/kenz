@@ -38,7 +38,7 @@ The deployed `kenz-livekit-token` Edge Function signs short-lived participant JW
 - Viewers can join a live room with subscribe-only tokens.
 - Only the channel owner receives publish permission.
 - Ending the stream closes the room listing; the SFU room is closed when participants disconnect.
-- Image/video post metadata is stored in Postgres; the file itself is transferred directly over WebRTC DataChannels to up to eight currently online followers.
+- Image/video post metadata is stored in Postgres; the file itself is relayed through LiveKit WebRTC DataChannels through the channel SFU to all currently online followers.
 - SFU DataChannel transfer limit is 30 MB per file; accepted types are JPEG, PNG, WebP, AVIF, MP4, WebM and QuickTime.
 - Offline followers cannot retrieve an attachment later because Kenz intentionally does not keep a server copy.
 
