@@ -158,7 +158,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
         {visibleChannels.map((channel)=> <article key={channel.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 transition hover:border-emerald-500/40">
           <div className="flex items-start gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-700 text-lg font-black text-slate-950">{initials(channel.name)}</div><div className="min-w-0 flex-1"><h3 className="truncate font-bold text-white">{channel.name}</h3><p className="text-xs text-slate-500">@{channel.slug}</p></div><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-300">{channel.category}</span></div>
           {channel.description && <p className="mt-3 line-clamp-2 text-sm text-slate-300">{channel.description}</p>}
-          <div className="mt-4 flex items-center justify-between gap-2"><span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><Users size={14}/>{channel.follower_count} {t.followers}</span>
+          <div className="mt-4 flex items-center justify-between gap-2"><span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><Users size={14}/>{locale === 'ar' ? 'قناة عامة' : locale === 'fr' ? 'Chaîne publique' : 'Public channel'}</span>
             {channel.owner_id !== userId && <button disabled={busy || !userId} onClick={()=>void onFollow(channel)} className={channel.is_following?'min-h-9 rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300':'min-h-9 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-slate-950'}>{channel.is_following?t.unfollow:t.follow}</button>}
           </div>
         </article>)}
