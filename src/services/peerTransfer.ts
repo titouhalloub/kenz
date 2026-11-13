@@ -90,9 +90,9 @@ export class PeerTransferSession {
       this.attachDataChannel(this.peer.createDataChannel('kenz-file-transfer', { ordered: true }));
       const offer = await this.peer.createOffer();
       await this.peer.setLocalDescription(offer);
-      await this.signal({ type: 'offer', description: offer });
       this.callbacks.onStatus?.('Waiting for the other device to join this channel.');
     } else {
+      await this.signal({ type: 'ready' });
       this.callbacks.onStatus?.('Channel joined. Waiting for the sender.');
     }
   }
@@ -116,7 +116,9 @@ export class PeerTransferSession {
   private async handleSignal(payload: Record<string, unknown>) {
     if (this.closed) return;
     try {
-      if (payload.type === 'ready' && this.role === 'sender' && this.peer.localDescription) {\n        await this.signal({ type: 'offer', description: this.peer.localDescription.toJSON() });\n      } else if (payload.type === 'offer' && this.role === 'receiver') {
+      if (payload.type === 'ready' && this.role === 'sender' && this.peer.localDescription) {
+        await this.signal({ type: 'offer', description: this.peer.localDescription.toJSON() });
+      } else if (payload.type === 'offer' && this.role === 'receiver') {
         const description = payload.description as RTCSessionDescriptionInit;
         await this.peer.setRemoteDescription(description);
         const answer = await this.peer.createAnswer();
