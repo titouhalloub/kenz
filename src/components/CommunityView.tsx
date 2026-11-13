@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Flag, Heart, MessageCircle, Plus, Share2, ShieldAlert, Trash2, Users } from 'lucide-react';
+import { Bookmark, Flag, Heart, MessageCircle, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
 import { loadMarketPrices } from '../services/priceStore';
@@ -389,19 +389,6 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
               </div>}
               {post.kind === 'shopping_list' && <div className="space-y-1">{post.ingredients.map((item, index) => <p key={index} className="text-xs text-slate-300">• {item.freeText || item.productSlug} — {item.quantityMilliUnits} {item.baseUnit}</p>)}</div>}
               <div className="flex items-center gap-3 text-[11px] text-slate-400">
-                <button onClick={() => {
-                  const ingredientText = post.ingredients.map((item) =>
-                    `• ${item.productSlug || item.freeText || 'Ingredient'}: ${item.quantityMilliUnits} ${item.baseUnit}`
-                  ).join('\\n');
-                  const shareText = [
-                    `Kenz · ${post.title}`,
-                    post.body,
-                    post.kind === 'recipe' ? `Ingredients ( ${post.servings || 1} servings ):\\n${ingredientText}\\n\\nSteps: ${post.steps || ''}` : ingredientText,
-                    typeof totalCost === 'number' ? `Estimated ingredients cost: ${formatMoney(totalCost, 'DZD', locale)}` : '',
-                    'Shared from Kenz',
-                  ].filter(Boolean).join('\\n\\n');
-                  window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank', 'noopener,noreferrer');
-                }} className="flex items-center gap-1"><Share2 className="h-4 w-4" /> WhatsApp</button>
                 <button disabled={!userId} onClick={async () => {
                   const result = await toggleCommunityReaction(post.id, userId!, post.likedByMe);
                   if (result.success) setPosts((current) => current.map((item) => item.id === post.id ? { ...item, likedByMe: result.data!, likes: item.likes + (result.data ? 1 : -1) } : item));
