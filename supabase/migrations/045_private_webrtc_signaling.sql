@@ -1,0 +1,5 @@
+-- 045: no SQL policy is required for expiring P2P invite topics.
+-- The Realtime topic uses a cryptographically random UUID and a 10-minute expiry.
+-- The invite code is a bearer secret. Media bytes remain on RTCDataChannel.
+-- Public Realtime topics are used because the project database role cannot own
+-- realtime.messages to manage its system-table RLS policies.

@@ -9,6 +9,7 @@ import {
   toggleCommunitySave, type CommunityKind, type CommunityPost, type VerifiedOwnedBusiness,
 } from '../services/communityStore';
 import type { UserProfile } from '../services/authStore';
+import { PeerTransferPanel } from './PeerTransferPanel';
 
 interface CommunityViewProps {
   user: UserProfile;
@@ -247,6 +248,8 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
         </div>
         <p className="text-[10px] text-slate-500">Les publications sont publiques sous un pseudonyme. Ne partage pas d’adresse personnelle, de numéro de téléphone ou d’informations privées.</p>
       </section>
+
+      <PeerTransferPanel enabled={Boolean(userId)} />
 
       {composerOpen && (
         <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4 space-y-3">

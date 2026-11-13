@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, ShoppingBasket, ClipboardList } from 'lucide-react';
 import type { UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
+import { loadMarketPrices } from '../services/priceStore';
+import type { SimulatorPrice } from '../domain/simulator';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
@@ -62,6 +64,25 @@ const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
   } catch { return fallback; }
 };
 
+const FAMILY_PRICE_PRODUCTS: Record<string, { slug: string; unit: 'kg' | 'l' | 'unit' }> = {
+  'عدس': { slug: 'lentilles', unit: 'kg' }, lentille: { slug: 'lentilles', unit: 'kg' }, lentilles: { slug: 'lentilles', unit: 'kg' },
+  'كسكس': { slug: 'couscous', unit: 'kg' }, couscous: { slug: 'couscous', unit: 'kg' },
+  'حمص': { slug: 'pois-chiches', unit: 'kg' }, 'pois chiche': { slug: 'pois-chiches', unit: 'kg' }, 'pois chiches': { slug: 'pois-chiches', unit: 'kg' },
+  'بيض': { slug: 'oeufs', unit: 'unit' }, oeuf: { slug: 'oeufs', unit: 'unit' }, oeufs: { slug: 'oeufs', unit: 'unit' },
+  'معكرونة': { slug: 'pates-spaghetti', unit: 'kg' }, 'pâtes': { slug: 'pates-spaghetti', unit: 'kg' }, pasta: { slug: 'pates-spaghetti', unit: 'kg' },
+  'زيت': { slug: 'huile-table', unit: 'l' }, huile: { slug: 'huile-table', unit: 'l' }, oil: { slug: 'huile-table', unit: 'l' },
+  'طماطم': { slug: 'tomate', unit: 'kg' }, tomate: { slug: 'tomate', unit: 'kg' },
+  'بصل': { slug: 'oignon', unit: 'kg' }, oignon: { slug: 'oignon', unit: 'kg' },
+  'جزر': { slug: 'carotte', unit: 'kg' }, carotte: { slug: 'carotte', unit: 'kg' },
+  'ثوم': { slug: 'ail', unit: 'kg' }, ail: { slug: 'ail', unit: 'kg' },
+  'كوسة': { slug: 'courgette', unit: 'kg' }, courgette: { slug: 'courgette', unit: 'kg' },
+  'لفت': { slug: 'navet', unit: 'kg' }, navet: { slug: 'navet', unit: 'kg' },
+  'خيار': { slug: 'concombre', unit: 'kg' }, concombre: { slug: 'concombre', unit: 'kg' },
+};
+const familyIngredientSlug = (name: string) => FAMILY_PRICE_PRODUCTS[name.trim().toLocaleLowerCase()]?.slug;
+const familyIngredientUnitMatches = (name: string, unit: IngredientUnit) =>
+  FAMILY_PRICE_PRODUCTS[name.trim().toLocaleLowerCase()]?.unit === (unit === 'g' ? 'kg' : unit === 'ml' ? 'l' : 'unit');
+
 export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, householdSize }) => {
   const [plan, setPlan] = useState(() => readLivingPlan(profile.id, month));
   const [section, setSection] = useState<Section>('meals');
@@ -86,6 +107,8 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const [extraQuantity, setExtraQuantity] = useState('');
   const [extraUnit, setExtraUnit] = useState<IngredientUnit>('piece');
   const [extraCategory, setExtraCategory] = useState<ShoppingExtraCategory>('grocery');
+  const [marketPrices, setMarketPrices] = useState<Record<string, SimulatorPrice>>({});
+  const [priceLoadState, setPriceLoadState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
 
   useEffect(() => {
     setPlan(readLivingPlan(profile.id, month));
@@ -105,6 +128,23 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       localStorage.setItem('kenz_family_recipe_library_v1_' + encodeURIComponent(profile.id), JSON.stringify(plan.recipes));
     } catch { setStatus(tr(profile, 'Stockage local indisponible.', 'التخزين المحلي غير متاح.', 'Local storage is unavailable.')); }
   }, [plan, profile.id, month, profile.locale]);
+
+
+  useEffect(() => {
+    let active = true;
+    const slugs = [...new Set([...BUILTIN_FAMILY_RECIPES, ...plan.recipes]
+      .flatMap((recipe) => recipe.ingredients.map((ingredient) => familyIngredientSlug(ingredient.name))
+        .filter((slug): slug is string => Boolean(slug))))];
+    setPriceLoadState('loading');
+    loadMarketPrices(slugs, null)
+      .then((result) => {
+        if (!active) return;
+        setMarketPrices(result.pricesBySlug);
+        setPriceLoadState(Object.keys(result.pricesBySlug).length ? 'ready' : 'unavailable');
+      })
+      .catch(() => { if (active) { setMarketPrices({}); setPriceLoadState('unavailable'); } });
+    return () => { active = false; };
+  }, [plan.recipes]);
 
   const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
   const recipeMap = useMemo(() => new Map<string, FamilyRecipe>(recipes.map((recipe) => [recipe.id, recipe] as const)), [recipes]);
@@ -343,6 +383,34 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <p className="mt-1 text-xs text-violet-800">{recipeDescription(selectedRecipe)} · {selectedRecipe.prepMinutes} {tr(profile, 'min', 'د', 'min')}</p>
           <p className="mt-2 text-xs font-semibold text-violet-900">{tr(profile, 'Ingrédients pour', 'المكونات لـ', 'Ingredients for')} {servings || householdSize} {tr(profile, 'personnes', 'أشخاص', 'people')}</p>
           <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-violet-900">{selectedRecipe.ingredients.map((ingredient) => <li key={ingredient.name + ingredient.unit}>• {ingredientLabel(ingredient.name)}: {formatQuantity(Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings), ingredient.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</li>)}</ul>
+
+          <div className="mt-3 rounded-lg border border-violet-200 bg-white/70 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-xs text-violet-950">{tr(profile, 'Coût des ingrédients', 'تكلفة المكونات', 'Ingredient cost')}</strong>
+              <strong className="text-sm text-violet-950">{(() => {
+                const rows = selectedRecipe.ingredients.map((ingredient) => {
+                  const slug = familyIngredientSlug(ingredient.name);
+                  const price = slug ? marketPrices[slug] : undefined;
+                  const compatible = familyIngredientUnitMatches(ingredient.name, ingredient.unit);
+                  if (!price || !compatible) return null;
+                  const quantity = Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings);
+                  return Math.round(quantity * price.medianUnitPriceMinor / (ingredient.unit === 'piece' ? 1000 : 1000000));
+                });
+                const total = rows.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+                return rows.every((value) => value !== null) ? formatMoney(total, 'DZD', profile.locale) : '≥ ' + formatMoney(total, 'DZD', profile.locale);
+              })()}</strong>
+            </div>
+            {selectedRecipe.ingredients.map((ingredient) => {
+              const slug = familyIngredientSlug(ingredient.name);
+              const price = slug ? marketPrices[slug] : undefined;
+              const compatible = familyIngredientUnitMatches(ingredient.name, ingredient.unit);
+              const quantity = Math.round(ingredient.quantityMilli * Math.max(1, Number(servings) || householdSize) / selectedRecipe.baseServings);
+              const cost = price && compatible ? Math.round(quantity * price.medianUnitPriceMinor / (ingredient.unit === 'piece' ? 1000 : 1000000)) : null;
+              return <div key={ingredient.name + ingredient.unit} className="mt-1 flex justify-between gap-2 text-[11px] text-violet-900"><span>{ingredientLabel(ingredient.name)}</span><span>{cost === null ? tr(profile, 'Prix indisponible', 'السعر غير متوفر', 'Price unavailable') : formatMoney(cost, 'DZD', profile.locale)}</span></div>;
+            })}
+            <p className="mt-2 text-[10px] text-amber-800">{tr(profile, 'المجموع تقديري حسب الأسعار المنشورة المتاحة؛ المواد غير المسعّرة لا تُحتسب. ≥ يعني أن المجموع جزئي.', 'المجموع تقديري حسب الأسعار المنشورة المتاحة؛ المواد غير المسعّرة لا تُحتسب.', 'Based on available published local prices. Unpriced ingredients are excluded; ≥ indicates a partial total.')}</p>
+            {priceLoadState === 'unavailable' && <p className="mt-1 text-[10px] text-slate-500">{tr(profile, 'لا توجد بيانات أسعار حديثة لهذه المنطقة.', 'لا توجد بيانات أسعار حديثة لهذه المنطقة.', 'No recent local price data is available.')}</p>}
+          </div>
           <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{recipeSteps(selectedRecipe).map((step, index) => <li key={index}>{step}</li>)}</ol>
         </div>}
         <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>

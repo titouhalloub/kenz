@@ -17,6 +17,7 @@ import {
   Moon,
   BarChart3,
   MessageCircle,
+  Radio,
 } from 'lucide-react';
 import {
   loadBudgetState,
@@ -84,6 +85,7 @@ import { TransactionsView } from './components/TransactionsView';
 import { PlanView } from './components/PlanView';
 import { DirectoryView } from './components/DirectoryView';
 import { CommunityView } from './components/CommunityView';
+import { ChannelsView } from './components/ChannelsView';
 import { SettingsView } from './components/SettingsView';
 import { DebtLedgerView } from './components/DebtLedgerView';
 import { FestiveZakatView } from './components/FestiveZakatView';
@@ -101,7 +103,7 @@ import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 import { kenzText } from './domain/i18n';
 
-type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'channels' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
@@ -443,10 +445,24 @@ export default function App() {
   const isRTL = budgetState.profile.locale === 'ar';
   useEffect(() => { document.documentElement.lang = budgetState.profile.locale; document.documentElement.dir = isRTL ? 'rtl' : 'ltr'; }, [budgetState.profile.locale, isRTL]);
   useEffect(() => {
-    const applyTranslations = () => translateKenzDOM(document.body, budgetState.profile.locale);
-    applyTranslations();
-    const observer = new MutationObserver(() => applyTranslations());
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+    const locale = budgetState.profile.locale;
+    translateKenzDOM(document.body, locale);
+    // Translate only newly inserted UI nodes. Re-scanning the entire application for
+    // every DOM mutation made the mobile Plus sheet trigger repeated full-tree walks.
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of Array.from(record.addedNodes)) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            translateKenzDOM(node as Element, locale);
+          } else if (node.nodeType === Node.TEXT_NODE && node.parentElement) {
+            const parent = node.parentElement;
+            const value = node.nodeValue?.trim() || '';
+            if (value) translateKenzDOM(parent, locale);
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [budgetState.profile.locale]);
 
@@ -521,6 +537,14 @@ export default function App() {
             }`}
           >
             {budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}
+          </button>
+          <button
+            onClick={() => setActiveTab('channels')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center gap-1 cursor-pointer ${
+              activeTab === 'channels' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Radio className="h-4 w-4" /> {budgetState.profile.locale === 'ar' ? 'القنوات' : budgetState.profile.locale === 'en' ? 'Channels' : 'Chaînes'}
           </button>
           <button
             onClick={() => setActiveTab('debts')}
@@ -684,6 +708,10 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'channels' && (
+          <ChannelsView user={currentUser} locale={budgetState.profile.locale} />
+        )}
+
         {activeTab === 'debts' && (
           <DebtLedgerView
             debts={debts}
@@ -764,6 +792,7 @@ export default function App() {
                 ['transactions', budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
                 ['nearby', budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
                 ['community', budgetState.profile.locale === 'en' ? 'Community' : budgetState.profile.locale === 'ar' ? 'المجتمع' : 'Communauté', MessageCircle],
+                ['channels', budgetState.profile.locale === 'en' ? 'Channels' : budgetState.profile.locale === 'ar' ? 'القنوات' : 'Chaînes', Radio],
                 ['debts', 'Kredy', BookOpen], ['zakat', 'Zakat', Moon],
                 ['settings', budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],
                 ['profile', budgetState.profile.locale === 'en' ? 'Profile' : budgetState.profile.locale === 'ar' ? 'الملف الشخصي' : 'Profil', Sparkles],
