@@ -92,7 +92,7 @@ export const PeerTransferPanel: React.FC<Props> = ({ enabled }) => {
       </div>}
       {downloadUrl && received && <a href={downloadUrl} download={received.name} className="block rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-xs text-emerald-200">Received {received.name} · Tap to save on this device</a>}
       {status && <p className="text-[11px] text-cyan-200" role="status">{status}</p>}
-      <p className="text-[10px] text-slate-500">Direct connections can fail on some networks. This first version uses STUN only (no media relay); both users must be online, signed in and accept the transfer. Invite codes are temporary bearer links: share them only with the intended person.</p>
+      <p className="text-[10px] text-slate-500">Direct connections can fail on some networks. This first version uses STUN only (no media relay), which can expose your public network IP to the peer. Only use it with someone you know and trust. Both users must be online, signed in and join the temporary invite channel.</p>
     </section>
   );
 };
