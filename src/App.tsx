@@ -447,6 +447,8 @@ export default function App() {
   useEffect(() => { document.documentElement.lang = budgetState.profile.locale; document.documentElement.dir = isRTL ? 'rtl' : 'ltr'; }, [budgetState.profile.locale, isRTL]);
   useEffect(() => {
     const locale = budgetState.profile.locale;
+    // French is the source language, so no translation observer is needed.
+    if (locale === 'fr') return;
     // One full pass for the initial screen/locale change; later DOM changes are incremental.
     translateKenzDOM(document.body, locale);
     const observer = new MutationObserver((records) => {
