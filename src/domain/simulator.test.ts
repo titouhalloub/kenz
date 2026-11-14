@@ -20,7 +20,7 @@ function fixture(month: string, overrides: Partial<SimulatorInput> = {}): Simula
     now: '2026-11-07T10:00:00Z',
     items: [{
       productId: 'rice', name: 'Rice', category: 'grains',
-      baseUnit: 'kg', quantityPerPersonPerDayMilliUnits: 10, price,
+      baseUnit: 'kg', substituteGroup: 'rice_variants', quantityPerPersonPerDayMilliUnits: 10, price,
     }],
     ...overrides,
   };
@@ -54,6 +54,30 @@ describe('simulateMonthlyBudget', () => {
     expect(result.projectedSurplusMinor).toBeNull();
   });
 
+
+  it('calculates fractional piece quantities using the same thousandths scale', () => {
+    const piecePrice = { ...price, p25UnitPriceMinor: 9000, medianUnitPriceMinor: 10000, p75UnitPriceMinor: 11000 };
+    const result = simulateMonthlyBudget(fixture('2026-11', {
+      household: { adults: 2, children: 0 },
+      items: [{
+        productId: 'baguette', name: 'Baguette', category: 'cereals_bread',
+        baseUnit: 'unit', quantityPerPersonPerDayMilliUnits: 700, price: piecePrice,
+      }],
+    }));
+    expect(result.lines[0].quantityMilliUnits).toBe(42_000);
+    expect(result.pricedSubtotal.expectedMinor).toBe(420_000);
+  });
+
+  it('does not suggest substitutes just because products share a category', () => {
+    const result = simulateMonthlyBudget(fixture('2026-11', {
+      items: [
+        { ...fixture('2026-11').items[0], productId: 'potato', category: 'vegetables', substituteGroup: undefined, price },
+        { ...fixture('2026-11').items[0], productId: 'tomato', category: 'vegetables', substituteGroup: undefined, price: { ...price, p25UnitPriceMinor: 1000, medianUnitPriceMinor: 2000, p75UnitPriceMinor: 3000 } },
+      ],
+    }));
+    expect(result.cheapestSubstitutes).toEqual([]);
+  });
+
   it('rejects mixed currencies and malformed month values', () => {
     expect(() => simulateMonthlyBudget(fixture('2026-11', {
       items: [{ ...fixture('2026-11').items[0], price: { ...price, currency: 'EUR' } }],
@@ -68,7 +92,7 @@ describe('simulateMonthlyBudget', () => {
     expect(result.dataQuality).toEqual({ staleProducts: 1, thinProducts: 1, pricedProducts: 1 });
   });
 
-  it('suggests lower-priced same-category substitutes without mixing units', () => {
+  it('suggests lower-priced explicitly equivalent substitutes without mixing units', () => {
     const result = simulateMonthlyBudget(fixture('2026-11', {
       items: [
         { ...fixture('2026-11').items[0], productId: 'rice-premium', price },
