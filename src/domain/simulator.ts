@@ -17,6 +17,8 @@ export interface SimulatorBasketItem {
   name: string;
   category: string;
   baseUnit: BaseUnit;
+  /** Explicitly curated equivalence group; category equality alone is not substitution. */
+  substituteGroup?: string;
   quantityPerPersonPerDayMilliUnits: number;
   price?: SimulatorPrice;
 }
@@ -95,7 +97,8 @@ function safeNumber(value: bigint): number {
 }
 
 function costForQuantity(quantityMilliUnits: number, pricePerBaseUnitMinor: number, baseUnit: BaseUnit): number {
-  const scale = baseUnit === 'unit' ? 1n : 1000n;
+  // Every quantity is stored in thousandths of its base unit, including pieces.
+  const scale = 1000n;
   const amount = BigInt(quantityMilliUnits) * BigInt(pricePerBaseUnitMinor);
   return safeNumber((amount + scale / 2n) / scale);
 }
@@ -242,7 +245,8 @@ function buildCheapestSubstitutes(items: SimulatorBasketItem[], householdPermill
     if (!item.price || item.quantityPerPersonPerDayMilliUnits <= 0) continue;
     const alternatives = items.filter((candidate) =>
       candidate.productId !== item.productId &&
-      candidate.category === item.category &&
+      Boolean(item.substituteGroup) &&
+      candidate.substituteGroup === item.substituteGroup &&
       candidate.baseUnit === item.baseUnit &&
       candidate.price?.currency === 'DZD' &&
       candidate.price.medianUnitPriceMinor < item.price!.medianUnitPriceMinor
@@ -253,7 +257,7 @@ function buildCheapestSubstitutes(items: SimulatorBasketItem[], householdPermill
     if (!cheapest) continue;
     const savingPerBaseUnit = BigInt(item.price.medianUnitPriceMinor - cheapest.price!.medianUnitPriceMinor);
     const monthlyQuantity = ceilDiv(BigInt(item.quantityPerPersonPerDayMilliUnits) * householdPermille * BigInt(daysInMonth), 1000n);
-    const unitScale = item.baseUnit === 'unit' ? 1n : 1000n;
+    const unitScale = 1000n;
     suggestions.push({
       fromProductId: item.productId,
       toProductId: cheapest.productId,
