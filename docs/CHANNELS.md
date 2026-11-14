@@ -12,7 +12,7 @@ Plan: the "Kenz Channels — Peer-to-Peer Video & Live Plan" document. This file
 ## Deploy checklist
 1. `node scripts/generate-channel-keys.mjs`; set `CHANNEL_SIGNING_PRIVATE_KEY`, `CHANNEL_MASTER_KEY`, `SUPABASE_SERVICE_ROLE_KEY` on the server, and `VITE_CHANNEL_SIGNING_PUBLIC_KEY`, `VITE_CHANNEL_TRACKERS` (comma-separated `wss://` tracker URLs), optional `VITE_CHANNEL_STUN` in the app build.
 2. Server needs `ffmpeg` and `ffprobe` on PATH (Supabase alone cannot transcode).
-3. Apply migration 051 (needs 041–044 first; main also has 051–054 from the earlier LiveKit channel attempt, which this feature does not use).
+3. Apply migration 055 (needs 041–044 first; main also has 051–054 from the earlier LiveKit channel attempt, which this feature does not use).
 4. Add moderators to `community_moderators`.
 5. Run the Phase-0 gate on three real Android phones before relying on P2P savings: playback, rejection of a bad piece, origin fallback.
 
