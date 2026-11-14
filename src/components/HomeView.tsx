@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Calculator,
   Wallet,
   Calendar,
   AlertTriangle,
@@ -39,7 +40,7 @@ interface HomeViewProps {
   debts?: DebtEntry[];
   onOpenAddModal: () => void;
   onOpenAIModal?: () => void;
-  onNavigate: (tab: 'transactions' | 'plan' | 'settings' | 'nearby' | 'debts' | 'reports') => void;
+  onNavigate: (tab: 'transactions' | 'plan' | 'settings' | 'nearby' | 'debts' | 'reports' | 'simulator') => void;
   onOpenReceiptScanner: () => void;
 }
 
@@ -92,6 +93,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <button type="button" onClick={onOpenReceiptScanner}><span className="kenz-action-icon kenz-action-green"><ScanLine /></span><span>{profile.locale === 'en' ? 'Scan receipt' : profile.locale === 'ar' ? 'مسح إيصال' : 'Scanner un reçu'}</span></button>
         <button type="button" onClick={() => onNavigate('plan')}><span className="kenz-action-icon kenz-action-amber"><Landmark /></span><span>{profile.locale === 'en' ? 'My budgets' : profile.locale === 'ar' ? 'ميزانياتي' : 'Mes budgets'}</span></button>
         <button type="button" onClick={() => onNavigate('reports')}><span className="kenz-action-icon kenz-action-blue"><BarChart3 /></span><span>{profile.locale === 'en' ? 'Reports' : profile.locale === 'ar' ? 'التقارير' : 'Rapports'}</span></button>
+      </section>
+
+      <section className="kenz-insight-card" aria-label="Simulateur du mois">
+        <div className="kenz-insight-icon"><Calculator /></div>
+        <div style={{flex:1,minWidth:0}}>
+          <strong>{profile.locale === 'en' ? 'Month simulator' : profile.locale === 'ar' ? 'محاكي الشهر' : 'Simulateur du mois'}</strong>
+          <p style={{margin:'2px 0 0',fontSize:12}}>{profile.locale === 'en' ? 'Compare a month of groceries with your budget in one minute.' : profile.locale === 'ar' ? 'قارن مشتريات الشهر بميزانيتك في دقيقة.' : 'Compare un mois de courses à ton budget en une minute.'}</p>
+        </div>
+        <button type="button" className="kenz-ai-button" onClick={() => onNavigate('simulator')}>{profile.locale === 'en' ? 'Simulate' : profile.locale === 'ar' ? 'ابدأ' : 'Simuler'}</button>
       </section>
 
       <section className="kenz-insight-card"><div className="kenz-insight-icon">{isShortfall ? <AlertTriangle /> : <ShieldCheck />}</div><div><span className="kenz-card-kicker">{profile.locale === 'en' ? 'YOUR WEEKLY INSIGHT' : profile.locale === 'ar' ? 'ملخص الأسبوع' : 'VOTRE POINT DE LA SEMAINE'}</span><p>{weeklySummary.actionableObservation}</p></div>{onOpenAIModal && <button type="button" onClick={onOpenAIModal} className="kenz-ai-button"><Sparkles /> <span>Coach IA</span></button>}</section>

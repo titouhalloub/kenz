@@ -67,6 +67,7 @@ const getLocalDateString = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 interface PlanViewProps {
+  initialTab?: 'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator';
   categories: Category[];
   budgets: MonthlyBudget[];
   recurringItems: RecurringItem[];
@@ -87,6 +88,7 @@ interface PlanViewProps {
 }
 
 export const PlanView: React.FC<PlanViewProps> = ({
+  initialTab,
   categories,
   budgets,
   recurringItems,
@@ -105,7 +107,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   challengeContributions,
   onAddChallengeContribution,
 }) => {
-  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator'>('budgets');
+  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator'>(initialTab ?? 'budgets');
 
   // New recurring state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
@@ -315,7 +317,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
             activeTab === 'simulator' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          Simulateur
+          {profile.locale === 'ar' ? 'محاكي الشهر' : profile.locale === 'en' ? 'Month simulator' : 'Simulateur du mois'}
         </button>
       </div>
 

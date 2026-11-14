@@ -18,6 +18,7 @@ import {
   BarChart3,
   MessageCircle,
   Video,
+  Calculator,
 } from 'lucide-react';
 import {
   loadBudgetState,
@@ -103,7 +104,7 @@ import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 import { kenzText } from './domain/i18n';
 
-type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'channels' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'channels' | 'simulator' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
@@ -639,8 +640,10 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'plan' && (
+        {(activeTab === 'plan' || activeTab === 'simulator') && (
           <PlanView
+            key={activeTab}
+            initialTab={activeTab === 'simulator' ? 'simulator' : undefined}
             categories={budgetState.categories}
             budgets={budgetState.budgets}
             recurringItems={budgetState.recurringItems}
@@ -778,6 +781,7 @@ export default function App() {
                 ['transactions', budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
                 ['nearby', budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
                 ['community', budgetState.profile.locale === 'en' ? 'Community' : budgetState.profile.locale === 'ar' ? 'المجتمع' : 'Communauté', MessageCircle],
+                ['simulator', budgetState.profile.locale === 'en' ? 'Month simulator' : budgetState.profile.locale === 'ar' ? 'محاكي الشهر' : 'Simulateur du mois', Calculator],
                 ['channels', budgetState.profile.locale === 'en' ? 'Channels' : budgetState.profile.locale === 'ar' ? 'القنوات' : 'Chaînes', Video],
                 ['debts', 'Kredy', BookOpen], ['zakat', 'Zakat', Moon],
                 ['settings', budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],

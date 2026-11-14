@@ -8,6 +8,7 @@ import { deleteSimulatorScenario, listSimulatorScenarios, saveSimulatorScenario,
 import type { SimulatorPrice } from '../domain/simulator';
 import type { UserProfile } from '../domain/types';
 import { ALGERIA_WILAYAS } from '../domain/wilayas';
+import { STARTER_BASKET, quickRowsToItems, type QuickRow } from '../domain/starterBasket';
 
 interface SimulatorViewProps {
   profile: UserProfile;
@@ -53,6 +54,12 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
   const [scenarios, setScenarios] = useState<SimulatorScenario[]>([]);
   const [scenarioStatus, setScenarioStatus] = useState('');
   const [scenarioBusy, setScenarioBusy] = useState(false);
+  const [budgetOverride, setBudgetOverride] = useState('');
+  const [quickRows, setQuickRows] = useState<QuickRow[]>(() => STARTER_BASKET.map((row) => {
+    return { slug: row.slug, qty: String(row.perDay), price: '' };
+  }));
+  const [quickStatus, setQuickStatus] = useState('');
+  const tr = (ar: string, fr: string, en: string) => (profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr);
 
   const selectedProduct = PRODUCT_CATALOG.find((product) => product.slug === selectedSlug) || PRODUCT_CATALOG[0];
   const quantityUnit = selectedProduct.baseUnit === 'kg'
@@ -89,7 +96,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         month,
         adults,
         children,
-        basket: basket.map((item) => ({
+        basket: effectiveBasket.map((item) => ({
           productId: item.productId,
           quantityPerPersonPerDayMilliUnits: item.quantityPerPersonPerDayMilliUnits,
         })),
@@ -198,6 +205,26 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     return () => { active = false; };
   }, [selectedSlug, wilayaCode, profile.locale]);
 
+  useEffect(() => {
+    let active = true;
+    loadMarketPrices(STARTER_BASKET.map((row) => row.slug), wilayaCode || null).then((res) => {
+      if (!active) return;
+      let found = 0;
+      setQuickRows((rows) => rows.map((row) => {
+        const market = res.pricesBySlug[row.slug];
+        if (!market) return { ...row, market: undefined };
+        found += 1;
+        const untouched = row.price === '' || (row.market && row.price === (row.market.medianUnitPriceMinor / 100).toFixed(2));
+        return { ...row, market, price: untouched ? (market.medianUnitPriceMinor / 100).toFixed(2) : row.price };
+      }));
+      setQuickStatus(found > 0
+        ? tr(`${found} prix publics préremplis. Modifie-les si besoin.`, `${found} prix publics préremplis. Modifie-les si besoin.`, `${found} public prices prefilled. Edit them if needed.`)
+        : tr('لا توجد أسعار عامة بعد: اكتب السعر المعتاد الذي تدفعه.', 'Aucun prix public publié pour l’instant : saisis le prix que tu paies d’habitude.', 'No public prices are published yet: type the price you usually pay.'));
+    }).catch(() => { if (active) setQuickStatus(tr('الأسعار العامة غير متاحة، أدخل أسعارك.', 'Prix publics indisponibles : saisis tes prix.', 'Public prices unavailable: type your own prices.')); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wilayaCode]);
+
   const addProduct = () => {
     setError('');
     const amount = Number(quantity);
@@ -241,19 +268,33 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     setQuantity(selectedProduct.baseUnit === 'unit' ? '1' : '100');
   };
 
+  const effectiveBudgetMinor = parseToMinorUnits(budgetOverride) > 0 ? parseToMinorUnits(budgetOverride) : availableBudgetMinor;
+  const quickItems = useMemo(
+    () => quickRowsToItems(quickRows, (slug) => {
+      const product = PRODUCT_CATALOG.find((item) => item.slug === slug);
+      return product ? productName(product, profile.locale) : slug;
+    }, parseToMinorUnits, new Date().toISOString()),
+    [quickRows, profile.locale],
+  );
+  // Manual basket entries win over quick-mode rows for the same product.
+  const effectiveBasket = useMemo(
+    () => [...basket, ...quickItems.filter((item) => !basket.some((row) => row.productId === item.productId))],
+    [basket, quickItems],
+  );
+
   const result: SimulatorResult | null = useMemo(() => {
-    if (basket.length === 0 || profile.preferredCurrency !== 'DZD') return null;
+    if (effectiveBasket.length === 0 || profile.preferredCurrency !== 'DZD') return null;
     try {
       return simulateMonthlyBudget({
         month,
         household: { adults, children },
-        availableBudgetMinor,
-        items: basket,
+        availableBudgetMinor: effectiveBudgetMinor,
+        items: effectiveBasket,
       });
     } catch {
       return null;
     }
-  }, [month, adults, children, availableBudgetMinor, basket, profile.preferredCurrency]);
+  }, [month, adults, children, effectiveBudgetMinor, effectiveBasket, profile.preferredCurrency]);
 
   if (profile.preferredCurrency !== 'DZD') {
     return (
@@ -265,6 +306,60 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
 
   return (
     <div className="space-y-4">
+      <div id="quick-simulation" className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Calculator className="h-4 w-4 text-emerald-400" />
+          <h2 className="text-sm font-semibold text-slate-100">{tr('حاكِ شهرك في دقيقة', 'Simuler mon mois en 1 minute', 'Simulate my month in 1 minute')}</h2>
+        </div>
+        <ol className="text-[11px] text-slate-400 space-y-0.5 list-decimal ps-4">
+          <li>{tr('اختر عدد البالغين والأطفال', 'Indique adultes et enfants', 'Set adults and children')}</li>
+          <li>{tr('اكتب السعر المعتاد للمنتجات التي تشتريها', 'Saisis le prix habituel des produits que tu achètes', 'Type the usual price of what you buy')}</li>
+          <li>{tr('اطّلع على النتيجة مقابل ميزانيتك أسفل الصفحة', 'Compare le résultat à ton budget juste en dessous', 'Compare the result with your budget right below')}</li>
+        </ol>
+        <div className="grid grid-cols-3 gap-2">
+          <label className="text-[11px] text-slate-400">{tr('الشهر', 'Mois', 'Month')}
+            <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
+          </label>
+          <label className="text-[11px] text-slate-400">{tr('بالغون', 'Adultes', 'Adults')}
+            <input type="number" min="1" max="30" value={adults} onChange={(event) => setAdults(Math.max(1, Math.min(30, Number(event.target.value) || 1)))} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
+          </label>
+          <label className="text-[11px] text-slate-400">{tr('أطفال', 'Enfants', 'Children')}
+            <input type="number" min="0" max="30" value={children} onChange={(event) => setChildren(Math.max(0, Math.min(30, Number(event.target.value) || 0)))} className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
+          </label>
+        </div>
+        <div className="sticky top-16 z-10 rounded-xl bg-slate-950 border border-slate-800 p-3 flex items-center justify-between gap-3 shadow-sm">
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-500">{tr('تقدير الشهر', 'Estimation du mois', 'Month estimate')}</div>
+            <div className="text-lg font-bold font-mono-numbers text-slate-100">{result ? formatMoney(result.pricedSubtotal.expectedMinor, 'DZD', profile.locale) : '—'}</div>
+          </div>
+          <div className="text-end">
+            <div className="text-[10px] text-slate-500">{tr('مقابل الميزانية', 'Budget', 'Budget')} {formatMoney(effectiveBudgetMinor, 'DZD', profile.locale)}</div>
+            <div className={`text-xs font-bold ${result && result.projectedSurplusMinor !== null && result.projectedSurplusMinor < 0 ? 'text-rose-400' : 'text-emerald-300'}`}>
+              {!result ? tr('اكتب سعراً واحداً على الأقل', 'Saisis au moins un prix', 'Enter at least one price') : result.projectedSurplusMinor === null ? tr('غير مكتمل', 'Incomplet', 'Incomplete') : effectiveBudgetMinor <= 0 ? tr('أدخل ميزانية أدناه', 'Saisis un budget ci-dessous', 'Enter a budget below') : `${result.projectedSurplusMinor >= 0 ? '+' : ''}${formatMoney(result.projectedSurplusMinor, 'DZD', profile.locale)}`}
+            </div>
+          </div>
+        </div>
+        {quickStatus && <p className="text-[10px] text-slate-500">{quickStatus}</p>}
+        <div className="grid grid-cols-[1fr_72px_88px] gap-2 text-[10px] font-semibold text-slate-500">
+          <span>{tr('المنتج', 'Produit', 'Product')}</span><span>{tr('كمية/يوم', 'Qté/jour', 'Qty/day')}</span><span>{tr('السعر (دج)', 'Prix (DA)', 'Price (DA)')}</span>
+        </div>
+        <div className="space-y-1.5">
+          {quickRows.map((row, index) => {
+            const product = PRODUCT_CATALOG.find((item) => item.slug === row.slug);
+            if (!product) return null;
+            const unit = product.baseUnit === 'kg' ? tr('غ/يوم', 'g/jour', 'g/day') : product.baseUnit === 'l' ? tr('مل/يوم', 'ml/jour', 'ml/day') : tr('قطعة/يوم', 'pièce/jour', 'pcs/day');
+            const priceUnit = product.baseUnit === 'kg' ? 'kg' : product.baseUnit === 'l' ? 'L' : tr('قطعة', 'pièce', 'piece');
+            return (
+              <div key={row.slug} className="grid grid-cols-[1fr_72px_88px] items-center gap-2">
+                <span className="text-xs text-slate-200 truncate">{productName(product, profile.locale)}</span>
+                <input aria-label={`${productName(product, profile.locale)} ${unit}`} inputMode="decimal" value={row.qty} onChange={(event) => setQuickRows((rows) => rows.map((r, i) => (i === index ? { ...r, qty: event.target.value } : r)))} className="h-9 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" title={unit} />
+                <input aria-label={`${productName(product, profile.locale)} DA/${priceUnit}`} inputMode="decimal" placeholder={`DA/${priceUnit}`} value={row.price} onChange={(event) => setQuickRows((rows) => rows.map((r, i) => (i === index ? { ...r, price: event.target.value } : r)))} className="h-9 rounded-lg bg-slate-950 border border-slate-700 px-2 text-xs text-slate-100" />
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-slate-500">{tr('الكميات تقريبية للشخص في اليوم (قابلة للتعديل). السعر المكتوب يُحوَّل إلى مجال ‎−10٪ / +10٪.', 'Quantités indicatives par personne et par jour (modifiables). Un prix saisi devient une fourchette −10 % / +10 %.', 'Indicative quantities per person per day (editable). A typed price becomes a −10% / +10% range.')}</p>
+      </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold text-slate-200">Mes scénarios</h3>
@@ -327,8 +422,11 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         </div>
         <div className="rounded-xl bg-slate-950 border border-slate-800 p-3">
           <div className="text-[10px] uppercase tracking-wide text-slate-500">Budget disponible utilisé par le calcul</div>
-          <div className="mt-1 text-lg font-bold font-mono-numbers text-slate-100">{formatMoney(availableBudgetMinor, 'DZD', profile.locale)}</div>
-          <div className="text-[10px] text-slate-500">Enveloppe alimentation restante, sinon reste à vivre Kenz.</div>
+          <div className="mt-1 text-lg font-bold font-mono-numbers text-slate-100">{formatMoney(effectiveBudgetMinor, 'DZD', profile.locale)}</div>
+          <div className="text-[10px] text-slate-500">{parseToMinorUnits(budgetOverride) > 0 ? tr('ميزانية أدخلتها أنت', 'Budget saisi par toi', 'Budget you entered') : tr('ما تبقّى من ميزانية الغذاء، وإلا المتبقي للصرف', 'Enveloppe alimentation restante, sinon reste à vivre Kenz.', 'Remaining food envelope, otherwise your Kenz safe-to-spend.')}</div>
+          <label className="mt-2 block text-[10px] text-slate-500">{tr('أو أدخل ميزانية المشتريات الشهرية (دج)', 'Ou saisis ton budget courses du mois (DA)', 'Or enter your monthly groceries budget (DA)')}
+            <input inputMode="decimal" value={budgetOverride} onChange={(event) => setBudgetOverride(event.target.value)} placeholder="Ex. 40000" className="mt-1 w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
+          </label>
         </div>
       </div>
 
