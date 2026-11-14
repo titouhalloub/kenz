@@ -180,14 +180,21 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     setExpectedPrice('');
     setHighPrice('');
     setMarketStatus('Recherche du prix public disponible…');
-    loadMarketPrices([selectedSlug], wilayaCode || null).then((result) => {
+
+    const productSlugs = [...new Set([
+      ...STARTER_BASKET.map((row) => row.slug),
+      selectedSlug,
+    ])];
+
+    loadMarketPrices(productSlugs, wilayaCode || null).then((result) => {
       if (!active) return;
-      const found = result.pricesBySlug[selectedSlug];
-      if (found) {
-        setMarketPrice(found);
-        setLowPrice((found.p25UnitPriceMinor / 100).toFixed(2));
-        setExpectedPrice((found.medianUnitPriceMinor / 100).toFixed(2));
-        setHighPrice((found.p75UnitPriceMinor / 100).toFixed(2));
+
+      const selectedPrice = result.pricesBySlug[selectedSlug];
+      if (selectedPrice) {
+        setMarketPrice(selectedPrice);
+        setLowPrice((selectedPrice.p25UnitPriceMinor / 100).toFixed(2));
+        setExpectedPrice((selectedPrice.medianUnitPriceMinor / 100).toFixed(2));
+        setHighPrice((selectedPrice.p75UnitPriceMinor / 100).toFixed(2));
         const fetchedLabel = result.fetchedAt
           ? new Date(result.fetchedAt).toLocaleString(profile.locale)
           : '';
@@ -199,19 +206,10 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
           ? 'Le catalogue de prix n’est pas encore déployé ; tu peux saisir tes propres prix.'
           : 'Aucun relevé public disponible pour ce produit ; tu peux saisir tes propres prix.');
       }
-    }).catch(() => {
-      if (active) setMarketStatus('Prix publics indisponibles pour le moment ; la saisie manuelle reste possible.');
-    });
-    return () => { active = false; };
-  }, [selectedSlug, wilayaCode, profile.locale]);
 
-  useEffect(() => {
-    let active = true;
-    loadMarketPrices(STARTER_BASKET.map((row) => row.slug), wilayaCode || null).then((res) => {
-      if (!active) return;
       let found = 0;
       setQuickRows((rows) => rows.map((row) => {
-        const market = res.pricesBySlug[row.slug];
+        const market = result.pricesBySlug[row.slug];
         if (!market) return { ...row, market: undefined };
         found += 1;
         const untouched = row.price === '' || (row.market && row.price === (row.market.medianUnitPriceMinor / 100).toFixed(2));
@@ -220,10 +218,15 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       setQuickStatus(found > 0
         ? tr(`${found} prix publics préremplis. Modifie-les si besoin.`, `${found} prix publics préremplis. Modifie-les si besoin.`, `${found} public prices prefilled. Edit them if needed.`)
         : tr('لا توجد أسعار عامة بعد: اكتب السعر المعتاد الذي تدفعه.', 'Aucun prix public publié pour l’instant : saisis le prix que tu paies d’habitude.', 'No public prices are published yet: type the price you usually pay.'));
-    }).catch(() => { if (active) setQuickStatus(tr('الأسعار العامة غير متاحة، أدخل أسعارك.', 'Prix publics indisponibles : saisis tes prix.', 'Public prices unavailable: type your own prices.')); });
+    }).catch(() => {
+      if (!active) return;
+      setMarketStatus('Prix publics indisponibles pour le moment ; la saisie manuelle reste possible.');
+      setQuickStatus(tr('الأسعار العامة غير متاحة، أدخل أسعارك.', 'Prix publics indisponibles : saisis tes prix.', 'Public prices unavailable: type your own prices.'));
+    });
+
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wilayaCode]);
+  }, [selectedSlug, wilayaCode, profile.locale]);
 
   const addProduct = () => {
     setError('');

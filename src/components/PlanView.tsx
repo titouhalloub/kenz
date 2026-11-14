@@ -108,6 +108,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onAddChallengeContribution,
 }) => {
   const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator'>(initialTab ?? 'budgets');
+  const [hasOpenedSimulator, setHasOpenedSimulator] = useState(initialTab === 'simulator');
 
   // New recurring state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
@@ -312,7 +313,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
           Défis d'épargne
         </button>
         <button
-          onClick={() => setActiveTab('simulator')}
+          onClick={() => {
+            setHasOpenedSimulator(true);
+            setActiveTab('simulator');
+          }}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
             activeTab === 'simulator' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
           }`}
@@ -996,9 +1000,11 @@ export const PlanView: React.FC<PlanViewProps> = ({
           </div>
         </div>
       )}
-      <div className={activeTab === 'simulator' ? '' : 'hidden'}>
-        <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />
-      </div>
+      {hasOpenedSimulator && (
+        <div className={activeTab === 'simulator' ? '' : 'hidden'}>
+          <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />
+        </div>
+      )}
 
     </div>
   );
