@@ -84,36 +84,37 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-9rem)] max-w-xl mx-auto" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="flex items-center gap-2 pb-2">
-        <div className="flex gap-1 flex-1 overflow-x-auto">
+    <div className="kenz-page kenz-channels" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{t('القنوات', 'Chaînes', 'Channels')}</h2></div></div>
+      <div className="kenz-channel-bar">
+        <div className="kenz-channel-tabs">
           {tabs.map(([m, label]) => (
-            <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${mode === m ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300'}`}>{label}</button>
+            <button key={m} onClick={() => setMode(m)} className={mode === m ? 'active' : ''}>{label}</button>
           ))}
         </div>
-        <button aria-label="upload" onClick={() => setPanel('upload')} className="p-2 rounded-full bg-slate-800"><Plus size={16} /></button>
-        <button aria-label="settings" onClick={() => setPanel('settings')} className="p-2 rounded-full bg-slate-800"><Settings2 size={16} /></button>
-        {moderator && <button aria-label="moderation" onClick={() => setPanel('moderation')} className="p-2 rounded-full bg-slate-800"><ShieldCheck size={16} /></button>}
+        <button type="button" aria-label="upload" onClick={() => setPanel('upload')} className="kenz-channel-icon"><Plus size={16} /></button>
+        <button type="button" aria-label="settings" onClick={() => setPanel('settings')} className="kenz-channel-icon"><Settings2 size={16} /></button>
+        {moderator && <button type="button" aria-label="moderation" onClick={() => setPanel('moderation')} className="kenz-channel-icon"><ShieldCheck size={16} /></button>}
       </div>
-      {error && <div className="text-xs text-amber-300 pb-2" role="alert">{error}</div>}
-      <div className="flex-1 overflow-y-auto snap-y snap-mandatory rounded-xl">
+      {error && <div role="alert">{error}</div>}
+      <div className="kenz-channel-feed">
         {loading && <div className="p-6 text-sm text-slate-400">{t('جارٍ التحميل…', 'Chargement…', 'Loading…')}</div>}
         {!loading && videos.length === 0 && <div className="p-6 text-sm text-slate-400">{t('لا توجد فيديوهات بعد', 'Aucune vidéo pour le moment', 'No videos yet')}</div>}
         {videos.map((v) => (
-          <section key={v.id} data-vid={v.id} ref={attach} className="snap-start h-full relative bg-black border-b border-slate-900">
+          <section key={v.id} data-vid={v.id} ref={attach} className="kenz-video-card">
             <Suspense fallback={<div className="w-full h-full bg-black" />}>
               <ChannelPlayer videoId={v.id} userId={userId} active={activeId === v.id} sharing={sharing} loop={v.kind === 'short'} />
             </Suspense>
-            <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
-              <div className="text-sm font-bold text-white">{v.title}</div>
-              <div className="text-xs text-slate-300">@{v.authorHandle} · {Math.round(v.durationMs / 1000)}s</div>
+            <div className="kenz-video-caption">
+              <strong>{v.title}</strong>
+              <span>@{v.authorHandle} · {Math.round(v.durationMs / 1000)}s</span>
             </div>
-            <div className="absolute end-2 bottom-16 flex flex-col items-center gap-3 text-white">
-              <button aria-label="like" onClick={() => like(v)} className="flex flex-col items-center text-[10px]"><Heart size={22} className={v.likedByMe ? 'fill-red-500 text-red-500' : ''} />{v.likes}</button>
+            <div className="kenz-video-rail">
+              <button aria-label="like" onClick={() => like(v)} ><Heart size={22} className={v.likedByMe ? 'fill-red-500 text-red-500' : ''} />{v.likes}</button>
               <button aria-label="comments" onClick={() => setCommentsFor(v.id)}><MessageCircle size={22} /></button>
               {v.authorId !== userId && <button aria-label="follow" onClick={() => follow(v)}>{v.followingAuthor ? <UserCheck size={22} className="text-emerald-400" /> : <UserPlus size={22} />}</button>}
               <button aria-label="report" onClick={() => report(v)}><Flag size={20} /></button>
-              {v.authorId !== userId && <button aria-label="block" onClick={() => block(v)} className="text-[10px] underline">{t('حظر', 'Bloquer', 'Block')}</button>}
+              {v.authorId !== userId && <button aria-label="block" onClick={() => block(v)} className="kenz-video-block">{t('حظر', 'Bloquer', 'Block')}</button>}
             </div>
           </section>
         ))}
@@ -129,11 +130,12 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
 
 type T = (ar: string, fr: string, en: string) => string;
 const Sheet: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center" role="dialog" aria-label={title}>
-    <div className="bg-slate-900 w-full max-w-lg max-h-[85dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl p-4 space-y-3 text-slate-100">
-      <div className="flex items-center justify-between"><h2 className="font-bold text-sm">{title}</h2><button aria-label="close" onClick={onClose}><X size={18} /></button></div>
+  <div className="kenz-more-overlay" role="presentation" onClick={onClose}>
+    <section className="kenz-more-sheet kenz-channel-sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className="kenz-sheet-handle" />
+      <div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{title}</h2></div><button type="button" aria-label="close" onClick={onClose}><X size={16} /></button></div>
       {children}
-    </div>
+    </section>
   </div>
 );
 const field = 'w-full bg-slate-800 rounded-lg px-3 py-2 text-sm';

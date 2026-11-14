@@ -165,7 +165,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-24" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="kenz-page kenz-settings-page space-y-6 pb-24" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
       <div>
         <h1 className="text-lg font-bold text-slate-100">{profile.locale === 'ar' ? 'إعدادات التطبيق' : profile.locale === 'en' ? 'Application settings' : 'Paramètres de l’application'}</h1>
         <p className="text-xs text-slate-400">
@@ -240,17 +240,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </select>
           </div>
 
-          <div>
+          <div className="kenz-language-field">
             <label className="block text-xs font-medium text-slate-300 mb-1">{profile.locale === 'ar' ? 'اللغة والتنسيق' : profile.locale === 'en' ? 'Language & format' : 'Langue & Format'}</label>
-            <select
-              value={profile.locale}
-              onChange={(e) => onUpdateProfile({ locale: e.target.value as 'ar' | 'fr' | 'en' })}
-              className="w-full h-11 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
-            >
-              <option value="fr">Français (FR)</option>
-              <option value="ar">العربية (RTL)</option>
-              <option value="en">English (US)</option>
-            </select>
+            <div className="kenz-language-options" role="radiogroup" aria-label="Language">
+              {([{value:'fr',label:'Français',code:'FR',flag:'🇫🇷'},{value:'ar',label:'العربية',code:'AR',flag:'🇩🇿'},{value:'en',label:'English',code:'EN',flag:'🇬🇧'}] as const).map((item) => <button key={item.value} type="button" role="radio" aria-checked={profile.locale === item.value} onClick={() => onUpdateProfile({ locale: item.value })} className={profile.locale === item.value ? 'kenz-language-option selected' : 'kenz-language-option'}><span className="kenz-language-flag">{item.flag}</span><span className="kenz-language-copy"><b>{item.label}</b><small>{item.code}</small></span><span className="kenz-radio-mark" /></button>)}
+            </div>
           </div>
         </div>
       </section>

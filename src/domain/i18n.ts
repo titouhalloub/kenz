@@ -97,7 +97,6 @@ const uiCopy: Record<string, { ar: string; en: string }> = {
   'Profil': { ar: 'الملف الشخصي', en: 'Profile' },
   'Déconnexion': { ar: 'تسجيل الخروج', en: 'Log out' },
   'Se connecter': { ar: 'تسجيل الدخول', en: 'Sign in' },
-  'Créer un compte': { ar: 'إنشاء حساب', en: 'Create account' },
   'Mot de passe': { ar: 'كلمة المرور', en: 'Password' },
   'Adresse e-mail': { ar: 'البريد الإلكتروني', en: 'Email address' },
   'Nouvelle dette': { ar: 'دين جديد', en: 'New debt' },

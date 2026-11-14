@@ -174,9 +174,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             return (
               <div
                 key={tx.id}
-                className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
+                className="kenz-transaction-row hover:bg-slate-800/30 transition-colors"
               >
-                <div className="flex items-center gap-3">
+                <div className="kenz-transaction-main">
                   {/* Type Icon */}
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
@@ -197,11 +197,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   </div>
 
                   {/* Transaction metadata (unboxed text separated by dots) */}
-                  <div>
-                    <span className="text-xs font-semibold text-slate-200 block">
+                  <div className="kenz-transaction-copy">
+                    <span className="kenz-transaction-title text-xs font-semibold text-slate-200 block">
                       {tx.description || catName}
                     </span>
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+                    <div className="kenz-transaction-meta text-[11px] text-slate-400 mt-0.5">
                       <span>{tx.transactionDate}</span>
                       <span aria-hidden="true">·</span>
                       <span>
@@ -220,7 +220,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 </div>
 
                 {/* Amount and delete button */}
-                <div className="flex items-center gap-3">
+                <div className="kenz-transaction-amount">
                   <span
                     className={`text-sm font-bold font-mono-numbers ${
                       tx.type === 'expense'
