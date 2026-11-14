@@ -195,6 +195,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
 
     loadMarketPrices(productSlugs, wilayaCode || null).then((result) => {
       if (!active) return;
+      setMarketLoadFailed(Object.keys(result.pricesBySlug).length === 0);
 
       const selectedPrice = result.pricesBySlug[selectedSlug];
       if (selectedPrice) {
