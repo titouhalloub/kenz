@@ -794,6 +794,9 @@ export default function App() {
             onUpdateUser={(updated) => setCurrentUser(updated)}
             onLogout={() => {
               logoutUser();
+              // Reset the identity so signing back into the same account
+              // retriggers the single account-hydration effect.
+              setCurrentUser(loadCurrentUser());
               setIsAuthModalOpen(true);
             }}
           />
