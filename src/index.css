@@ -141,3 +141,25 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-kredy-tab-idle{color:#81768f}
 .kenz-kredy-page .grid.grid-cols-2>div,.kenz-kredy-page .grid.grid-cols-2>div.rounded-2xl{border-color:#e9e2f2;background:#fff;border-radius:19px;box-shadow:0 4px 16px rgba(75,49,120,.045)}
 @media(max-width:520px){.kenz-action-icon{width:44px;height:44px}.kenz-action-icon svg{width:23px;height:23px}.kenz-budget-category-icon{width:46px;height:46px;flex-basis:46px}.kenz-budget-category-icon svg{width:23px;height:23px}.kenz-kredy-page>div:first-child{padding:14px;border-radius:20px}.kenz-kredy-tabs button{min-height:58px;flex-direction:column;gap:3px;padding:7px 4px;font-size:9px}.kenz-kredy-tabs button svg{width:22px;height:22px}.kenz-kredy-primary-action,.kenz-kredy-secondary-action{padding-inline:10px;font-size:10px}}
+
+/* Video channels (lavender system). Overlay colours are explicit: the global palette remap turns text-white dark. */
+.kenz-channels{max-width:560px}
+.kenz-channel-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.kenz-channel-tabs{display:flex;flex:1;gap:4px;padding:4px;border-radius:14px;background:#f0ecf8;overflow-x:auto;scrollbar-width:none}
+.kenz-channel-tabs::-webkit-scrollbar{display:none}
+.kenz-channel-tabs button{flex:1;min-height:36px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:#847e97;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer}
+.kenz-channel-tabs button.active{background:#5b2bc5;color:#fff;box-shadow:0 4px 10px rgba(85,36,199,.2)}
+.kenz-channel-icon{width:40px;height:40px;flex:0 0 40px;display:grid;place-items:center;border:1px solid var(--kenz-line);border-radius:13px;background:#fff;color:var(--kenz-purple);cursor:pointer;box-shadow:0 4px 12px rgba(52,34,101,.05)}
+.kenz-channel-feed{height:calc(100dvh - 15rem);min-height:380px;overflow-y:auto;scroll-snap-type:y mandatory;border-radius:24px;border:1px solid var(--kenz-line);background:#fff;box-shadow:var(--kenz-card-shadow);overscroll-behavior:contain}
+.kenz-video-card{position:relative;height:100%;scroll-snap-align:start;background:#17102e}
+.kenz-video-caption{position:absolute;inset-inline:0;bottom:0;display:flex;flex-direction:column;gap:2px;padding:44px 74px 16px 16px;background:linear-gradient(to top,rgba(23,16,46,.85),transparent);pointer-events:none;color:#fff}
+[dir="rtl"] .kenz-video-caption{padding:44px 16px 16px 74px}
+.kenz-video-caption strong{font-size:14px;font-weight:800;color:#fff}
+.kenz-video-caption span{font-size:11px;color:#e4dcf7}
+.kenz-video-rail{position:absolute;inset-inline-end:10px;bottom:70px;display:flex;flex-direction:column;align-items:center;gap:14px;color:#fff}
+.kenz-video-rail button{display:flex;flex-direction:column;align-items:center;gap:2px;width:44px;min-height:44px;justify-content:center;border:0;border-radius:50%;background:rgba(32,23,74,.55);color:#fff;font-size:10px;font-weight:700;cursor:pointer;backdrop-filter:blur(6px)}
+.kenz-video-rail .kenz-video-block{font-size:9px;text-decoration:none}
+.kenz-channel-sheet .kenz-section-heading>button{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:50%;background:#f4f1f8;color:#625b73;cursor:pointer}
+.kenz-channel-sheet{display:flex;flex-direction:column;gap:12px}
+.kenz-channel-sheet .kenz-section-heading{margin-bottom:2px}
+.kenz-channel-sheet input:not([type=checkbox]),.kenz-channel-sheet select,.kenz-channel-sheet textarea{border:1px solid var(--kenz-line);border-radius:12px}

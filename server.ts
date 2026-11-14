@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import { registerChannelRoutes } from './src/server/channelRoutes.ts';
 import { chatCompletionsEndpoint, resolveOpenAIBaseUrl } from './src/server/providerUrl.ts';
 
 dotenv.config();
@@ -198,6 +199,8 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defa
     label: 'Endpoint Personnalisé',
   },
 };
+
+registerChannelRoutes(app, { requireAuth: requireAuthenticatedUser });
 
 // Universal Server-Side AI Gateway supporting ANY provider
 app.post('/api/ai/advisor', rateLimitAi, requireAuthenticatedUser, async (req, res) => {
