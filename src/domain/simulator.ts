@@ -96,7 +96,7 @@ function safeNumber(value: bigint): number {
   return result;
 }
 
-function costForQuantity(quantityMilliUnits: number, pricePerBaseUnitMinor: number, baseUnit: BaseUnit): number {
+function costForQuantity(quantityMilliUnits: number, pricePerBaseUnitMinor: number): number {
   // Every quantity is stored in thousandths of its base unit, including pieces.
   const scale = 1000n;
   const amount = BigInt(quantityMilliUnits) * BigInt(pricePerBaseUnitMinor);
@@ -178,9 +178,9 @@ export function simulateMonthlyBudget(input: SimulatorInput): SimulatorResult {
     }
 
     const cost: SimulatorCostBand = {
-      lowMinor: costForQuantity(quantity, price.p25UnitPriceMinor, item.baseUnit),
-      expectedMinor: costForQuantity(quantity, price.medianUnitPriceMinor, item.baseUnit),
-      highMinor: costForQuantity(quantity, price.p75UnitPriceMinor, item.baseUnit),
+      lowMinor: costForQuantity(quantity, price.p25UnitPriceMinor),
+      expectedMinor: costForQuantity(quantity, price.medianUnitPriceMinor),
+      highMinor: costForQuantity(quantity, price.p75UnitPriceMinor),
     };
     lowTotal += BigInt(cost.lowMinor);
     expectedTotal += BigInt(cost.expectedMinor);
