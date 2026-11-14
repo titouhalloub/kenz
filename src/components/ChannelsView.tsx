@@ -53,7 +53,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
   useEffect(() => () => observer.current?.disconnect(), []);
 
   const patch = (id: string, fn: (v: ChannelVideo) => ChannelVideo) => setVideos((vs) => vs.map((v) => (v.id === id ? fn(v) : v)));
-  const requireLogin = () => { if (!userId) { setError(t('سجّل الدخول أولاً', 'Connectez-vous d’abord', 'Sign in first')); return true; } return false; };
+  const requireLogin = () => { if (!userId) { setError(t('حسابك محلي. سجّل الخروج ثم الدخول بحساب سحابي.', 'Compte local : déconnectez-vous puis connectez-vous avec un compte cloud.', 'Local-only account: sign out, then sign in with a cloud account.')); return true; } return false; };
 
   const like = async (v: ChannelVideo) => {
     if (requireLogin()) return;
@@ -176,7 +176,7 @@ const UploadSheet: React.FC<{ t: T; locale: Locale; wilaya: string | null; signe
   };
   return (
     <Sheet title={t('نشر فيديو', 'Publier une vidéo', 'Post a video')} onClose={onClose}>
-      {!signedIn && <div className="text-xs text-amber-300">{t('سجّل الدخول للنشر', 'Connectez-vous pour publier', 'Sign in to post')}</div>}
+      {!signedIn && <div role="alert">{t('حسابك محلي على هذا الجهاز فقط. سجّل الخروج ثم سجّل الدخول بحساب سحابي (أو أنشئ حساباً جديداً وأكّد بريدك).', 'Votre compte est local à cet appareil. Déconnectez-vous, puis connectez-vous avec un compte cloud (ou créez-en un et confirmez votre e-mail).', 'Your account is local to this device. Sign out, then sign in with a cloud account (or register and confirm your email).')}</div>}
       <div className="flex gap-2 text-xs">
         {(['short', 'long'] as VideoKind[]).map((k) => <button key={k} onClick={() => setKind(k)} className={`px-3 py-1.5 rounded-full ${kind === k ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-800'}`}>{k === 'short' ? t('قصير (≤ 90 ث)', 'Court (≤ 90 s)', 'Short (≤ 90 s)') : t('طويل (≤ 15 د)', 'Long (≤ 15 min)', 'Long (≤ 15 min)')}</button>)}
       </div>
