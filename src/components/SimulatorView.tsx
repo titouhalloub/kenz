@@ -483,6 +483,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       </div>
 
       {simulationMode === 'custom' && (
+        <>
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
         <div>
           <h3 className="text-xs font-semibold text-slate-200">Ajouter un produit au panier</h3>
@@ -550,7 +551,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
           </div>
         )}
       </div>
-
+        </>
       )}
       {calculation.error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-300">Calcul impossible : {calculation.error}</p>}
       {result && (
