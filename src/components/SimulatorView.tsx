@@ -149,6 +149,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       setAdults(scenario.adults);
       setChildren(scenario.children);
       setBasket(restored);
+      setSimulationMode('custom');
       setScenarioTitle(scenario.title);
       setScenarioStatus('Scénario chargé. Les prix publics sont actualisés ; les prix saisis manuellement doivent être ressaisis.');
     } catch {
@@ -289,7 +290,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     }, parseToMinorUnits, new Date().toISOString()),
     [quickRows, profile.locale],
   );
-  // Manual basket entries win over quick-mode rows for the same product.
+  // Each mode calculates from its own basket; switching modes never mixes items.
   const effectiveBasket = useMemo(
     () => simulationMode === 'quick' ? quickItems : basket,
     [simulationMode, basket, quickItems],
@@ -338,12 +339,12 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         <div className="flex items-center justify-between"><h3 className="text-xs font-semibold text-slate-100">{tr('سير المحاكاة', 'Progression de la simulation', 'Simulation progress')}</h3><span className="text-[10px] text-slate-400">{tr('مراحل فعلية', 'Étapes réelles', 'Live stages')}</span></div>
         <div className="space-y-2">
           {[
-            { label: tr('إعداد الأسرة والميزانية', 'Foyer et budget configurés', 'Household and budget set'), done: adults > 0 && Boolean(month) },
-            { label: simulationMode === 'quick' ? tr('تجهيز السلة الأساسية', 'Préparation du panier de base', 'Preparing starter basket') : tr('اختيار المنتجات يدويًا', 'Sélection des produits', 'Selecting products'), done: effectiveBasket.length > 0 },
-            { label: tr('جلب الأسعار', 'Chargement des prix', 'Loading prices'), done: !marketLoading && !marketLoadFailed, busy: marketLoading, failed: marketLoadFailed },
-            { label: tr('مراجعة الأسعار والبيانات الناقصة', 'Vérification des prix et données manquantes', 'Reviewing prices and missing data'), done: !marketLoading && effectiveBasket.length > 0 && effectiveBasket.every((item) => Boolean(item.price)), warning: !marketLoading && effectiveBasket.some((item) => !item.price) },
-            { label: tr('حساب التكلفة الشهرية', 'Calcul du coût mensuel', 'Calculating monthly cost'), done: Boolean(result) && !calculation.error },
-            { label: tr('عرض النتيجة', 'Résultat disponible', 'Result available'), done: Boolean(result) && !calculation.error },
+            { label: tr('إعداد الأسرة والميزانية', 'Foyer et budget configurés', 'Household and budget set'), done: adults > 0 && Boolean(month), busy: false, failed: false, warning: false },
+            { label: simulationMode === 'quick' ? tr('تجهيز السلة الأساسية', 'Préparation du panier de base', 'Preparing starter basket') : tr('اختيار المنتجات يدويًا', 'Sélection des produits', 'Selecting products'), done: effectiveBasket.length > 0, busy: false, failed: false, warning: false },
+            { label: tr('جلب الأسعار', 'Chargement des prix', 'Loading prices'), done: !marketLoading && !marketLoadFailed, busy: marketLoading, failed: marketLoadFailed, warning: false },
+            { label: tr('مراجعة الأسعار والبيانات الناقصة', 'Vérification des prix et données manquantes', 'Reviewing prices and missing data'), done: !marketLoading && effectiveBasket.length > 0 && effectiveBasket.every((item) => Boolean(item.price)), busy: false, failed: false, warning: !marketLoading && effectiveBasket.some((item) => !item.price) },
+            { label: tr('حساب التكلفة الشهرية', 'Calcul du coût mensuel', 'Calculating monthly cost'), done: Boolean(result) && !calculation.error, busy: false, failed: Boolean(calculation.error), warning: false },
+            { label: tr('عرض النتيجة', 'Résultat disponible', 'Result available'), done: Boolean(result) && !calculation.error, busy: false, failed: Boolean(calculation.error), warning: false },
           ].map((stage, index) => <div key={index} className="flex items-center gap-2 text-[11px]">
             {stage.done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : stage.busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" /> : stage.failed || stage.warning ? <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" /> : <Circle className="h-4 w-4 shrink-0 text-slate-600" />}
             <span className={stage.done ? 'text-emerald-300' : stage.busy ? 'text-sky-300' : stage.failed || stage.warning ? 'text-amber-300' : 'text-slate-400'}>{index + 1}. {stage.label}</span>
