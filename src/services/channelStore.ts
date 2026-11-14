@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase';
+import { apiUrl } from './apiBase';
 import { DEFAULT_SHARING, type SharingSettings } from '../domain/channels/sharingPolicy';
 import type { VideoKind } from '../domain/channels/limits';
 
@@ -68,7 +69,7 @@ export async function uploadChannelVideo(file: File, meta: { kind: VideoKind; ti
   try {
     const params = new URLSearchParams({ kind: meta.kind, title: meta.title, description: meta.description, locale: meta.locale });
     if (meta.wilaya) params.set('wilaya', meta.wilaya);
-    const res = await fetch(`/api/channels/uploads?${params}`, { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': file.type || 'video/mp4' }, body: file });
+    const res = await fetch(apiUrl(`/api/channels/uploads?${params}`), { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': file.type || 'video/mp4' }, body: file });
     const json = await res.json().catch(() => ({}));
     return res.ok ? { success: true, data: { videoId: json.videoId } } : { success: false, error: json.error || 'upload_failed' };
   } catch (e) { return fail(e); }
@@ -149,7 +150,7 @@ export async function listMirrors(): Promise<Result<StorageMirror[]>> {
 
 export async function connectMirror(input: Record<string, string>): Promise<Result<{ mirrorId: string }>> {
   try {
-    const res = await fetch('/api/channels/mirrors', { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+    const res = await fetch(apiUrl('/api/channels/mirrors'), { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
     const json = await res.json().catch(() => ({}));
     return res.ok ? { success: true, data: { mirrorId: json.mirrorId } } : { success: false, error: [json.error, json.detail, ...(json.problems ?? [])].filter(Boolean).join(': ') };
   } catch (e) { return fail(e); }
@@ -157,7 +158,7 @@ export async function connectMirror(input: Record<string, string>): Promise<Resu
 
 export async function disconnectMirror(id: string): Promise<Result<boolean>> {
   try {
-    const res = await fetch(`/api/channels/mirrors/${id}`, { method: 'DELETE', headers: await authHeader() });
+    const res = await fetch(apiUrl(`/api/channels/mirrors/${id}`), { method: 'DELETE', headers: await authHeader() });
     return { success: res.ok, data: res.ok };
   } catch (e) { return fail(e); }
 }
@@ -173,7 +174,7 @@ export async function loadPendingVideos(): Promise<Result<Array<{ id: string; ti
 
 export async function moderateVideo(id: string, action: 'approve' | 'reject' | 'remove', reason?: string): Promise<Result<boolean>> {
   try {
-    const res = await fetch(`/api/channels/videos/${id}/${action}`, { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+    const res = await fetch(apiUrl(`/api/channels/videos/${id}/${action}`), { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
     return { success: res.ok, data: res.ok, error: res.ok ? undefined : 'moderation_failed' };
   } catch (e) { return fail(e); }
 }

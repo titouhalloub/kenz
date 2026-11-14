@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: kenz
+    runtime: docker
+    plan: starter        # ffmpeg needs CPU/RAM; free (512 MB, shared CPU) is only good for trying it out
+    region: frankfurt
+    healthCheckPath: /healthz
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CHANNEL_SIGNING_PRIVATE_KEY
+        sync: false
+      - key: VITE_CHANNEL_SIGNING_PUBLIC_KEY
+        sync: false
+      - key: CHANNEL_MASTER_KEY
+        sync: false
+      - key: VITE_CHANNEL_TRACKERS
+        sync: false
