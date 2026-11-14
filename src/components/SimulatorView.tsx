@@ -8,7 +8,7 @@ import { deleteSimulatorScenario, listSimulatorScenarios, saveSimulatorScenario,
 import type { SimulatorPrice } from '../domain/simulator';
 import type { UserProfile } from '../domain/types';
 import { ALGERIA_WILAYAS } from '../domain/wilayas';
-import { STARTER_BASKET, quickRowsToItems, type QuickRow } from '../domain/starterBasket';
+import { STARTER_BASKET, quickRowsToItems, toMilliUnits, type QuickRow } from '../domain/starterBasket';
 
 interface SimulatorViewProps {
   profile: UserProfile;
@@ -255,7 +255,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       category: selectedProduct.category,
       baseUnit: selectedProduct.baseUnit,
       ...(selectedProduct.substituteGroup ? { substituteGroup: selectedProduct.substituteGroup } : {}),
-      quantityPerPersonPerDayMilliUnits: amount,
+      quantityPerPersonPerDayMilliUnits: toMilliUnits(selectedProduct.baseUnit, amount),
       price: marketPrice || {
         currency: 'DZD',
         p25UnitPriceMinor: low,
@@ -487,7 +487,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
           <div key={item.productId} className="rounded-xl border border-slate-800 bg-slate-900 p-3 flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-slate-100 truncate">{item.name}</div>
-              <div className="text-[10px] text-slate-500">{categoryLabels[item.category]?.[profile.locale] || item.category} · {item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? (profile.locale === 'ar' ? 'غ' : 'g') : item.baseUnit === 'l' ? (profile.locale === 'ar' ? 'مل' : 'ml') : (profile.locale === 'ar' ? 'وحدة' : 'unit')} / {profile.locale === 'ar' ? 'شخص / يوم' : profile.locale === 'en' ? 'person / day' : 'personne / jour'}</div>
+              <div className="text-[10px] text-slate-500">{categoryLabels[item.category]?.[profile.locale] || item.category} · {item.baseUnit === 'unit' ? item.quantityPerPersonPerDayMilliUnits / 1000 : item.quantityPerPersonPerDayMilliUnits} {item.baseUnit === 'kg' ? (profile.locale === 'ar' ? 'غ' : 'g') : item.baseUnit === 'l' ? (profile.locale === 'ar' ? 'مل' : 'ml') : (profile.locale === 'ar' ? 'وحدة' : 'unit')} / {profile.locale === 'ar' ? 'شخص / يوم' : profile.locale === 'en' ? 'person / day' : 'personne / jour'}</div>
               <div className="text-[10px] text-amber-300">{item.price?.nObservations ? `Prix de marché · ${item.price.nObservations} relevés · ${item.price.areaLevel} · ${(item.price.sourceTiers || []).join(', ') || 'source non précisée'} · ${item.price.lastObserved}` : 'Prix saisi manuellement · non vérifié'}</div>
             </div>
             <div className="text-right shrink-0">
