@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { translateKenzDOM } from './domain/i18n';
+import { translateKenzDOM, translateKenzNode } from './domain/i18n';
 import {
   LayoutDashboard,
   Receipt,
@@ -446,10 +446,27 @@ export default function App() {
   const isRTL = budgetState.profile.locale === 'ar';
   useEffect(() => { document.documentElement.lang = budgetState.profile.locale; document.documentElement.dir = isRTL ? 'rtl' : 'ltr'; }, [budgetState.profile.locale, isRTL]);
   useEffect(() => {
-    const applyTranslations = () => translateKenzDOM(document.body, budgetState.profile.locale);
-    applyTranslations();
-    const observer = new MutationObserver(() => applyTranslations());
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+    const locale = budgetState.profile.locale;
+    // One full pass for the initial screen/locale change; later DOM changes are incremental.
+    translateKenzDOM(document.body, locale);
+    const observer = new MutationObserver((records) => {
+      const changedNodes = new Set<Node>();
+      for (const record of records) {
+        if (record.type === 'characterData' || record.type === 'attributes') {
+          changedNodes.add(record.target);
+        } else {
+          record.addedNodes.forEach((node) => changedNodes.add(node));
+        }
+      }
+      changedNodes.forEach((node) => translateKenzNode(node, locale));
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['placeholder', 'title', 'aria-label'],
+    });
     return () => observer.disconnect();
   }, [budgetState.profile.locale]);
 
