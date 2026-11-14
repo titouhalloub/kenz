@@ -137,6 +137,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
           name: productName(product, profile.locale),
           category: product.category,
           baseUnit: product.baseUnit,
+          ...(product.substituteGroup ? { substituteGroup: product.substituteGroup } : {}),
           quantityPerPersonPerDayMilliUnits: item.quantityPerPersonPerDayMilliUnits,
           ...(prices.pricesBySlug[product.slug] ? { price: prices.pricesBySlug[product.slug] } : {}),
         }];
@@ -253,6 +254,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       name: productName(selectedProduct, profile.locale),
       category: selectedProduct.category,
       baseUnit: selectedProduct.baseUnit,
+      ...(selectedProduct.substituteGroup ? { substituteGroup: selectedProduct.substituteGroup } : {}),
       quantityPerPersonPerDayMilliUnits: amount,
       price: marketPrice || {
         currency: 'DZD',
@@ -285,19 +287,20 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     [basket, quickItems],
   );
 
-  const result: SimulatorResult | null = useMemo(() => {
-    if (effectiveBasket.length === 0 || profile.preferredCurrency !== 'DZD') return null;
+  const calculation = useMemo((): { result: SimulatorResult | null; error: string } => {
+    if (effectiveBasket.length === 0 || profile.preferredCurrency !== 'DZD') return { result: null, error: '' };
     try {
-      return simulateMonthlyBudget({
+      return { result: simulateMonthlyBudget({
         month,
         household: { adults, children },
         availableBudgetMinor: effectiveBudgetMinor,
         items: effectiveBasket,
-      });
-    } catch {
-      return null;
+      }), error: '' };
+    } catch (cause) {
+      return { result: null, error: cause instanceof Error ? cause.message : 'Erreur de calcul inconnue.' };
     }
   }, [month, adults, children, effectiveBudgetMinor, effectiveBasket, profile.preferredCurrency]);
+  const result = calculation.result;
 
   if (profile.preferredCurrency !== 'DZD') {
     return (
@@ -501,6 +504,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         )}
       </div>
 
+      {calculation.error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-300">Calcul impossible : {calculation.error}</p>}
       {result && (
         <div className="space-y-3">
           <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 space-y-3">
@@ -569,8 +573,8 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2">
               <h3 className="text-xs font-semibold text-slate-200">Alternatives moins chères dans ton panier</h3>
               {result.cheapestSubstitutes.map((suggestion) => {
-                const from = basket.find((item) => item.productId === suggestion.fromProductId);
-                const to = basket.find((item) => item.productId === suggestion.toProductId);
+                const from = effectiveBasket.find((item) => item.productId === suggestion.fromProductId);
+                const to = effectiveBasket.find((item) => item.productId === suggestion.toProductId);
                 return <div key={suggestion.fromProductId} className="text-[11px] text-slate-400">{from?.name} → {to?.name} · économie estimée {formatMoney(suggestion.estimatedSavingMinor, 'DZD', profile.locale)}</div>;
               })}
             </div>
