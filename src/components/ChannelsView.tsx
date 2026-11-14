@@ -3,7 +3,7 @@ import { isUuid } from '../domain/isUuid';
 import { Flag, Heart, MessageCircle, Plus, Settings2, ShieldCheck, UserCheck, UserPlus, X, HardDrive } from 'lucide-react';
 import type { UserProfile } from '../services/authStore';
 import {
-  addVideoComment, connectMirror, disconnectMirror, isModerator, listMirrors, loadChannelFeed, loadPendingVideos, loadSharingSettings,
+  addVideoComment, connectMirror, loadMyVideos, type MyVideo, disconnectMirror, isModerator, listMirrors, loadChannelFeed, loadPendingVideos, loadSharingSettings,
   loadVideoComments, moderateVideo, reportVideo, saveSharingSettings, toggleFollow, toggleVideoLike, uploadChannelVideo,
   type ChannelVideo, type FeedMode, type StorageMirror,
 } from '../services/channelStore';
@@ -121,7 +121,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
       </div>
 
       {commentsFor && <CommentsSheet videoId={commentsFor} userId={userId} t={t} onClose={() => setCommentsFor(null)} />}
-      {panel === 'upload' && <UploadSheet t={t} locale={locale} wilaya={wilayaOf(user.wilaya)} signedIn={!!userId} onClose={() => setPanel(null)} />}
+      {panel === 'upload' && <UploadSheet t={t} locale={locale} wilaya={wilayaOf(user.wilaya)} userId={userId} signedIn={!!userId} onClose={() => setPanel(null)} />}
       {panel === 'settings' && <SettingsSheet t={t} userId={userId} sharing={sharing} onChange={setSharing} onClose={() => setPanel(null)} />}
       {panel === 'moderation' && <ModerationSheet t={t} onClose={() => { setPanel(null); void refresh(); }} />}
     </div>
@@ -159,7 +159,12 @@ const CommentsSheet: React.FC<{ videoId: string; userId?: string; t: T; onClose:
   );
 };
 
-const UploadSheet: React.FC<{ t: T; locale: Locale; wilaya: string | null; signedIn: boolean; onClose: () => void }> = ({ t, locale, wilaya, signedIn, onClose }) => {
+const UploadSheet: React.FC<{ t: T; locale: Locale; wilaya: string | null; userId?: string; signedIn: boolean; onClose: () => void }> = ({ t, locale, wilaya, userId, signedIn, onClose }) => {
+  const [progress, setProgress] = useState<number | null>(null);
+  const [mine, setMine] = useState<MyVideo[]>([]);
+  const reloadMine = useCallback(async () => { if (userId) setMine((await loadMyVideos(userId)).data ?? []); }, [userId]);
+  useEffect(() => { void reloadMine(); }, [reloadMine]);
+  const statusLabel = (st: string) => ({ processing: t('قيد المعالجة', 'Traitement', 'Processing'), pending: t('بانتظار المراجعة', 'En attente de relecture', 'Waiting for review'), published: t('منشور', 'Publiée', 'Live'), rejected: t('مرفوض', 'Refusée', 'Rejected'), removed: t('محذوف', 'Retirée', 'Removed') } as Record<string, string>)[st] ?? st;
   const [kind, setKind] = useState<VideoKind>('short');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -169,9 +174,10 @@ const UploadSheet: React.FC<{ t: T; locale: Locale; wilaya: string | null; signe
   const [msg, setMsg] = useState('');
   const submit = async () => {
     if (!file) return;
-    setBusy(true); setMsg('');
-    const r = await uploadChannelVideo(file, { kind, title: title.trim(), description, locale, wilaya: shareWilaya ? wilaya : null });
-    setBusy(false);
+    setBusy(true); setMsg(''); setProgress(0);
+    const r = await uploadChannelVideo(file, { kind, title: title.trim(), description, locale, wilaya: shareWilaya ? wilaya : null }, setProgress);
+    setBusy(false); setProgress(null);
+    if (r.success) void reloadMine();
     setMsg(r.success ? t('تم الإرسال. سيُنشر بعد مراجعة المشرف.', 'Envoyée. Publication après relecture par un modérateur.', 'Uploaded. It goes live after a moderator reviews it.') : t('فشل الرفع: ', 'Échec : ', 'Failed: ') + (r.error || ''));
   };
   return (
@@ -185,8 +191,15 @@ const UploadSheet: React.FC<{ t: T; locale: Locale; wilaya: string | null; signe
       <input type="file" accept="video/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
       {wilaya && <label className="flex gap-2 text-xs"><input type="checkbox" checked={shareWilaya} onChange={(e) => setShareWilaya(e.target.checked)} />{t('أظهر ولايتي', 'Afficher ma wilaya', 'Show my wilaya')}</label>}
       <p className="text-[11px] text-slate-400">{t('كل فيديو يُراجع قبل نشره ولا يُمرَّر بين الهواتف قبل الموافقة.', 'Chaque vidéo est relue avant publication et n’est jamais relayée entre téléphones avant approbation.', 'Every video is reviewed before it goes live and is never relayed between phones before approval.')}</p>
-      <button onClick={submit} disabled={!signedIn || busy || !file || title.trim().length < 3} className="w-full py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold text-sm disabled:opacity-40">{busy ? '…' : t('إرسال للمراجعة', 'Envoyer pour relecture', 'Submit for review')}</button>
+      <button onClick={submit} disabled={!signedIn || busy || !file || title.trim().length < 3} className="w-full py-2 rounded-lg bg-emerald-500 text-slate-950 font-bold text-sm disabled:opacity-40">{busy ? (progress !== null && progress < 1 ? `${Math.round(progress * 100)} %` : t('جارٍ المعالجة على الخادم…', 'Traitement sur le serveur…', 'Processing on the server…')) : t('إرسال للمراجعة', 'Envoyer pour relecture', 'Submit for review')}</button>
+      {busy && <progress className="w-full" max={1} value={progress !== null && progress < 1 ? progress : undefined} />}
       {msg && <div className="text-xs text-slate-300">{msg}</div>}
+      {mine.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-bold text-sm">{t('فيديوهاتي', 'Mes vidéos', 'My videos')}</h3>
+          {mine.map((v) => <div key={v.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2 text-xs"><span>{v.title}</span><b>{statusLabel(v.status)}{v.rejectionReason ? ` (${v.rejectionReason})` : ''}</b></div>)}
+        </div>
+      )}
     </Sheet>
   );
 };

@@ -65,13 +65,41 @@ export async function loadChannelFeed(mode: FeedMode, userId: string | undefined
   } catch (e) { return fail(e); }
 }
 
-export async function uploadChannelVideo(file: File, meta: { kind: VideoKind; title: string; description: string; locale: string; wilaya: string | null }): Promise<Result<{ videoId: string }>> {
+export async function uploadChannelVideo(
+  file: File,
+  meta: { kind: VideoKind; title: string; description: string; locale: string; wilaya: string | null },
+  onProgress?: (fraction: number) => void,
+): Promise<Result<{ videoId: string }>> {
   try {
     const params = new URLSearchParams({ kind: meta.kind, title: meta.title, description: meta.description, locale: meta.locale });
     if (meta.wilaya) params.set('wilaya', meta.wilaya);
-    const res = await fetch(apiUrl(`/api/channels/uploads?${params}`), { method: 'POST', headers: { ...(await authHeader()), 'Content-Type': file.type || 'video/mp4' }, body: file });
-    const json = await res.json().catch(() => ({}));
-    return res.ok ? { success: true, data: { videoId: json.videoId } } : { success: false, error: json.error || 'upload_failed' };
+    const headers = { ...(await authHeader()), 'Content-Type': file.type || 'video/mp4' };
+    return await new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', apiUrl(`/api/channels/uploads?${params}`));
+      for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(e.loaded / e.total); };
+      xhr.onerror = () => resolve({ success: false, error: 'network_error' });
+      xhr.ontimeout = () => resolve({ success: false, error: 'timeout' });
+      xhr.timeout = 15 * 60_000;
+      xhr.onload = () => {
+        let json: { videoId?: string; error?: string } = {};
+        try { json = JSON.parse(xhr.responseText); } catch { /* non-JSON error page */ }
+        if (xhr.status >= 200 && xhr.status < 300 && json.videoId) resolve({ success: true, data: { videoId: json.videoId } });
+        else resolve({ success: false, error: json.error || `http_${xhr.status}` });
+      };
+      xhr.send(file);
+    });
+  } catch (e) { return fail(e); }
+}
+
+export interface MyVideo { id: string; title: string; status: string; rejectionReason: string | null; createdAt: string }
+
+export async function loadMyVideos(userId: string): Promise<Result<MyVideo[]>> {
+  try {
+    const { data, error } = await client().from('channel_videos').select('id,title,status,rejection_reason,created_at').eq('author_id', userId).order('created_at', { ascending: false }).limit(20);
+    if (error) throw error;
+    return { success: true, data: (data ?? []).map((v) => ({ id: v.id, title: v.title, status: v.status, rejectionReason: v.rejection_reason, createdAt: v.created_at })) };
   } catch (e) { return fail(e); }
 }
 
