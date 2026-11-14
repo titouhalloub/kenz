@@ -16,6 +16,7 @@ import {
   Moon,
   BarChart3,
   MessageCircle,
+  Video,
 } from 'lucide-react';
 import {
   loadBudgetState,
@@ -83,6 +84,7 @@ import { TransactionsView } from './components/TransactionsView';
 import { PlanView } from './components/PlanView';
 import { DirectoryView } from './components/DirectoryView';
 import { CommunityView } from './components/CommunityView';
+import { ChannelsView } from './components/ChannelsView';
 import { SettingsView } from './components/SettingsView';
 import { DebtLedgerView } from './components/DebtLedgerView';
 import { FestiveZakatView } from './components/FestiveZakatView';
@@ -100,7 +102,7 @@ import { dispatchBillReminders } from './services/billReminderService';
 import { User as UserIcon } from 'lucide-react';
 import { kenzText } from './domain/i18n';
 
-type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'debts' | 'zakat' | 'settings' | 'profile';
+type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'channels' | 'debts' | 'zakat' | 'settings' | 'profile';
 
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
@@ -521,6 +523,14 @@ export default function App() {
             {budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}
           </button>
           <button
+            onClick={() => setActiveTab('channels')}
+            className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
+              activeTab === 'channels' ? 'text-emerald-400 font-bold' : 'hover:text-slate-200'
+            }`}
+          >
+            {budgetState.profile.locale === 'ar' ? 'القنوات' : budgetState.profile.locale === 'en' ? 'Channels' : 'Chaînes'}
+          </button>
+          <button
             onClick={() => setActiveTab('debts')}
             className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
               activeTab === 'debts' ? 'text-amber-400 font-bold' : 'hover:text-slate-200'
@@ -681,6 +691,10 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'channels' && (
+          <ChannelsView user={currentUser} locale={budgetState.profile.locale} />
+        )}
+
         {activeTab === 'debts' && (
           <DebtLedgerView
             debts={debts}
@@ -802,6 +816,17 @@ export default function App() {
           >
             <MessageCircle className="w-4 h-4" />
             <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'المجتمع' : budgetState.profile.locale === 'en' ? 'Community' : 'Communauté'}</span>
+          </button>
+
+          {/* Channels tab */}
+          <button
+            onClick={() => setActiveTab('channels')}
+            className={`flex flex-col items-center justify-center min-h-[44px] cursor-pointer transition-colors ${
+              activeTab === 'channels' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Video className="w-4 h-4" />
+            <span className="text-[9px] mt-1 tracking-tight">{budgetState.profile.locale === 'ar' ? 'القنوات' : budgetState.profile.locale === 'en' ? 'Channels' : 'Chaînes'}</span>
           </button>
 
           {/* 4. Carnet Kredy Tab */}
