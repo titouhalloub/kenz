@@ -58,6 +58,7 @@ export function quickRowsToItems(
     if (!price) continue;
     items.push({
       productId: product.slug, name: names(product.slug), category: product.category, baseUnit: product.baseUnit,
+      ...(product.substituteGroup ? { substituteGroup: product.substituteGroup } : {}),
       quantityPerPersonPerDayMilliUnits: toMilliUnits(product.baseUnit, qty), price,
     });
   }
