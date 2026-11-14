@@ -901,7 +901,7 @@ export default function App() {
           // and restored sessions, preventing duplicate Supabase requests.
           setCurrentUser(u);
           setActiveTab('profile');
-        }}}
+        }}
       />
     </div>
   );
