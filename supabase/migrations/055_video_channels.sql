@@ -1,4 +1,4 @@
--- 051: video channels (short/long video, P2P-assisted delivery, creator storage mirrors).
+-- 055: video channels (short/long video, P2P-assisted delivery, creator storage mirrors).
 -- Invariant: a video's segments reach the PUBLIC origin bucket only after moderator approval.
 -- Uploads are staged in a private bucket and handled by the server with the service role.
 
