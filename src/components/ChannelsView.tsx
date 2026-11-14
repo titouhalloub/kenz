@@ -1,4 +1,5 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { isUuid } from '../domain/isUuid';
 import { Flag, Heart, MessageCircle, Plus, Settings2, ShieldCheck, UserCheck, UserPlus, X, HardDrive } from 'lucide-react';
 import type { UserProfile } from '../services/authStore';
 import {
@@ -13,7 +14,6 @@ import type { VideoKind } from '../domain/channels/limits';
 const ChannelPlayer = React.lazy(() => import('./ChannelPlayer').then((m) => ({ default: m.ChannelPlayer })));
 
 type Locale = 'ar' | 'fr' | 'en';
-const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(v);
 const wilayaOf = (v: string) => v.match(/^\s*(\d{2,3})/)?.[1] ?? null;
 
 interface Props { user: UserProfile; locale: Locale }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { isUuid } from '../domain/isUuid';
 import { Bookmark, Flag, Heart, MessageCircle, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
@@ -16,7 +17,6 @@ interface CommunityViewProps {
   locale: 'ar' | 'fr' | 'en';
 }
 
-const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
 const getWilayaCode = (value: string) => value.match(/^\s*(\d{2,3})/)?.[1] || null;
 const today = () => new Date().toISOString().slice(0, 10);
 
