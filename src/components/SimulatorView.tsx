@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calculator, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2, Circle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
 import { simulateMonthlyBudget, type SimulatorBasketItem, type SimulatorResult } from '../domain/simulator';
 import { formatMoney, parseToMinorUnits } from '../domain/financialCalculations';
@@ -59,6 +59,9 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
     return { slug: row.slug, qty: String(row.perDay), price: '' };
   }));
   const [quickStatus, setQuickStatus] = useState('');
+  const [simulationMode, setSimulationMode] = useState<'quick' | 'custom'>('quick');
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [marketLoadFailed, setMarketLoadFailed] = useState(false);
   const tr = (ar: string, fr: string, en: string) => (profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr);
 
   const selectedProduct = PRODUCT_CATALOG.find((product) => product.slug === selectedSlug) || PRODUCT_CATALOG[0];
@@ -176,6 +179,8 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
 
   useEffect(() => {
     let active = true;
+    setMarketLoading(true);
+    setMarketLoadFailed(false);
     setMarketPrice(null);
     setLowPrice('');
     setExpectedPrice('');
@@ -219,10 +224,13 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
       setQuickStatus(found > 0
         ? tr(`${found} prix publics préremplis. Modifie-les si besoin.`, `${found} prix publics préremplis. Modifie-les si besoin.`, `${found} public prices prefilled. Edit them if needed.`)
         : tr('لا توجد أسعار عامة بعد: اكتب السعر المعتاد الذي تدفعه.', 'Aucun prix public publié pour l’instant : saisis le prix que tu paies d’habitude.', 'No public prices are published yet: type the price you usually pay.'));
+      setMarketLoading(false);
     }).catch(() => {
       if (!active) return;
       setMarketStatus('Prix publics indisponibles pour le moment ; la saisie manuelle reste possible.');
       setQuickStatus(tr('الأسعار العامة غير متاحة، أدخل أسعارك.', 'Prix publics indisponibles : saisis tes prix.', 'Public prices unavailable: type your own prices.'));
+      setMarketLoadFailed(true);
+      setMarketLoading(false);
     });
 
     return () => { active = false; };
@@ -283,8 +291,8 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
   );
   // Manual basket entries win over quick-mode rows for the same product.
   const effectiveBasket = useMemo(
-    () => [...basket, ...quickItems.filter((item) => !basket.some((row) => row.productId === item.productId))],
-    [basket, quickItems],
+    () => simulationMode === 'quick' ? quickItems : basket,
+    [simulationMode, basket, quickItems],
   );
 
   const calculation = useMemo((): { result: SimulatorResult | null; error: string } => {
@@ -312,6 +320,41 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-100">{tr('اختر طريقة المحاكاة', 'Choisis ton mode de simulation', 'Choose simulation mode')}</h2>
+          <p className="mt-1 text-[11px] text-slate-400">{tr('السريعة تبدأ بسلة أساسية جاهزة. المخصصة تعتمد فقط على المنتجات التي تضيفها بنفسك.', 'Le mode rapide démarre avec un panier de base. Le mode personnalisé utilise uniquement les produits que tu ajoutes.', 'Quick starts with a starter basket. Custom uses only the products you add yourself.')}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setSimulationMode('quick')} aria-pressed={simulationMode === 'quick'} className={simulationMode === 'quick' ? 'rounded-xl border border-emerald-500 bg-emerald-500/10 px-3 py-3 text-start text-xs font-semibold text-emerald-200' : 'rounded-xl border border-slate-700 px-3 py-3 text-start text-xs font-semibold text-slate-300'}>
+            {tr('⚡ سريعة', '⚡ Rapide', '⚡ Quick')}<span className="mt-1 block text-[10px] font-normal opacity-75">{tr('سلة أساسية قابلة للتعديل', 'Panier de base modifiable', 'Editable starter basket')}</span>
+          </button>
+          <button type="button" onClick={() => setSimulationMode('custom')} aria-pressed={simulationMode === 'custom'} className={simulationMode === 'custom' ? 'rounded-xl border border-emerald-500 bg-emerald-500/10 px-3 py-3 text-start text-xs font-semibold text-emerald-200' : 'rounded-xl border border-slate-700 px-3 py-3 text-start text-xs font-semibold text-slate-300'}>
+            {tr('🛠 مخصصة', '🛠 Personnalisée', '🛠 Custom')}<span className="mt-1 block text-[10px] font-normal opacity-75">{tr('أنت تختار كل منتج وكمية', 'Tu choisis chaque produit et quantité', 'You choose every product and quantity')}</span>
+          </button>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 space-y-3" aria-live="polite">
+        <div className="flex items-center justify-between"><h3 className="text-xs font-semibold text-slate-100">{tr('سير المحاكاة', 'Progression de la simulation', 'Simulation progress')}</h3><span className="text-[10px] text-slate-400">{tr('مراحل فعلية', 'Étapes réelles', 'Live stages')}</span></div>
+        <div className="space-y-2">
+          {[
+            { label: tr('إعداد الأسرة والميزانية', 'Foyer et budget configurés', 'Household and budget set'), done: adults > 0 && Boolean(month) },
+            { label: simulationMode === 'quick' ? tr('تجهيز السلة الأساسية', 'Préparation du panier de base', 'Preparing starter basket') : tr('اختيار المنتجات يدويًا', 'Sélection des produits', 'Selecting products'), done: effectiveBasket.length > 0 },
+            { label: tr('جلب الأسعار', 'Chargement des prix', 'Loading prices'), done: !marketLoading && !marketLoadFailed, busy: marketLoading, failed: marketLoadFailed },
+            { label: tr('مراجعة الأسعار والبيانات الناقصة', 'Vérification des prix et données manquantes', 'Reviewing prices and missing data'), done: !marketLoading && effectiveBasket.length > 0 && effectiveBasket.every((item) => Boolean(item.price)), warning: !marketLoading && effectiveBasket.some((item) => !item.price) },
+            { label: tr('حساب التكلفة الشهرية', 'Calcul du coût mensuel', 'Calculating monthly cost'), done: Boolean(result) && !calculation.error },
+            { label: tr('عرض النتيجة', 'Résultat disponible', 'Result available'), done: Boolean(result) && !calculation.error },
+          ].map((stage, index) => <div key={index} className="flex items-center gap-2 text-[11px]">
+            {stage.done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : stage.busy ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" /> : stage.failed || stage.warning ? <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" /> : <Circle className="h-4 w-4 shrink-0 text-slate-600" />}
+            <span className={stage.done ? 'text-emerald-300' : stage.busy ? 'text-sky-300' : stage.failed || stage.warning ? 'text-amber-300' : 'text-slate-400'}>{index + 1}. {stage.label}</span>
+            {stage.busy && <span className="ms-auto text-[10px] text-sky-300">{tr('جارٍ الآن', 'En cours', 'In progress')}</span>}
+            {stage.failed && <span className="ms-auto text-[10px] text-amber-300">{tr('تعذر الاتصال', 'Indisponible', 'Unavailable')}</span>}
+            {stage.warning && <span className="ms-auto text-[10px] text-amber-300">{tr('أسعار ناقصة', 'Prix manquants', 'Missing prices')}</span>}
+          </div>)}
+        </div>
+        <p className="text-[10px] leading-relaxed text-slate-500">{marketLoading ? tr('نحمّل الأسعار العامة. يمكنك متابعة الصفحة؛ لم تتوقف المحاكاة.', 'Chargement des prix publics. Tu peux continuer ; la simulation ne bloque pas.', 'Public prices are loading. You can keep using the screen; the app is not frozen.') : marketLoadFailed ? tr('تعذر جلب الأسعار. يمكنك إدخالها يدويًا؛ لم تتوقف المحاكاة.', 'Impossible de charger les prix. Tu peux les saisir manuellement ; la simulation ne bloque pas.', 'Prices could not be loaded. Enter them manually; the app is not frozen.') : tr('الحساب محلي وفوري بعد توفر الكميات والأسعار. المراحل غير المنجزة ظاهرة.', 'Le calcul est local et immédiat dès que quantités et prix sont disponibles. Les étapes restantes sont visibles.', 'Calculation is local and immediate once quantities and prices are available. Remaining stages stay visible.')}</p>
+      </div>
+      {simulationMode === 'quick' && (
       <div id="quick-simulation" className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Calculator className="h-4 w-4 text-emerald-400" />
@@ -366,6 +409,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         </div>
         <p className="text-[10px] text-slate-500">{tr('الكميات تقريبية للشخص في اليوم (قابلة للتعديل). السعر المكتوب يُحوَّل إلى مجال ‎−10٪ / +10٪.', 'Quantités indicatives par personne et par jour (modifiables). Un prix saisi devient une fourchette −10 % / +10 %.', 'Indicative quantities per person per day (editable). A typed price becomes a −10% / +10% range.')}</p>
       </div>
+      )}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold text-slate-200">Mes scénarios</h3>
@@ -436,6 +480,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         </div>
       </div>
 
+      {simulationMode === 'custom' && (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
         <div>
           <h3 className="text-xs font-semibold text-slate-200">Ajouter un produit au panier</h3>
@@ -504,6 +549,7 @@ export const SimulatorView: React.FC<SimulatorViewProps> = ({ profile, available
         )}
       </div>
 
+      )}
       {calculation.error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 text-xs text-rose-300">Calcul impossible : {calculation.error}</p>}
       {result && (
         <div className="space-y-3">
