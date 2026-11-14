@@ -124,16 +124,17 @@ export default function App() {
   const [isAddDebtModalOpen, setIsAddDebtModalOpen] = useState(false);
   const [kredyPreselectedBiz, setKredyPreselectedBiz] = useState<Business | null>(null);
 
-  // Restore an existing Supabase session and hydrate only that user's cloud data.
+  // Restore the Supabase identity only. Account data is hydrated by the single
+  // currentUser effect below, so login and session restoration share one path.
   useEffect(() => {
     let active = true;
     const supabase = getSupabaseClient();
     if (!supabase) return () => { active = false; };
 
-    void supabase.auth.getUser().then(async ({ data, error }) => {
+    void supabase.auth.getUser().then(({ data, error }) => {
       if (!active || error || !data.user) return;
       const authUser = data.user;
-      const authProfile: UserProfile = {
+      setCurrentUser({
         id: authUser.id,
         email: authUser.email || '',
         fullName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Kenz',
@@ -141,42 +142,81 @@ export default function App() {
         wilaya: authUser.user_metadata?.wilaya || '16 - Alger',
         membershipTier: authUser.user_metadata?.tier || 'Citoyen Free',
         createdAt: authUser.created_at,
-      };
-      setCurrentUser(authProfile);
-      setDebts([]);
-      setAiWallet({ userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
-      const financialProfile = {
-        id: authUser.id,
-        email: authUser.email || '',
-        displayName: authProfile.fullName,
-        preferredCurrency: budgetState.profile.preferredCurrency,
-        locale: budgetState.profile.locale,
-        paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
-        planningPeriodDays: budgetState.profile.planningPeriodDays,
-      };
-      // Restore this account's own local cache before cloud access.
-      setBudgetState(loadBudgetState(financialProfile));
-      // Replay this user's durable local outbox before cloud hydration so offline edits aren't overwritten.
-      await flushPendingBudgetSync(authUser.id);
-      await flushPendingDebtSync(authUser.id);
-      await flushPendingZakatFestiveSync(authUser.id);
-      const [cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive] = await Promise.all([
-        loadBudgetStateFromSupabase(financialProfile),
-        loadDebtStateFromSupabase(authUser.id),
-        loadAICreditStateFromSupabase(authUser.id),
-        loadZakatStateFromSupabase(authUser.id),
-        loadFestiveStateFromSupabase(authUser.id),
-      ]);
-      if (!active) return;
-      if (cloudState) setBudgetState(cloudState);
-      setDebts(cloudDebts ?? loadDebtState(authUser.id));
-      setAiWallet(cloudCredits?.wallet ?? { userId: authUser.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
-      setZakatState(cloudZakat ?? loadZakatState(authUser.id));
-      setFestiveBudgets(cloudFestive ?? loadFestiveState(authUser.id));
-    }).catch((error) => console.error('Unable to restore Kenz cloud session:', error));
+      });
+    }).catch((error) => console.error('Unable to restore Kenz auth session:', error));
 
     return () => { active = false; };
   }, []);
+
+  // One hydration pipeline per authenticated identity. Both fresh login and
+  // restored sessions reach this effect; no duplicate fetch/replay path exists.
+  useEffect(() => {
+    const userId = currentUser.id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) return;
+
+    let active = true;
+    const financialProfile = {
+      id: userId,
+      email: currentUser.email,
+      displayName: currentUser.fullName,
+      preferredCurrency: budgetState.profile.preferredCurrency,
+      locale: budgetState.profile.locale,
+      paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
+      planningPeriodDays: budgetState.profile.planningPeriodDays,
+    };
+
+    // Switch to this account's isolated local cache immediately; never show
+    // the demo user's financial data while the cloud account is loading.
+    setBudgetState(loadBudgetState(financialProfile));
+    setDebts(loadDebtState(userId));
+    setAiWallet({ userId, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+    setZakatState(loadZakatState(userId));
+    setFestiveBudgets(loadFestiveState(userId));
+
+    const hydrate = async () => {
+      // A failed outbox in one domain must not prevent the other domains loading.
+      const replayResults = await Promise.allSettled([
+        flushPendingBudgetSync(userId),
+        flushPendingDebtSync(userId),
+        flushPendingZakatFestiveSync(userId),
+      ]);
+      replayResults.forEach((result) => {
+        if (result.status === 'rejected') console.error('Kenz pending sync replay failed:', result.reason);
+      });
+      if (!active) return;
+
+      // Isolate failures: one missing/temporarily unavailable table must not
+      // leave the entire signed-in app waiting for a single Promise.all.
+      const results = await Promise.allSettled([
+        loadBudgetStateFromSupabase(financialProfile),
+        loadDebtStateFromSupabase(userId),
+        loadAICreditStateFromSupabase(userId),
+        loadZakatStateFromSupabase(userId),
+        loadFestiveStateFromSupabase(userId),
+      ]);
+      if (!active) return;
+
+      const [budget, debt, credits, zakat, festive] = results;
+      if (budget.status === 'fulfilled' && budget.value) setBudgetState(budget.value);
+      else if (budget.status === 'rejected') console.error('Kenz budget hydration failed:', budget.reason);
+
+      if (debt.status === 'fulfilled') setDebts(debt.value ?? loadDebtState(userId));
+      else console.error('Kenz debt hydration failed:', debt.reason);
+
+      if (credits.status === 'fulfilled') {
+        setAiWallet(credits.value?.wallet ?? { userId, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
+      } else console.error('Kenz AI credits hydration failed:', credits.reason);
+
+      if (zakat.status === 'fulfilled') setZakatState(zakat.value ?? loadZakatState(userId));
+      else console.error('Kenz zakat hydration failed:', zakat.reason);
+
+      if (festive.status === 'fulfilled') setFestiveBudgets(festive.value ?? loadFestiveState(userId));
+      else console.error('Kenz festive budgets hydration failed:', festive.reason);
+    };
+
+    void hydrate().catch((error) => console.error('Kenz account hydration failed:', error));
+    return () => { active = false; };
+  }, [currentUser.id]);
 
   // Load and replay the append-only savings challenge ledger for this account.
   useEffect(() => {
@@ -776,6 +816,9 @@ export default function App() {
             onUpdateUser={(updated) => setCurrentUser(updated)}
             onLogout={() => {
               logoutUser();
+              // Reset the identity so signing back into the same account
+              // retriggers the single account-hydration effect.
+              setCurrentUser(loadCurrentUser());
               setIsAuthModalOpen(true);
             }}
           />
@@ -854,39 +897,11 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={(u) => {
+          // The currentUser effect owns all account hydration for both login
+          // and restored sessions, preventing duplicate Supabase requests.
           setCurrentUser(u);
           setActiveTab('profile');
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
-            setDebts([]);
-            setAiWallet({ userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
-          }
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(u.id)) {
-            const financialProfile = {
-              id: u.id, email: u.email, displayName: u.fullName,
-              preferredCurrency: budgetState.profile.preferredCurrency,
-              locale: budgetState.profile.locale,
-              paydayDayOfMonth: budgetState.profile.paydayDayOfMonth,
-              planningPeriodDays: budgetState.profile.planningPeriodDays,
-            };
-            setBudgetState(loadBudgetState(financialProfile));
-            void flushPendingBudgetSync(u.id).then(async () => {
-              await flushPendingDebtSync(u.id);
-              return Promise.all([
-              loadBudgetStateFromSupabase(financialProfile),
-              loadDebtStateFromSupabase(u.id),
-              loadAICreditStateFromSupabase(u.id),
-              loadZakatStateFromSupabase(u.id),
-              loadFestiveStateFromSupabase(u.id),
-              ]);
-            }).then(([cloudState, cloudDebts, cloudCredits, cloudZakat, cloudFestive]) => {
-              if (cloudState) setBudgetState(cloudState);
-              setDebts(cloudDebts ?? loadDebtState(u.id));
-              setAiWallet(cloudCredits?.wallet ?? { userId: u.id, balanceCredits: 0, lifetimeCreditsUsed: 0, updatedAt: new Date().toISOString() });
-              setZakatState(cloudZakat ?? loadZakatState(u.id));
-              setFestiveBudgets(cloudFestive ?? loadFestiveState(u.id));
-            });
-          }
-        }}
+        }}}
       />
     </div>
   );
