@@ -300,24 +300,49 @@ const uiCopy: Record<string, { ar: string; en: string }> = {
 export const kenzText = (locale: string, key: string, fallback?: string) =>
   messages[(locale === 'ar' || locale === 'en' ? locale : 'fr')][key] || fallback || key;
 
-export const translateKenzDOM = (root: ParentNode, locale: string) => {
+const translateTextNode = (node: Node, language: 'ar' | 'en') => {
+  const parent = node.parentElement;
+  if (!parent || ['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'OPTION'].includes(parent.tagName)) return;
+  const original = node.nodeValue || '';
+  const key = original.trim();
+  const translated = uiCopy[key]?.[language];
+  if (translated) node.nodeValue = original.replace(key, translated);
+};
+
+const translateElementAttributes = (element: Element, language: 'ar' | 'en') => {
+  for (const attr of ['placeholder', 'title', 'aria-label']) {
+    const value = element.getAttribute(attr);
+    const translated = value ? uiCopy[value.trim()]?.[language] : undefined;
+    if (translated) element.setAttribute(attr, translated);
+  }
+};
+
+/** Translate only a changed/added node and its own descendants. */
+export const translateKenzNode = (node: Node, locale: string) => {
   if (locale === 'fr') return;
   const language = locale === 'ar' ? 'ar' : 'en';
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let node: Node | null;
-  while ((node = walker.nextNode())) {
-    const parent = node.parentElement;
-    if (!parent || ['SCRIPT','STYLE','TEXTAREA','INPUT','OPTION'].includes(parent.tagName)) continue;
-    const original = node.nodeValue || '';
-    const key = original.trim();
-    const translated = uiCopy[key]?.[language];
-    if (translated) node.nodeValue = original.replace(key, translated);
+
+  if (node.nodeType === Node.TEXT_NODE) {
+    translateTextNode(node, language);
+    return;
   }
-  root.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]').forEach((element) => {
-    for (const attr of ['placeholder','title','aria-label']) {
-      const value = element.getAttribute(attr);
-      const translated = value ? uiCopy[value.trim()]?.[language] : undefined;
-      if (translated) element.setAttribute(attr, translated);
-    }
+
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    translateElementAttributes(node as Element, language);
+  }
+
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+  let textNode: Node | null;
+  while ((textNode = walker.nextNode())) translateTextNode(textNode, language);
+
+  const parent = node as ParentNode;
+  parent.querySelectorAll?.<Element>('[placeholder],[title],[aria-label]').forEach((element) => {
+    translateElementAttributes(element, language);
   });
+};
+
+/** Full scan is reserved for the initial render or an explicit locale change. */
+export const translateKenzDOM = (root: ParentNode, locale: string) => {
+  if (locale === 'fr') return;
+  translateKenzNode(root as Node, locale);
 };
