@@ -15,6 +15,17 @@ interface MarketPriceCache {
 }
 
 const CACHE_PREFIX = 'kenz:public-market-prices:v1:';
+const PRICE_REQUEST_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(request: PromiseLike<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Market price request timed out.')), timeoutMs);
+    Promise.resolve(request).then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 function cacheKey(slugs: string[], wilayaCode?: string | null): string {
   return CACHE_PREFIX + (wilayaCode || 'DZ') + ':' + [...slugs].sort().join(',');
@@ -83,18 +94,21 @@ export async function loadMarketPrices(productSlugs: string[], wilayaCode?: stri
   if (!supabase) return unavailable('not_configured', slugs, wilayaCode);
 
   try {
-    const productsResult = await supabase.from('products').select('id, slug').in('slug', slugs);
+    const productsResult = await withTimeout(
+      supabase.from('products').select('id, slug').in('slug', slugs),
+      PRICE_REQUEST_TIMEOUT_MS,
+    );
     if (productsResult.error) return unavailable('schema_not_deployed', slugs, wilayaCode);
     const products = (productsResult.data || []) as Array<{ id: string; slug: string }>;
     if (products.length === 0) return unavailable('no_data', slugs, wilayaCode);
 
-    const pricesResult = await supabase.rpc('get_area_prices', {
+    const pricesResult = await withTimeout(supabase.rpc('get_area_prices', {
       p_product_ids: products.map((product) => product.id),
       p_wilaya_code: wilayaCode && /^\d{2,3}$/.test(wilayaCode) ? wilayaCode : null,
       p_commune_id: null,
       p_geo_cell: null,
       p_window_days: 14,
-    });
+    }), PRICE_REQUEST_TIMEOUT_MS);
     if (pricesResult.error) return unavailable('schema_not_deployed', slugs, wilayaCode);
 
     const slugById = new Map(products.map((product) => [product.id, product.slug]));
