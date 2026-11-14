@@ -200,6 +200,21 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { defaultBaseUrl: string; defa
   },
 };
 
+// CORS for the Android app (Capacitor serves pages from https://localhost) and any configured origins.
+const allowedOrigins = (process.env.CORS_ORIGINS || 'https://localhost,capacitor://localhost,http://localhost').split(',').map((o) => o.trim());
+app.use('/api', (req, res, next) => {
+  const origin = req.header('origin');
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+});
+app.get('/healthz', (_req, res) => res.json({ ok: true }));
+
 registerChannelRoutes(app, { requireAuth: requireAuthenticatedUser });
 
 // Universal Server-Side AI Gateway supporting ANY provider

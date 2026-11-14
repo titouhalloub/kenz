@@ -39,7 +39,9 @@ export function decideUpload(settings: SharingSettings, device: DeviceConditions
 
 /** Upload accounting that resets on a new UTC day. */
 export class DailyUploadMeter {
-  constructor(private day = '', private bytes = 0) {}
+  private day: string;
+  private bytes: number;
+  constructor(day = '', bytes = 0) { this.day = day; this.bytes = bytes; }
   private roll(now: Date) {
     const d = now.toISOString().slice(0, 10);
     if (d !== this.day) { this.day = d; this.bytes = 0; }

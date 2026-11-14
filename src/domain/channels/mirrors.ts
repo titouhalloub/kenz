@@ -57,7 +57,8 @@ const QUARANTINE_MS = 5 * 60_000;
 export class MirrorHealth {
   private failures = new Map<string, number>();
   private downUntil = new Map<string, number>();
-  constructor(private now: () => number = () => Date.now()) {}
+  private now: () => number;
+  constructor(now: () => number = () => Date.now()) { this.now = now; }
 
   recordSuccess(id: string): void { this.failures.delete(id); }
   recordFailure(id: string): void {

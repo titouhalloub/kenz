@@ -1,6 +1,7 @@
 // Builds a verified, P2P-assisted playback session for one video.
 // Trust model: only the server-signed manifest is trusted. The playlist, init segment and media
 // segments are accepted only if their hashes match it, whatever source (origin, mirror, peer) served them.
+import { apiUrl } from './apiBase';
 import { createSegmentValidator, sha256Hex, verifyManifest, type ManifestPayload, type SignedManifest } from '../domain/channels/manifest';
 import { MirrorHealth, normalizeBaseUrl, sourceOrder, type MirrorSource } from '../domain/channels/mirrors';
 import { decideUpload, type DeviceConditions, type SharingSettings, DailyUploadMeter } from '../domain/channels/sharingPolicy';
@@ -11,7 +12,7 @@ export interface PlaybackInfo { videoId: string; manifestUrl: string; originBase
 export interface PlaybackStats { bytesOrigin: number; bytesMirror: number; bytesPeer: number; rejectedPieces: number }
 
 export async function fetchPlaybackInfo(videoId: string): Promise<PlaybackInfo> {
-  const res = await fetch(`/api/channels/videos/${videoId}/playback`);
+  const res = await fetch(apiUrl(`/api/channels/videos/${videoId}/playback`));
   if (!res.ok) throw new Error('video_unavailable');
   return res.json();
 }
