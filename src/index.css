@@ -163,3 +163,5 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-channel-sheet{display:flex;flex-direction:column;gap:12px}
 .kenz-channel-sheet .kenz-section-heading{margin-bottom:2px}
 .kenz-channel-sheet input:not([type=checkbox]),.kenz-channel-sheet select,.kenz-channel-sheet textarea{border:1px solid var(--kenz-line);border-radius:12px}
+.kenz-channels [role="alert"]{margin-bottom:10px;padding:9px 12px;border-radius:12px;background:#fff6e5;color:#8a5200!important;font-size:12px;font-weight:600}
+.kenz-channels input[type="checkbox"],.kenz-channel-sheet input[type="checkbox"]{accent-color:#5b2bc5;width:18px;height:18px}

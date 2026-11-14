@@ -96,7 +96,7 @@ export const ChannelsView: React.FC<Props> = ({ user, locale }) => {
         <button type="button" aria-label="settings" onClick={() => setPanel('settings')} className="kenz-channel-icon"><Settings2 size={16} /></button>
         {moderator && <button type="button" aria-label="moderation" onClick={() => setPanel('moderation')} className="kenz-channel-icon"><ShieldCheck size={16} /></button>}
       </div>
-      {error && <div className="text-xs text-amber-300 pb-2" role="alert">{error}</div>}
+      {error && <div role="alert">{error}</div>}
       <div className="kenz-channel-feed">
         {loading && <div className="p-6 text-sm text-slate-400">{t('جارٍ التحميل…', 'Chargement…', 'Loading…')}</div>}
         {!loading && videos.length === 0 && <div className="p-6 text-sm text-slate-400">{t('لا توجد فيديوهات بعد', 'Aucune vidéo pour le moment', 'No videos yet')}</div>}
