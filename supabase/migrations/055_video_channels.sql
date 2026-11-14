@@ -152,11 +152,11 @@ grant select, insert on public.channel_playback_stats to authenticated;
 -- Inserts/updates happen only in the server (service role) after ffmpeg + hashing + review.
 create policy "Published videos visible unless blocked" on public.channel_videos
   for select to anon, authenticated
-  using (
-    (status = 'published' and public.community_can_view_author(author_id))
-    or author_id = (select auth.uid())
-    or public.is_community_moderator()
-  );
+  using (status = 'published' and public.community_can_view_author(author_id));
+-- Separate policy: is_community_moderator() is not executable by anon (migration 044), so it must not run for anon.
+create policy "Authors and moderators read all their videos" on public.channel_videos
+  for select to authenticated
+  using (author_id = (select auth.uid()) or public.is_community_moderator());
 
 create policy "Follows are private to the follower" on public.channel_follows
   for select to authenticated using (follower_id = (select auth.uid()));
