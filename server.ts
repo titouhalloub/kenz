@@ -683,7 +683,14 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static('dist'));
+    // Never let a browser or CDN cache the app shell or the service worker, so new deploys show up at once.
+    app.use(express.static('dist', {
+      setHeaders: (res, filePath) => {
+        if (/(^|[\\/])(index\.html|sw\.js|registerSW\.js|manifest\.webmanifest)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }));
     app.get('*', (_req, res) => {
       res.sendFile('dist/index.html', { root: '.' });
     });
