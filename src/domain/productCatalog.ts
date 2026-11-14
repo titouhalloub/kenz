@@ -37,6 +37,8 @@ export interface CatalogProduct {
   category: ProductCategory;
   baseUnit: BaseUnit;
   regulated?: boolean;
+  /** Products explicitly considered comparable alternatives in the simulator. */
+  substituteGroup?: string;
 }
 
 const p = (
@@ -47,12 +49,13 @@ const p = (
   category: ProductCategory,
   baseUnit: BaseUnit,
   regulated = false,
-): CatalogProduct => ({ slug, nameFr, nameAr, nameEn, category, baseUnit, ...(regulated ? { regulated } : {}) });
+  substituteGroup?: string,
+): CatalogProduct => ({ slug, nameFr, nameAr, nameEn, category, baseUnit, ...(regulated ? { regulated } : {}), ...(substituteGroup ? { substituteGroup } : {}) });
 
 export const PRODUCT_CATALOG: readonly CatalogProduct[] = [
   // Cereals & bread
-  p('semoule-ordinaire', 'Semoule ordinaire', 'سميد عادي', 'Standard semolina', 'cereals_bread', 'kg', true),
-  p('semoule-fine', 'Semoule fine', 'سميد رفيع', 'Fine semolina', 'cereals_bread', 'kg', true),
+  p('semoule-ordinaire', 'Semoule ordinaire', 'سميد عادي', 'Standard semolina', 'cereals_bread', 'kg', true, 'semolina'),
+  p('semoule-fine', 'Semoule fine', 'سميد رفيع', 'Fine semolina', 'cereals_bread', 'kg', true, 'semolina'),
   p('farine-ble-tendre', 'Farine de blé tendre', 'دقيق القمح اللين', 'Soft wheat flour', 'cereals_bread', 'kg', true),
   p('baguette', 'Baguette de pain', 'خبز باغيت', 'Baguette', 'cereals_bread', 'unit', true),
   p('pates-spaghetti', 'Pâtes (spaghetti)', 'معكرونة (سباغيتي)', 'Pasta (spaghetti)', 'cereals_bread', 'kg'),
@@ -109,9 +112,9 @@ export const PRODUCT_CATALOG: readonly CatalogProduct[] = [
   p('thon-conserve', 'Thon en conserve', 'تونة معلبة', 'Canned tuna', 'meat_fish', 'unit'),
 
   // Legumes
-  p('lentilles', 'Lentilles', 'عدس', 'Lentils', 'legumes', 'kg'),
-  p('pois-chiches', 'Pois chiches', 'حمص', 'Chickpeas', 'legumes', 'kg'),
-  p('haricots-blancs', 'Haricots blancs secs', 'لوبيا بيضاء', 'Dried white beans', 'legumes', 'kg'),
+  p('lentilles', 'Lentilles', 'عدس', 'Lentils', 'legumes', 'kg', false, 'dry_pulses'),
+  p('pois-chiches', 'Pois chiches', 'حمص', 'Chickpeas', 'legumes', 'kg', false, 'dry_pulses'),
+  p('haricots-blancs', 'Haricots blancs secs', 'لوبيا بيضاء', 'Dried white beans', 'legumes', 'kg', false, 'dry_pulses'),
 
   // Spices & condiments
   p('sel', 'Sel', 'ملح', 'Salt', 'spices_condiments', 'kg'),
