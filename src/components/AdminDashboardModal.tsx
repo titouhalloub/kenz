@@ -23,7 +23,7 @@ import { Business, BusinessDocument, BusinessReport, VerificationStatus } from '
 import { formatMoney } from '../domain/financialCalculations';
 import { getCatalogProduct } from '../domain/productCatalog';
 import { PRICE_EXTENDED_WINDOW_DAYS, PRICE_FRESH_WINDOW_DAYS, priceLifecycle } from '../domain/priceWindow';
-import { parsePriceCsv, toBaseUnitPrice } from '../domain/priceValidation';
+import { parsePriceCsv, toBaseUnitPrice, validatePriceInput } from '../domain/priceValidation';
 import { loadPriceAdminData, reviewPriceObservation, stageAdminPrices, type PriceQueueStatus, type PendingPriceObservation, type PriceSourceHealth } from '../services/priceAdminStore';
 import { loadCommunityModerationQueue, moderateCommunityComment, moderateCommunityPost, resolveCommunityReport, type CommunityModerationReport } from '../services/communityStore';
 
@@ -61,7 +61,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [manualForm, setManualForm] = useState({ slug: '', price: '', unit: '', date: new Date().toISOString().slice(0, 10), wilaya: '', reference: '', note: '' });
   const [importMessage, setImportMessage] = useState('');
   const [importBusy, setImportBusy] = useState(false);
-  const [csvPreview, setCsvPreview] = useState<{ rows: ReturnType<typeof parsePriceCsv>['rows']; errors: ReturnType<typeof parsePriceCsv>['errors'] } | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ rows: ReturnType<typeof parsePriceCsv>['rows']; errors: ReturnType<typeof parsePriceCsv>['errors']; warnings: Array<{ line: number; message: string }> } | null>(null);
   useEffect(() => {
     if (!isOpen || initialTab !== 'prices') return;
     setActiveTab('prices');
@@ -198,7 +198,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (file.size > 500_000) { setImportMessage('Fichier trop volumineux (500 Ko max).'); return; }
     try {
       const parsed = parsePriceCsv(await file.text());
-      setCsvPreview(parsed);
+      const validRows: typeof parsed.rows = [];
+      const validationErrors = [...parsed.errors];
+      const warnings: Array<{ line: number; message: string }> = [];
+      const seenKeys = new Set<string>();
+      parsed.rows.forEach((row, index) => {
+        const line = index + 2;
+        const checked = validatePriceInput(row, { now: new Date(), seenKeys });
+        const rowErrors = [...checked.errors];
+        if (!row.sourceReference?.trim() || row.sourceReference.trim().length < 3) rowErrors.push('source_reference_required');
+        if (rowErrors.length || !checked.row) {
+          validationErrors.push({ line, message: rowErrors.join(', ') || 'invalid_row' });
+          return;
+        }
+        if (checked.flags.length) warnings.push({ line, message: checked.flags.join(', ') });
+        validRows.push(checked.row);
+      });
+      setCsvPreview({ rows: validRows, errors: validationErrors, warnings });
       setImportMessage('');
     } catch {
       setImportMessage('Impossible de lire ce fichier CSV.');
@@ -568,13 +584,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   {csvPreview && (
                     <div className="rounded-lg border border-amber-800/60 bg-amber-950/20 p-3 space-y-2">
                       <p className="text-xs font-semibold text-amber-200">Aperçu avant import</p>
-                      <p className="text-[11px] text-slate-200">{csvPreview.rows.length} lignes lisibles · {csvPreview.errors.length} lignes rejetées à la lecture. Aucun prix n’a encore été enregistré.</p>
+                      <p className="text-[11px] text-slate-200">{csvPreview.rows.length} lignes valides · {csvPreview.errors.length} lignes rejetées · {csvPreview.warnings.length} lignes à vérifier. Aucun prix n’a encore été enregistré.</p>
                       {csvPreview.errors.slice(0, 8).map((error, index) => (
                         <p key={`csv-error-${index}`} className="text-[10px] text-rose-300">Ligne {error.line} : {error.message}</p>
+                      ))}
+                      {csvPreview.warnings.slice(0, 8).map((warning, index) => (
+                        <p key={`csv-warning-${index}`} className="text-[10px] text-amber-300">Alerte ligne {warning.line} : {warning.message}</p>
                       ))}
                       {csvPreview.rows.slice(0, 8).map((row, index) => (
                         <p key={`csv-row-${index}`} className="text-[10px] text-slate-300">{row.productSlug} · {(row.unitPriceMinor / 100).toLocaleString('fr-DZ')} DA · {new Date(row.observedAt).toLocaleDateString()} · {row.wilayaCode || 'National'} · {row.sourceReference || 'Source manquante'}</p>
                       ))}
+                      {csvPreview.warnings.length > 8 && <p className="text-[10px] text-slate-500">… et {csvPreview.warnings.length - 8} autres alertes.</p>}
                       {csvPreview.rows.length > 8 && <p className="text-[10px] text-slate-500">… et {csvPreview.rows.length - 8} autres lignes.</p>}
                       <div className="flex gap-2 pt-1">
                         <button disabled={importBusy || csvPreview.rows.length === 0} onClick={() => void handleConfirmCsvImport()} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2 text-xs text-white disabled:opacity-40">{importBusy ? 'Import en cours…' : 'Confirmer l’import en attente'}</button>
