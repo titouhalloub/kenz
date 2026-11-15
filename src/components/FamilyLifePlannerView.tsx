@@ -355,7 +355,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-3 sm:p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <strong className="text-sm text-slate-800">{t(profile, 'Composition de la famille', 'تركيبة الأسرة', 'Family members')}</strong>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-violet-700">{plan.adults + plan.children} {t(profile, 'personnes', 'أفراد', 'members')}</span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-violet-700">{Math.max(1, plan.adults) + plan.children} {t(profile, 'personnes', 'أفراد', 'members')}</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-xs text-slate-600">{t(profile, 'Adultes', 'البالغون', 'Adults')}
@@ -382,7 +382,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-600">{priceLoadStatus === 'live' ? t(profile, 'Prix publiés · direct', 'أسعار منشورة · مباشر', 'Live published prices') : priceLoadStatus === 'cache' ? t(profile, 'Prix en cache', 'أسعار محفوظة', 'Cached prices') : priceLoadStatus === 'loading' ? t(profile, 'Chargement…', 'جارٍ التحميل…', 'Loading…') : t(profile, 'Prix indisponibles', 'الأسعار غير متاحة', 'Prices unavailable')}</span>
           </div>
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <strong className="text-2xl font-bold tracking-tight text-slate-900">{foodSimulation ? formatMoney(foodSimulation.amountMinor, profile.preferredCurrency, profile.locale) : '—'}</strong>
+            <strong className="text-2xl font-bold tracking-tight text-slate-900">{foodSimulation && foodSimulation.pricedProducts > 0 ? formatMoney(foodSimulation.amountMinor, profile.preferredCurrency, profile.locale) : '—'}</strong>
             <span className="text-xs text-slate-500">{foodSimulation ? `${foodSimulation.pricedProducts}/${foodSimulation.totalProducts} ${t(profile, 'produits avec prix vérifiés', 'منتجات بأسعار موثقة', 'products with verified prices')}` : t(profile, 'En attente des prix', 'بانتظار الأسعار', 'Waiting for prices')}</span>
           </div>
           <p className="text-[11px] leading-5 text-slate-500">{foodSimulation?.complete
