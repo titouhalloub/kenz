@@ -48,7 +48,6 @@ as $$
 declare
   v_fresh integer;
   v_extended integer;
-  v_extended integer;
 begin
   select fresh_days, extended_days into v_fresh, v_extended from public.get_price_windows();
   perform public.refresh_price_stats(v_fresh);
@@ -98,6 +97,7 @@ declare
   v_id uuid;
   v_median bigint;
   v_fresh integer;
+  v_extended integer;
   v_flags text[] := array['crowd_contribution','awaiting_operator_review'];
   v_record_key text;
 begin
@@ -114,7 +114,6 @@ begin
     raise exception 'Valid wilaya code is required';
   end if;
   if p_unit_price_minor < 100 then v_flags := array_append(v_flags, 'implausibly_low_price'); end if;
-  end if;
   if p_evidence_url is not null and (p_evidence_url !~ '^https://' or char_length(p_evidence_url) > 500) then
     raise exception 'Evidence must be an https link of at most 500 characters';
   end if;
