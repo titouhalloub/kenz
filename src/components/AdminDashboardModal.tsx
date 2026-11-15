@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Database,
   X,
@@ -21,7 +21,10 @@ import {
 } from '../services/supabase';
 import { Business, BusinessDocument, BusinessReport, VerificationStatus } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
-import { loadPriceAdminData, reviewPriceObservation, type PendingPriceObservation, type PriceSourceHealth } from '../services/priceAdminStore';
+import { getCatalogProduct } from '../domain/productCatalog';
+import { PRICE_EXTENDED_WINDOW_DAYS, PRICE_FRESH_WINDOW_DAYS, priceLifecycle } from '../domain/priceWindow';
+import { parsePriceCsv, toBaseUnitPrice } from '../domain/priceValidation';
+import { loadPriceAdminData, reviewPriceObservation, stageAdminPrices, type PriceQueueStatus, type PendingPriceObservation, type PriceSourceHealth } from '../services/priceAdminStore';
 import { loadCommunityModerationQueue, moderateCommunityComment, moderateCommunityPost, resolveCommunityReport, type CommunityModerationReport } from '../services/communityStore';
 
 interface AdminDashboardModalProps {
@@ -38,6 +41,8 @@ interface AdminDashboardModalProps {
     reviewerNotes?: string;
   }) => void;
   onResolveReport?: (reportId: string, status: 'resolved' | 'dismissed') => void;
+  /** Open directly on the price review tab (used by the "Revue des prix" button in Settings). */
+  initialTab?: 'prices';
 }
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
@@ -48,8 +53,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   reports = [],
   onReviewBusiness,
   onResolveReport,
+  initialTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<'infra' | 'queue' | 'reports' | 'community' | 'prices'>('queue');
+  const [activeTab, setActiveTab] = useState<'infra' | 'queue' | 'reports' | 'community' | 'prices'>(initialTab ?? 'queue');
+  const [priceStatus, setPriceStatus] = useState<PriceQueueStatus>('pending');
+  const [reviewReason, setReviewReason] = useState('Vérifié contre la source citée.');
+  const [manualForm, setManualForm] = useState({ slug: '', price: '', unit: '', date: new Date().toISOString().slice(0, 10), wilaya: '', reference: '', note: '' });
+  const [importMessage, setImportMessage] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  useEffect(() => {
+    if (!isOpen || initialTab !== 'prices') return;
+    setActiveTab('prices');
+    let active = true;
+    void loadPriceAdminData('pending').then((result) => {
+      if (!active) return;
+      if (result.success) {
+        setPriceSources(result.data?.sources || []);
+        setPendingPrices(result.data?.pending || []);
+        setPriceQueueError('');
+      } else setPriceQueueError(result.error || 'Accès réservé aux modérateurs.');
+    });
+    return () => { active = false; };
+  }, [isOpen, initialTab]);
   const [communityQueue, setCommunityQueue] = useState<CommunityModerationReport[]>([]);
   const [communityQueueLoading, setCommunityQueueLoading] = useState(false);
   const [communityQueueError, setCommunityQueueError] = useState('');
@@ -108,11 +133,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   };
 
 
-  const openPriceAdmin = async () => {
+  const openPriceAdmin = async (status: PriceQueueStatus = priceStatus) => {
     setActiveTab('prices');
+    setPriceStatus(status);
     setPriceQueueLoading(true);
     setPriceQueueError('');
-    const result = await loadPriceAdminData();
+    const result = await loadPriceAdminData(status);
     if (result.success) {
       setPriceSources(result.data?.sources || []);
       setPendingPrices(result.data?.pending || []);
@@ -124,16 +150,57 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const handlePriceDecision = async (row: PendingPriceObservation, decision: 'accepted' | 'rejected') => {
     setPriceQueueError('');
-    const result = await reviewPriceObservation(
-      row.observation_id,
-      decision,
-      decision === 'accepted' ? 'Prix vérifié par un modérateur.' : 'Prix rejeté après vérification.',
-    );
+    const reason = reviewReason.trim();
+    if (!reason) {
+      setPriceQueueError('Indiquez la raison de votre décision (elle est conservée dans l’historique).');
+      return;
+    }
+    const result = await reviewPriceObservation(row.observation_id, decision, reason);
     if (!result.success) {
       setPriceQueueError(result.error || 'La revue du prix a échoué.');
       return;
     }
     await openPriceAdmin();
+  };
+
+  /** Channel 2: one manual entry. The price is typed per catalog unit (kg/l/unit) or g/ml; everything lands as PENDING. */
+  const handleManualPrice = async () => {
+    setImportMessage('');
+    const product = getCatalogProduct(manualForm.slug.trim());
+    const amount = Number(manualForm.price.replace(',', '.'));
+    if (!product || !Number.isFinite(amount) || amount <= 0) {
+      setImportMessage('Produit (identifiant du catalogue) et prix valides requis.');
+      return;
+    }
+    const perBase = toBaseUnitPrice(Math.round(amount * 100), manualForm.unit.trim() || product.baseUnit, product.baseUnit);
+    if (perBase === null) {
+      setImportMessage(`Unité incompatible : ${product.nameFr} se compte en ${product.baseUnit}.`);
+      return;
+    }
+    setImportBusy(true);
+    const result = await stageAdminPrices([{
+      productSlug: product.slug, unitPriceMinor: perBase, observedAt: manualForm.date,
+      wilayaCode: manualForm.wilaya || null, sourceReference: manualForm.reference, note: manualForm.note || null,
+    }]);
+    setImportBusy(false);
+    if (!result.success) { setImportMessage(result.error || 'Échec.'); return; }
+    const failure = result.data?.failed[0];
+    setImportMessage(failure ? `Refusé : ${failure.message}` : 'Prix ajouté à la file « en attente ». Il n’est pas publié tant qu’il n’est pas accepté.');
+    if (!failure) void openPriceAdmin('pending');
+  };
+
+  /** Channel 2: CSV file (product_slug, unit_price, observed_at, unit, wilaya_code, source_reference, note). */
+  const handleCsvFile = async (file: File | undefined) => {
+    setImportMessage('');
+    if (!file) return;
+    if (file.size > 500_000) { setImportMessage('Fichier trop volumineux (500 Ko max).'); return; }
+    const parsed = parsePriceCsv(await file.text());
+    setImportBusy(true);
+    const staged = parsed.rows.length ? await stageAdminPrices(parsed.rows) : null;
+    setImportBusy(false);
+    const failed = (staged?.data?.failed.length ?? 0) + parsed.errors.length;
+    setImportMessage(`${staged?.data?.staged ?? 0} prix ajoutés en attente · ${failed} lignes refusées${parsed.errors[0] ? ` (ex. ligne ${parsed.errors[0].line} : ${parsed.errors[0].message})` : ''}.`);
+    if (staged?.data?.staged) void openPriceAdmin('pending');
   };
 
   const pendingBusinesses = businesses.filter((b) => b.verificationStatus === 'pending_review');
@@ -457,24 +524,77 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
                   ))}
                 </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2 text-[11px] text-slate-400">
+                  <p className="font-semibold text-slate-200">Comment fonctionnent les prix</p>
+                  <p>Officiel, import administrateur et contributions de la communauté arrivent tous ici comme <b>en attente</b>. Seul un prix <b>accepté</b> (« vérifié ») alimente les moyennes du simulateur. Un prix saisi par un utilisateur dans le simulateur reste une <b>estimation manuelle</b> et n’apparaît jamais ici.</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2">
+                  <h3 className="text-xs font-semibold text-slate-200">Ajouter des prix (import administrateur)</h3>
+                  <p className="text-[10px] text-slate-500">Une source citée est obligatoire. Les prix ajoutés restent « en attente » jusqu’à votre acceptation. Nécessite que la source « admin-manual-import » soit activée.</p>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <input value={manualForm.slug} onChange={(e) => setManualForm({ ...manualForm, slug: e.target.value })} placeholder="produit (ex. tomate)" className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
+                    <input value={manualForm.price} onChange={(e) => setManualForm({ ...manualForm, price: e.target.value })} inputMode="decimal" placeholder="prix DA" className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
+                    <input value={manualForm.unit} onChange={(e) => setManualForm({ ...manualForm, unit: e.target.value })} placeholder="unité (kg, l, unit, g, ml)" className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
+                    <input value={manualForm.wilaya} onChange={(e) => setManualForm({ ...manualForm, wilaya: e.target.value })} placeholder="wilaya (ex. 15) ou vide = national" className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
+                    <input type="date" value={manualForm.date} onChange={(e) => setManualForm({ ...manualForm, date: e.target.value })} className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
+                    <input value={manualForm.reference} onChange={(e) => setManualForm({ ...manualForm, reference: e.target.value })} placeholder="source (lien https ou bulletin)" className="rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button disabled={importBusy} onClick={() => void handleManualPrice()} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2 text-xs text-white disabled:opacity-40">Ajouter en attente</button>
+                    <label className="flex-1 cursor-pointer rounded-lg border border-slate-700 px-3 py-2 text-center text-xs text-slate-200">
+                      Importer un CSV
+                      <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { void handleCsvFile(e.target.files?.[0]); e.target.value = ''; }} />
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-slate-500">CSV : product_slug, unit_price, observed_at, unit, wilaya_code, source_reference, note</p>
+                  {importMessage && <p className="rounded-md bg-slate-900 p-2 text-[11px] text-slate-200">{importMessage}</p>}
+                </div>
                 <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-slate-200">File de validation des prix ({pendingPrices.length})</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-semibold text-slate-200">Prix ({pendingPrices.length})</h3>
+                    <div className="flex gap-1">
+                      {([['pending', 'En attente'], ['accepted', 'Vérifiés'], ['rejected', 'Rejetés']] as const).map(([value, label]) => (
+                        <button key={value} onClick={() => void openPriceAdmin(value)} className={`rounded-full px-3 py-1 text-[11px] ${priceStatus === value ? 'bg-emerald-700 text-white' : 'border border-slate-700 text-slate-300'}`}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {priceStatus === 'pending' && (
+                    <label className="block text-[10px] text-slate-400">Raison de la décision (enregistrée avec chaque acceptation ou rejet)
+                      <input value={reviewReason} onChange={(e) => setReviewReason(e.target.value)} maxLength={500} className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-xs text-slate-100" />
+                    </label>
+                  )}
                   {pendingPrices.length === 0 ? (
-                    <p className="rounded-xl border border-slate-800 bg-slate-950 p-5 text-center text-xs text-slate-400">Aucun prix en attente.</p>
-                  ) : pendingPrices.map((row) => (
+                    <p className="rounded-xl border border-slate-800 bg-slate-950 p-5 text-center text-xs text-slate-400">{priceStatus === 'pending' ? 'Aucun prix en attente.' : priceStatus === 'accepted' ? 'Aucun prix vérifié.' : 'Aucun prix rejeté.'}</p>
+                  ) : pendingPrices.map((row) => {
+                    const catalogUnit = row.base_unit || getCatalogProduct(row.product_slug)?.baseUnit;
+                    const ageDays = Math.max(0, Math.floor((Date.now() - Date.parse(row.observed_at)) / 86_400_000));
+                    const lifecycle = priceLifecycle(row.status ?? priceStatus, row.observed_at, new Date());
+                    const expired = lifecycle === 'expired';
+                    const aging = !expired && ageDays > PRICE_FRESH_WINDOW_DAYS;
+                    const lifecycleLabel = { pending: 'En attente', verified: 'Vérifié', rejected: 'Rejeté', expired: 'Expiré' }[lifecycle];
+                    const lifecycleStyle = { pending: 'bg-amber-950 text-amber-300', verified: 'bg-emerald-950 text-emerald-300', rejected: 'bg-rose-950 text-rose-300', expired: 'bg-slate-800 text-slate-400' }[lifecycle];
+                    return (
                     <div key={row.observation_id} className="rounded-xl border border-slate-800 bg-slate-950 p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div><p className="text-xs font-semibold text-slate-100">{row.product_name}</p><p className="text-[10px] text-slate-500">{row.source_name} · Wilaya {row.wilaya_code || 'DZ'}</p></div>
-                        <span className="text-sm font-bold text-emerald-300">{formatMoney(row.unit_price_minor, 'DZD', 'fr')}</span>
+                        <div><p className="text-xs font-semibold text-slate-100">{row.product_name} <span className={`ml-1 rounded px-1.5 py-0.5 text-[9px] ${lifecycleStyle}`}>{lifecycleLabel}</span></p><p className="text-[10px] text-slate-500">{row.source_name}{row.source_type ? ` (${row.source_type})` : ''} · {row.wilaya_code ? `Wilaya ${row.wilaya_code}` : 'National'}</p></div>
+                        <span className="text-sm font-bold text-emerald-300">{formatMoney(row.unit_price_minor, 'DZD', 'fr')}{catalogUnit ? ` / ${catalogUnit === 'unit' ? 'unité' : catalogUnit}` : ''}</span>
                       </div>
-                      <p className="text-[10px] text-slate-400">Observé : {new Date(row.observed_at).toLocaleString()} · {row.quality_flags.join(', ') || 'Aucun drapeau'}</p>
+                      <p className="text-[10px] text-slate-400">Observé : {new Date(row.observed_at).toLocaleDateString()} ({ageDays} j) · {row.quality_flags.join(', ') || 'Aucun drapeau'}</p>
+                      {expired && <p className="rounded-md bg-rose-950/40 p-2 text-[10px] text-rose-200">Relevé de plus de {PRICE_EXTENDED_WINDOW_DAYS} jours : l’accepter ne le publiera pas dans les moyennes. Rejetez-le ou attendez un relevé récent.</p>}
+                      {aging && <p className="rounded-md bg-amber-950/40 p-2 text-[10px] text-amber-200">Relevé de plus de {PRICE_FRESH_WINDOW_DAYS} jours : il sera publié comme « ancien » avec sa date.</p>}
                       {row.source_reference && <p className="text-[10px] text-slate-500">{row.source_reference}</p>}
-                      <div className="flex gap-2">
-                        <button onClick={() => void handlePriceDecision(row, 'accepted')} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2 text-xs text-white">Accepter</button>
-                        <button onClick={() => void handlePriceDecision(row, 'rejected')} className="flex-1 rounded-lg border border-rose-900/60 px-3 py-2 text-xs text-rose-300">Rejeter</button>
-                      </div>
+                      {row.evidence_url && <a href={row.evidence_url} target="_blank" rel="noopener noreferrer" className="block text-[10px] text-emerald-300 underline">Preuve fournie ↗</a>}
+                      {row.note && <p className="text-[10px] text-slate-400">Note : {row.note}</p>}
+                      {row.review_reason && <p className="text-[10px] text-slate-500">Décision : {row.review_reason}</p>}
+                      {priceStatus === 'pending' && (
+                        <div className="flex gap-2">
+                          <button disabled={expired} onClick={() => void handlePriceDecision(row, 'accepted')} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2 text-xs text-white disabled:opacity-40">Accepter</button>
+                          <button onClick={() => void handlePriceDecision(row, 'rejected')} className="flex-1 rounded-lg border border-rose-900/60 px-3 py-2 text-xs text-rose-300">Rejeter</button>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}

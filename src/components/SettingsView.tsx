@@ -81,6 +81,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Admin dashboard modal state
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminInitialTab, setAdminInitialTab] = useState<'prices' | undefined>(undefined);
 
   // Universal BYOK & AI Mode State
   const [aiMode, setAiModeState] = useState<AIMode>(() => getAIMode());
@@ -614,9 +615,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </section>
 
       {/* 4. Operator / Administrator Access (Quiet, Non-intrusive) */}
-      <div className="pt-2 text-center">
+      <div className="pt-2 text-center space-y-1">
         <button
-          onClick={() => setShowAdminModal(true)}
+          onClick={() => { setAdminInitialTab('prices'); setShowAdminModal(true); }}
+          className="w-full text-xs font-semibold text-emerald-300 border border-emerald-900/60 rounded-xl py-3 px-3 hover:bg-slate-900 cursor-pointer min-h-[44px]"
+        >
+          Revue des prix du marché (modérateurs)
+        </button>
+        <button
+          onClick={() => { setAdminInitialTab(undefined); setShowAdminModal(true); }}
           className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors inline-flex items-center gap-1.5 py-2 px-3 rounded-lg hover:bg-slate-900 cursor-pointer min-h-[44px]"
         >
           <Lock className="w-3 h-3" />
@@ -627,6 +634,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Admin Dashboard Modal */}
       <AdminDashboardModal
         isOpen={showAdminModal}
+        initialTab={adminInitialTab}
         onClose={() => setShowAdminModal(false)}
         businesses={businesses}
         documents={documents}

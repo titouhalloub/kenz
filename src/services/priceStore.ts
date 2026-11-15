@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './supabase';
 import type { SimulatorPrice } from '../domain/simulator';
+import { DEFAULT_PRICE_WINDOWS, resolvePriceWindows, type PriceWindows } from '../domain/priceWindow';
 
 export interface MarketPriceLoadResult {
   pricesBySlug: Record<string, SimulatorPrice>;
@@ -86,7 +87,26 @@ function unavailable(
   return readCachedMarketPrices(slugs, wilayaCode) || { pricesBySlug: {}, unavailableReason: reason };
 }
 
-/** Reads public market aggregates only; no personal budget data is accepted or sent. */
+let cachedWindows: { value: PriceWindows; at: number } | null = null;
+
+/** Freshness windows configured in the database (migration 057); defaults when unavailable. */
+async function loadConfiguredWindows(supabase: NonNullable<ReturnType<typeof getSupabaseClient>>): Promise<PriceWindows> {
+  if (cachedWindows && Date.now() - cachedWindows.at < 10 * 60 * 1000) return cachedWindows.value;
+  let value = DEFAULT_PRICE_WINDOWS;
+  try {
+    const { data, error } = await withTimeout(supabase.rpc('get_price_windows'), PRICE_REQUEST_TIMEOUT_MS);
+    if (!error && data) value = resolvePriceWindows(Array.isArray(data) ? data[0] : data);
+  } catch {
+    // keep defaults
+  }
+  cachedWindows = { value, at: Date.now() };
+  return value;
+}
+
+/**
+ * Reads PUBLISHED aggregates only (get_area_prices over price_stats): no external fetching, no
+ * personal budget data sent. Each price carries its observation date, source tiers and area level.
+ */
 export async function loadMarketPrices(productSlugs: string[], wilayaCode?: string | null): Promise<MarketPriceLoadResult> {
   const slugs = [...new Set(productSlugs.filter((slug) => /^[a-z0-9-]{1,80}$/.test(slug)))];
   if (slugs.length === 0) return { pricesBySlug: {}, unavailableReason: 'no_data' };
@@ -102,18 +122,42 @@ export async function loadMarketPrices(productSlugs: string[], wilayaCode?: stri
     const products = (productsResult.data || []) as Array<{ id: string; slug: string }>;
     if (products.length === 0) return unavailable('no_data', slugs, wilayaCode);
 
-    const pricesResult = await withTimeout(supabase.rpc('get_area_prices', {
-      p_product_ids: products.map((product) => product.id),
-      p_wilaya_code: wilayaCode && /^\d{2,3}$/.test(wilayaCode) ? wilayaCode : null,
-      p_commune_id: null,
-      p_geo_cell: null,
-      p_window_days: 14,
-    }), PRICE_REQUEST_TIMEOUT_MS);
-    if (pricesResult.error) return unavailable('schema_not_deployed', slugs, wilayaCode);
-
     const slugById = new Map(products.map((product) => [product.id, product.slug]));
     const pricesBySlug: Record<string, SimulatorPrice> = {};
-    for (const row of (pricesResult.data || []) as Array<Record<string, unknown>>) {
+    // Fresh window first; products with no fresh aggregate fall back to the extended window.
+    // Either way last_observed travels with the price, so older data is never shown as fresh.
+    let rpcFailed = false;
+    const configured = await loadConfiguredWindows(supabase);
+    const windowsToTry = [configured.freshDays, configured.extendedDays];
+    for (const windowDays of windowsToTry) {
+      const missing = products.filter((product) => !pricesBySlug[product.slug]);
+      if (missing.length === 0) break;
+      const pricesResult = await withTimeout(supabase.rpc('get_area_prices', {
+        p_product_ids: missing.map((product) => product.id),
+        p_wilaya_code: wilayaCode && /^\d{2,3}$/.test(wilayaCode) ? wilayaCode : null,
+        p_commune_id: null,
+        p_geo_cell: null,
+        p_window_days: windowDays,
+      }), PRICE_REQUEST_TIMEOUT_MS);
+      if (pricesResult.error) { rpcFailed = windowDays === windowsToTry[0]; if (rpcFailed) break; continue; }
+      collectPriceRows((pricesResult.data || []) as Array<Record<string, unknown>>, slugById, pricesBySlug);
+    }
+    if (rpcFailed) return unavailable('schema_not_deployed', slugs, wilayaCode);
+    if (Object.keys(pricesBySlug).length === 0) return unavailable('no_data', slugs, wilayaCode);
+    const fetchedAt = writeCachedMarketPrices(slugs, wilayaCode, pricesBySlug);
+    return { pricesBySlug, source: 'live', fetchedAt };
+  } catch {
+    return unavailable('no_data', slugs, wilayaCode);
+  }
+}
+
+function collectPriceRows(
+  rows: Array<Record<string, unknown>>,
+  slugById: Map<string, string>,
+  pricesBySlug: Record<string, SimulatorPrice>,
+) {
+  {
+    for (const row of rows) {
       const slug = slugById.get(String(row.product_id));
       const areaLevel = row.area_level;
       if (!slug || !['neighborhood', 'commune', 'wilaya', 'national'].includes(String(areaLevel))) continue;
@@ -135,12 +179,8 @@ export async function loadMarketPrices(productSlugs: string[], wilayaCode?: stri
         lastObserved: row.last_observed,
         areaLevel: areaLevel as SimulatorPrice['areaLevel'],
         sourceTiers: Array.isArray(row.source_tiers) ? row.source_tiers.map(String) : [],
+        origin: 'market',
       };
     }
-    if (Object.keys(pricesBySlug).length === 0) return unavailable('no_data', slugs, wilayaCode);
-    const fetchedAt = writeCachedMarketPrices(slugs, wilayaCode, pricesBySlug);
-    return { pricesBySlug, source: 'live', fetchedAt };
-  } catch {
-    return unavailable('no_data', slugs, wilayaCode);
   }
 }

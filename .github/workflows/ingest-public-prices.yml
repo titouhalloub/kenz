@@ -2,9 +2,12 @@ name: Ingest public Algerian prices
 
 on:
   push:
-    branches: [feat/price-simulator-community]
+    branches: [feat/price-simulator-community, integration/family-planner]
+  # NOTE: GitHub only runs `schedule` triggers from the repository's DEFAULT branch (main).
+  # This file is not on main, so the cron below has never fired; the only DB-writing run so far
+  # was a manual workflow_dispatch. See docs/PRICE_PIPELINE.md for the options that need approval.
   schedule:
-    - cron: '25 6 * * *'
+    - cron: '25 6 * * 1'   # weekly, Monday 06:25 UTC (collection is independent of any user session)
   workflow_dispatch:
     inputs:
       dry_run:

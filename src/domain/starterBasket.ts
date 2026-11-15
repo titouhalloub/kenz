@@ -36,6 +36,7 @@ export function manualPriceRange(usualMinor: number, nowIso: string): SimulatorP
     nContributors: 0,
     lastObserved: nowIso,
     areaLevel: 'national',
+    origin: 'manual',
   };
 }
 
