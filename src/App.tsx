@@ -555,9 +555,13 @@ export default function App() {
     const observer = new MutationObserver((records) => {
       const changedNodes = new Set<Node>();
       for (const record of records) {
-        if (record.type === 'characterData' || record.type === 'attributes') {
+        // React can update attributes on large containers. Re-walking every
+        // descendant for each attribute mutation made newly opened admin
+        // screens unnecessarily expensive. Added nodes already translate
+        // their own attributes; character-data changes only need their text node.
+        if (record.type === 'characterData') {
           changedNodes.add(record.target);
-        } else {
+        } else if (record.type === 'childList') {
           record.addedNodes.forEach((node) => changedNodes.add(node));
         }
       }
