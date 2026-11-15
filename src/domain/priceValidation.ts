@@ -29,6 +29,7 @@ export interface ValidationContext {
   referenceMedianBySlug?: Record<string, number>;
   /** Mutable set used to detect duplicates inside one batch. */
   seenKeys?: Set<string>;
+  requireSourceReference?: boolean;
 }
 
 export interface ValidatedPrice extends PriceInputRow {
@@ -108,6 +109,9 @@ export function validatePriceInput(input: PriceInputRow, context: ValidationCont
   }
 
   const reference = input.sourceReference?.trim();
+  if (context.requireSourceReference && (!reference || reference.length < 3 || reference.length > 500)) {
+    errors.push('source_reference_required');
+  }
   if (reference) {
     try {
       if (new URL(reference).protocol !== 'https:') errors.push('source_reference_not_https');
