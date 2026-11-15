@@ -48,6 +48,7 @@ as $$
 declare
   v_fresh integer;
   v_extended integer;
+  v_extended integer;
 begin
   select fresh_days, extended_days into v_fresh, v_extended from public.get_price_windows();
   perform public.refresh_price_stats(v_fresh);
@@ -105,11 +106,12 @@ begin
   if p_unit_price_minor is null or p_unit_price_minor <= 0 or p_unit_price_minor > 500000000 then
     raise exception 'Price must be a positive DZD amount within the supported range';
   end if;
-  select fresh_days into v_fresh from public.get_price_windows();
-  if p_observed_at is null or p_observed_at < now() - make_interval(days => v_fresh) or p_observed_at > now() + interval '1 day' then
-    raise exception 'Observation date must be within the last % days', v_fresh;
+  select fresh_days, extended_days into v_fresh, v_extended from public.get_price_windows();
+  if p_observed_at is null or p_observed_at < now() - make_interval(days => v_extended) or p_observed_at > now() + interval '1 day' then
+    raise exception 'Observation date must be within the last % days', v_extended;
   end if;
-  if p_wilaya_code is null or p_wilaya_code !~ '^[0-9]{2,3}$' then
+  if p_wilaya_code is null or p_wilaya_code !~ '^[0-9]{2,3}$'
+     or not exists (select 1 from public.communes c where c.wilaya_code = p_wilaya_code and c.is_active = true) then
     raise exception 'Valid wilaya code is required';
   end if;
   if p_evidence_url is not null and (p_evidence_url !~ '^https://' or char_length(p_evidence_url) > 500) then
@@ -202,7 +204,10 @@ begin
   if p_observed_at is null or p_observed_at > now() + interval '1 day' then raise exception 'Invalid observation date'; end if;
   if p_observed_at < now() - make_interval(days => v_fresh) then v_flags := array_append(v_flags,'older_than_fresh_window'); end if;
   if p_observed_at < now() - make_interval(days => v_extended) then v_flags := array_append(v_flags,'older_than_extended_window'); end if;
-  if p_wilaya_code is not null and p_wilaya_code !~ '^[0-9]{2,3}$' then raise exception 'Invalid wilaya code'; end if;
+  if p_wilaya_code is not null and (p_wilaya_code !~ '^[0-9]{2,3}$'
+     or not exists (select 1 from public.communes c where c.wilaya_code = p_wilaya_code and c.is_active = true)) then
+    raise exception 'Invalid wilaya code';
+  end if;
   if char_length(trim(coalesce(p_source_reference,''))) not between 3 and 500 then
     raise exception 'A source reference (bulletin, URL or document) is required';
   end if;
