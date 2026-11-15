@@ -61,6 +61,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [manualForm, setManualForm] = useState({ slug: '', price: '', unit: '', date: new Date().toISOString().slice(0, 10), wilaya: '', reference: '', note: '' });
   const [importMessage, setImportMessage] = useState('');
   const [importBusy, setImportBusy] = useState(false);
+  const [csvPreview, setCsvPreview] = useState<{ rows: ReturnType<typeof parsePriceCsv>['rows']; errors: ReturnType<typeof parsePriceCsv>['errors'] } | null>(null);
   useEffect(() => {
     if (!isOpen || initialTab !== 'prices') return;
     setActiveTab('prices');
@@ -189,18 +190,35 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (!failure) void openPriceAdmin('pending');
   };
 
-  /** Channel 2: CSV file (product_slug, unit_price, observed_at, unit, wilaya_code, source_reference, note). */
+  /** CSV is parsed first; no database write occurs until the operator confirms the preview. */
   const handleCsvFile = async (file: File | undefined) => {
     setImportMessage('');
+    setCsvPreview(null);
     if (!file) return;
     if (file.size > 500_000) { setImportMessage('Fichier trop volumineux (500 Ko max).'); return; }
-    const parsed = parsePriceCsv(await file.text());
+    try {
+      const parsed = parsePriceCsv(await file.text());
+      setCsvPreview(parsed);
+      setImportMessage('');
+    } catch {
+      setImportMessage('Impossible de lire ce fichier CSV.');
+    }
+  };
+
+  const handleConfirmCsvImport = async () => {
+    if (!csvPreview || csvPreview.rows.length === 0 || importBusy) return;
     setImportBusy(true);
-    const staged = parsed.rows.length ? await stageAdminPrices(parsed.rows) : null;
+    const staged = await stageAdminPrices(csvPreview.rows);
     setImportBusy(false);
-    const failed = (staged?.data?.failed.length ?? 0) + parsed.errors.length;
-    setImportMessage(`${staged?.data?.staged ?? 0} prix ajoutés en attente · ${failed} lignes refusées${parsed.errors[0] ? ` (ex. ligne ${parsed.errors[0].line} : ${parsed.errors[0].message})` : ''}.`);
-    if (staged?.data?.staged) void openPriceAdmin('pending');
+    if (!staged.success) {
+      setImportMessage(staged.error || 'Échec de l’import.');
+      return;
+    }
+    const failed = staged.data?.failed.length ?? 0;
+    const added = staged.data?.staged ?? 0;
+    setImportMessage(`${added} prix ajoutés en attente · ${failed + csvPreview.errors.length} lignes refusées ou ignorées.`);
+    setCsvPreview(null);
+    if (added) void openPriceAdmin('pending');
   };
 
   const pendingBusinesses = businesses.filter((b) => b.verificationStatus === 'pending_review');
@@ -547,6 +565,23 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </label>
                   </div>
                   <p className="text-[10px] text-slate-500">CSV : product_slug, unit_price, observed_at, unit, wilaya_code, source_reference, note</p>
+                  {csvPreview && (
+                    <div className="rounded-lg border border-amber-800/60 bg-amber-950/20 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-amber-200">Aperçu avant import</p>
+                      <p className="text-[11px] text-slate-200">{csvPreview.rows.length} lignes lisibles · {csvPreview.errors.length} lignes rejetées à la lecture. Aucun prix n’a encore été enregistré.</p>
+                      {csvPreview.errors.slice(0, 8).map((error, index) => (
+                        <p key={`csv-error-${index}`} className="text-[10px] text-rose-300">Ligne {error.line} : {error.message}</p>
+                      ))}
+                      {csvPreview.rows.slice(0, 8).map((row, index) => (
+                        <p key={`csv-row-${index}`} className="text-[10px] text-slate-300">{row.productSlug} · {(row.unitPriceMinor / 100).toLocaleString('fr-DZ')} DA · {new Date(row.observedAt).toLocaleDateString()} · {row.wilayaCode || 'National'} · {row.sourceReference || 'Source manquante'}</p>
+                      ))}
+                      {csvPreview.rows.length > 8 && <p className="text-[10px] text-slate-500">… et {csvPreview.rows.length - 8} autres lignes.</p>}
+                      <div className="flex gap-2 pt-1">
+                        <button disabled={importBusy || csvPreview.rows.length === 0} onClick={() => void handleConfirmCsvImport()} className="flex-1 rounded-lg bg-emerald-700 px-3 py-2 text-xs text-white disabled:opacity-40">{importBusy ? 'Import en cours…' : 'Confirmer l’import en attente'}</button>
+                        <button disabled={importBusy} onClick={() => setCsvPreview(null)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 disabled:opacity-40">Annuler</button>
+                      </div>
+                    </div>
+                  )}
                   {importMessage && <p className="rounded-md bg-slate-900 p-2 text-[11px] text-slate-200">{importMessage}</p>}
                 </div>
                 <div className="space-y-2">
