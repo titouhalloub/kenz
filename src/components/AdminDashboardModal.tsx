@@ -66,14 +66,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     if (!isOpen || initialTab !== 'prices') return;
     setActiveTab('prices');
     let active = true;
-    void loadPriceAdminData('pending').then((result) => {
-      if (!active) return;
-      if (result.success) {
-        setPriceSources(result.data?.sources || []);
-        setPendingPrices(result.data?.pending || []);
-        setPriceQueueError('');
-      } else setPriceQueueError(result.error || 'Accès réservé aux modérateurs.');
-    });
+    setPriceQueueLoading(true);
+    setPriceQueueError('');
+    void loadPriceAdminData('pending')
+      .then((result) => {
+        if (!active) return;
+        if (result.success) {
+          setPriceSources(result.data?.sources || []);
+          setPendingPrices(result.data?.pending || []);
+          setPriceQueueError('');
+        } else {
+          setPriceQueueError(result.error || 'Accès réservé aux modérateurs.');
+        }
+      })
+      .catch((error) => {
+        if (active) setPriceQueueError(error instanceof Error ? error.message : 'Impossible de charger les prix.');
+      })
+      .finally(() => {
+        if (active) setPriceQueueLoading(false);
+      });
     return () => { active = false; };
   }, [isOpen, initialTab]);
   const [communityQueue, setCommunityQueue] = useState<CommunityModerationReport[]>([]);
