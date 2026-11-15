@@ -32,6 +32,8 @@ export function loadSavingsChallengeContributions(userId: string): SavingsChalle
 export async function loadSavingsChallengeContributionsFromSupabase(userId: string): Promise<SavingsChallengeContribution[] | null> {
   const supabase = getSupabaseClient();
   if (!supabase || !isUuid(userId)) return null;
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user || authData.user.id !== userId) return null;
   const { data, error } = await supabase
     .from('savings_challenge_contributions')
     .select('*')
@@ -65,6 +67,11 @@ export async function flushPendingSavingsChallengeContributions(userId: string):
   if (!budgetSynced) return false;
   const supabase = getSupabaseClient();
   if (!supabase) return false;
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user || authData.user.id !== userId) {
+    console.warn('Skipping savings challenge sync: no verified matching Supabase user session.');
+    return false;
+  }
   const rows = loadSavingsChallengeContributions(userId);
   let allSucceeded = true;
   for (const row of rows.filter((item) => item.syncStatus === 'pending')) {
