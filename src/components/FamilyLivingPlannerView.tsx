@@ -140,6 +140,20 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     return { amountMinor, complete };
   }, [requirements, marketPrices]);
   useEffect(() => { onFoodPlanCostChange?.(foodCost.amountMinor, foodCost.complete); }, [foodCost.amountMinor, foodCost.complete, onFoodPlanCostChange]);
+  const calendarDays = useMemo(() => {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const daysInMonth = new Date(year, monthNumber, 0).getDate();
+    const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
+    return Array.from({ length: firstWeekday + daysInMonth }, (_, index) => index < firstWeekday ? null : index - firstWeekday + 1);
+  }, [month]);
+  const weekdayLabels = profile.locale === 'ar'
+    ? ['أح', 'إث', 'ثل', 'أر', 'خم', 'جم', 'سب']
+    : profile.locale === 'en' ? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] : ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'];
+  const mealsByDate = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const meal of plan.meals) counts.set(meal.date, (counts.get(meal.date) || 0) + 1);
+    return counts;
+  }, [plan.meals]);
   const selectedRecipe = recipeMap.get(recipeId) || recipes[0];
   const plannedMeals = [...plan.meals].sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot));
   const updatePlan = (updater: (current: FamilyLivingPlan) => FamilyLivingPlan) => {
@@ -363,6 +377,19 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
 
       {section === 'meals' && <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'CALENDRIER', 'التقويم', 'CALENDAR')}</span><h3>{tr(profile, 'Programmer un repas', 'برمجة وجبة', 'Plan a meal')}</h3><p className="mt-1 text-xs text-slate-500">{tr(profile, 'Coût estimé des ingrédients', 'التكلفة المقدرة للمكونات', 'Estimated ingredient cost')}: <strong className="text-violet-700">{formatMoney(foodCost.amountMinor, profile.preferredCurrency, profile.locale)}</strong>{!foodCost.complete && <span className="ml-1 text-amber-700">· {tr(profile, 'partiel, prix manquants', 'جزئي، توجد أسعار ناقصة', 'partial; prices missing')}</span>}</p></div><span className="text-xs text-slate-500">{month}</span></div>
+        <div className="grid grid-cols-7 gap-1 rounded-xl border border-violet-100 p-2">
+          {weekdayLabels.map((label) => <span key={label} className="py-1 text-center text-[10px] font-semibold text-slate-500">{label}</span>)}
+          {calendarDays.map((day, index) => {
+            if (day === null) return <span key={'empty-' + index} />;
+            const date = month + '-' + String(day).padStart(2, '0');
+            const count = mealsByDate.get(date) || 0;
+            const selected = mealDate === date;
+            return <button key={date} type="button" onClick={() => setMealDate(date)} aria-pressed={selected} className={`min-h-11 rounded-lg border px-1 py-1 text-center text-xs ${selected ? 'border-violet-600 bg-violet-700 text-white' : 'border-slate-100 bg-white text-slate-700'}`}>
+              <span className="block font-semibold">{day}</span>
+              <span className={`block text-[9px] ${selected ? 'text-violet-100' : 'text-violet-700'}`}>{count ? count + ' ' + tr(profile, 'repas', 'وجبات', 'meals') : '·'}</span>
+            </button>;
+          })}
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <label>{tr(profile, 'Date', 'التاريخ', 'Date')}<input type="date" min={monthFirstDay(month)} max={monthLastDay(month)} value={mealDate} onChange={(e) => setMealDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label>{tr(profile, 'Repas', 'الوجبة', 'Meal')}<select value={mealSlot} onChange={(e) => setMealSlot(e.target.value as MealSlot)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm"><option value="breakfast">{slotLabel('breakfast')}</option><option value="lunch">{slotLabel('lunch')}</option><option value="dinner">{slotLabel('dinner')}</option></select></label>
