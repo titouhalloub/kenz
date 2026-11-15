@@ -4,9 +4,10 @@ import type { UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import { loadMarketPrices } from '../services/priceStore';
 import { isVerifiedMarketPrice, type SimulatorPrice } from '../domain/simulator';
+import { resolveIngredient } from '../domain/ingredientMapping';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth,
-  exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
+  exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe, scaleIngredient,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
   type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
 } from '../domain/familyLiving';
@@ -126,19 +127,41 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     }).finally(() => { if (active) setMarketLoading(false); });
     return () => { active = false; };
   }, [priceSlugs.join('|')]);
+  const mealCosts = useMemo(() => {
+    const costs = new Map<string, { amountMinor: number; complete: boolean; observedAt: string[]; sources: string[] }>();
+    for (const meal of plan.meals) {
+      const recipe = recipeMap.get(meal.recipeId);
+      let amountMinor = 0;
+      let complete = !!recipe;
+      const observedAt = new Set<string>();
+      const sources = new Set<string>();
+      if (recipe) {
+        for (const ingredient of recipe.ingredients) {
+          const quantity = scaleIngredient(ingredient.quantityMilli, recipe.baseServings, meal.servings);
+          const resolved = resolveIngredient(ingredient.name, ingredient.unit, quantity, ingredient.productId);
+          if (resolved.status !== 'mapped') { complete = false; continue; }
+          const price = marketPrices[resolved.productId];
+          if (!isVerifiedMarketPrice(price)) { complete = false; continue; }
+          const line = Math.round((resolved.baseQuantityMilli * price.medianUnitPriceMinor) / 1000);
+          if (!Number.isSafeInteger(line) || !Number.isSafeInteger(amountMinor + line)) { complete = false; continue; }
+          amountMinor += line;
+          observedAt.add(price.lastObserved);
+          for (const source of price.sourceTiers || []) sources.add(source);
+        }
+      }
+      costs.set(meal.id, { amountMinor, complete, observedAt: [...observedAt].sort(), sources: [...sources].sort() });
+    }
+    return costs;
+  }, [plan.meals, recipeMap, marketPrices]);
   const foodCost = useMemo(() => {
     let amountMinor = 0;
     let complete = true;
-    for (const row of requirements) {
-      if (!row.productId || !row.requiredBaseMilli) { if (row.requiredMilli > 0) complete = false; continue; }
-      const price = marketPrices[row.productId];
-      if (!isVerifiedMarketPrice(price)) { complete = false; continue; }
-      const line = Math.round((row.requiredBaseMilli * price.medianUnitPriceMinor) / 1000);
-      if (!Number.isSafeInteger(line) || !Number.isSafeInteger(amountMinor + line)) { complete = false; continue; }
-      amountMinor += line;
+    for (const cost of mealCosts.values()) {
+      amountMinor += cost.amountMinor;
+      complete = complete && cost.complete;
     }
     return { amountMinor, complete };
-  }, [requirements, marketPrices]);
+  }, [mealCosts]);
   useEffect(() => { onFoodPlanCostChange?.(foodCost.amountMinor, foodCost.complete); }, [foodCost.amountMinor, foodCost.complete, onFoodPlanCostChange]);
   const calendarDays = useMemo(() => {
     const [year, monthNumber] = month.split('-').map(Number);
@@ -411,7 +434,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           {plannedMeals.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Aucun repas planifié. Commencez par ajouter une recette.', 'لا توجد وجبات مبرمجة. ابدأ بإضافة وصفة.', 'No meals planned yet. Add a recipe to get started.')}</p> : <div className="space-y-2">{plannedMeals.map((meal) => {
             const recipe = recipeMap.get(meal.recipeId);
             return <article key={meal.id} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
-              <div className="min-w-0 flex-1"><strong className="block text-xs">{recipe ? recipeTitle(recipe) : meal.recipeId}</strong><span className="text-[10px] text-slate-500">{meal.date} · {slotLabel(meal.slot)} · {meal.servings} {tr(profile, 'portions', 'حصص', 'servings')}</span></div>
+              <div className="min-w-0 flex-1"><strong className="block text-xs">{recipe ? recipeTitle(recipe) : meal.recipeId}</strong><span className="text-[10px] text-slate-500">{meal.date} · {slotLabel(meal.slot)} · {meal.servings} {tr(profile, 'portions', 'حصص', 'servings')}</span><span className="mt-1 block text-[11px] font-semibold text-violet-700">{formatMoney(mealCosts.get(meal.id)?.amountMinor || 0, profile.preferredCurrency, profile.locale)}{mealCosts.get(meal.id)?.complete ? '' : ' · ' + tr(profile, 'prix partiel / manquant', 'سعر جزئي / ناقص', 'partial / missing price')}</span>{(mealCosts.get(meal.id)?.observedAt.length || 0) > 0 && <span className="block text-[9px] text-slate-500">{tr(profile, 'Observé', 'تاريخ الرصد', 'Observed')}: {mealCosts.get(meal.id)!.observedAt.join(', ')} · {tr(profile, 'Sources', 'المصادر', 'Sources')}: {mealCosts.get(meal.id)!.sources.join(', ') || '—'}</span>}</div>
               <button aria-label={tr(profile, 'Supprimer le repas', 'حذف الوجبة', 'Remove meal')} onClick={() => updatePlan((current) => ({ ...current, meals: current.meals.filter((item) => item.id !== meal.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button>
             </article>;
           })}</div>}
@@ -434,7 +457,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         </div>
         {requirements.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Planifiez d’abord quelques repas pour générer votre liste.', 'برمج بعض الوجبات أولاً لإنشاء القائمة.', 'Plan a few meals first to generate your list.')}</p> : <div className="space-y-2">{requirements.map((item) => <article key={item.key} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
           <div className="min-w-0 flex-1"><strong className="block text-xs">{ingredientLabel(item.name)}{item.approximate && <span className="ml-1 text-[10px] font-normal text-slate-500" title={tr(profile, 'Quantité estimée à partir d’un poids moyen par pièce', 'كمية تقديرية من متوسط وزن الحبة', 'Estimated from an average weight per piece')}>≈</span>}{!item.priced && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" title={item.unpricedReason}>{tr(profile, 'Sans prix', 'غير مسعّر', 'UNPRICED')}</span>}</strong><span className="text-[10px] text-slate-500">{tr(profile, 'Nécessaire', 'المطلوب', 'Needed')}: {formatQuantity(item.requiredMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {tr(profile, 'Stock', 'المخزون', 'Stock')}: {formatQuantity(item.inPantryMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div>
-          <div className="text-right"><strong className="block text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>{item.productId && marketPrices[item.productId] && isVerifiedMarketPrice(marketPrices[item.productId]) ? <span className="block text-[10px] text-emerald-700">{formatMoney(Math.round(((item.toBuyBaseMilli || 0) * marketPrices[item.productId].medianUnitPriceMinor) / 1000), profile.preferredCurrency, profile.locale)} · {new Date(marketPrices[item.productId].lastObserved).toLocaleDateString(profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span> : item.productId ? <span className="block text-[10px] text-amber-700">{tr(profile, 'Prix vérifié indisponible', 'السعر الموثق غير متاح', 'Verified price unavailable')}</span> : null}</div>
+          <div className="text-right"><strong className="block text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>{item.productId && marketPrices[item.productId] && isVerifiedMarketPrice(marketPrices[item.productId]) ? <span className="block text-[10px] text-emerald-700">{formatMoney(Math.round(((item.toBuyBaseMilli || 0) * marketPrices[item.productId].medianUnitPriceMinor) / 1000), profile.preferredCurrency, profile.locale)} · {new Date(marketPrices[item.productId].lastObserved).toLocaleDateString(profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {(marketPrices[item.productId].sourceTiers || []).join(', ') || tr(profile, 'source non précisée', 'المصدر غير محدد', 'source not specified')}</span> : item.productId ? <span className="block text-[10px] text-amber-700">{tr(profile, 'Prix vérifié indisponible', 'السعر الموثق غير متاح', 'Verified price unavailable')}</span> : null}</div>
         </article>)}</div>}
         <p className="text-[10px] text-slate-500">{marketLoading ? tr(profile, 'Chargement des prix publiés…', 'جارٍ تحميل الأسعار المنشورة…', 'Loading published prices…') : tr(profile, 'Seuls les prix publiés issus d’observations acceptées sont utilisés. Les prix absents restent non chiffrés.', 'تُستخدم الأسعار المنشورة المبنية على ملاحظات مقبولة فقط. تبقى الأسعار غير المتاحة دون تسعير.', 'Only published prices backed by accepted observations are used. Missing prices remain unpriced.')}</p>
       </div>}
