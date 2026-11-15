@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Home, Utensils, Sparkles, Shirt, Car, GraduationCap, HeartPulse, Wifi, Wrench, CreditCard, PiggyBank, Package, Users, AlertTriangle, CheckCircle2, ReceiptText, Wallet } from 'lucide-react';
 import { FamilyLivingPlannerView } from './FamilyLivingPlannerView';
 import type { Category, RecurringItem, Transaction, UserProfile } from '../domain/types';
@@ -80,6 +80,12 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
   const [budgetMessage, setBudgetMessage] = useState('');
   const [suggestedPlan, setSuggestedPlan] = useState<FamilyBudgetPlan | null>(null);
+  const [mealPlanCostMinor, setMealPlanCostMinor] = useState(0);
+  const [mealPlanCostComplete, setMealPlanCostComplete] = useState(true);
+  const handleFoodPlanCostChange = useCallback((amountMinor: number, complete: boolean) => {
+    setMealPlanCostMinor(Number.isSafeInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0);
+    setMealPlanCostComplete(complete);
+  }, []);
 
   useEffect(() => {
     const next = readPlan(profile.id, selectedMonth);
@@ -273,7 +279,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
       </div>
 
       {activeSection === 'living' ? (
-        <FamilyLivingPlannerView profile={profile} month={selectedMonth} householdSize={Math.max(1, plan.adults + plan.children)} />
+        <FamilyLivingPlannerView profile={profile} month={selectedMonth} householdSize={Math.max(1, plan.adults + plan.children)} onFoodPlanCostChange={handleFoodPlanCostChange} />
       ) : <>
         <div className="kenz-family-panel space-y-3">
           <div className="kenz-section-heading">
@@ -311,7 +317,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
         <div className="kenz-family-panel space-y-3">
           <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{t(profile, 'PLANIFICATION', 'التخطيط', 'PLANNING')}</span><h3>{t(profile, 'Répartition automatique', 'التوزيع التلقائي', 'Automatic allocation')}</h3></div></div>
           {budgetMessage && <p role="status" className="kenz-family-inline-status">{budgetMessage}</p>}
-          <p className="text-xs text-slate-500">{t(profile, 'Kenz suit les dépenses depuis vos opérations. Ajustez les montants prévus et les priorités ; les dépenses réelles ne sont plus saisies deux fois.', 'يتابع كنز المصاريف من عملياتك. عدّل المبالغ المخططة والأولويات؛ لن تحتاج لإدخال المصاريف الفعلية مرتين.', 'Kenz tracks spending from your transactions. Adjust planned amounts and priorities; actual expenses are no longer entered twice.')}</p>
+          <p className="text-xs text-slate-500">{t(profile, 'Kenz suit les dépenses depuis vos opérations. Le coût estimé des repas planifiés est intégré au solde de la catégorie alimentation ; les dépenses réelles restent issues du registre Kenz.', 'يتابع كنز المصاريف من عملياتك. تُحتسب تكلفة الوجبات المخططة ضمن رصيد فئة الطعام، بينما تبقى المصروفات الفعلية من سجل كنز.', 'Kenz tracks actual spending from transactions. Estimated planned meals are included in the food category balance; actual spending remains sourced from Kenz records.')}</p>
           <button onClick={createBudgetDraft} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white">{t(profile, 'Générer ma répartition', 'أنشئ توزيع ميزانيتي', 'Generate my allocation')}</button>
           {suggestedPlan && <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 space-y-2">
             <strong className="text-xs text-violet-950">{t(profile, 'Brouillon de répartition', 'مسودة توزيع الميزانية', 'Suggested budget draft')}</strong>
@@ -322,9 +328,10 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <div className="space-y-2">
             {effectivePlan.categories.map((row) => {
               const item = labels[row.id]; const Icon = item.icon;
-              const remaining = row.plannedMinor - row.actualMinor;
-              return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
-                <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small><label className="kenz-family-priority">{t(profile, 'Priorité', 'الأولوية', 'Priority')}<select value={row.priority} onChange={(e) => updatePlan('priority', row.id, Number(e.target.value))} className="mt-1 rounded-lg border px-2 py-1 text-[10px]"><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option></select></label></div>
+              const categoryMealCost = row.id === 'food' ? mealPlanCostMinor : 0;
+              const remaining = row.plannedMinor - row.actualMinor - categoryMealCost;
+              return <article className="kenz-family-category" key={profile.id + '-' + row.id} onClick={row.id === 'food' ? () => setActiveSection('living') : undefined} onKeyDown={row.id === 'food' ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveSection('living'); } } : undefined} role={row.id === 'food' ? 'button' : undefined} tabIndex={row.id === 'food' ? 0 : undefined} style={row.id === 'food' ? { cursor: 'pointer' } : undefined}>
+                <div className="kenz-family-category-title"><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small>{row.id === 'food' && <span className="text-[10px] text-violet-700">{t(profile, 'Repas planifiés', 'الوجبات المخططة', 'Meals planned')}: {formatMoney(mealPlanCostMinor, profile.preferredCurrency, profile.locale)}{!mealPlanCostComplete ? ' · ' + t(profile, 'partiel', 'جزئي', 'partial') : ''}</span>}<label className="kenz-family-priority" onClick={(event) => event.stopPropagation()}>{t(profile, 'Priorité', 'الأولوية', 'Priority')}<select value={row.priority} onChange={(e) => updatePlan('priority', row.id, Number(e.target.value))} className="mt-1 rounded-lg border px-2 py-1 text-[10px]"><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option></select></label></div>
                 <div className="grid grid-cols-2 gap-2">
                   <label>{t(profile, 'Prévu', 'مخطط', 'Planned')}<input key={selectedMonth + '-' + row.id + '-planned'} inputMode="decimal" value={plannedInputs[row.id] ?? moneyInput(row.plannedMinor)} onChange={(e) => setPlannedInputs((current) => ({ ...current, [row.id]: e.target.value }))} onBlur={(e) => { const amount = parseBudgetInput(e.currentTarget.value); if (amount === null) { setPlannedInputs((current) => ({ ...current, [row.id]: moneyInput(row.plannedMinor) })); return; } if (updatePlan('plannedMinor', row.id, amount)) setPlannedInputs((current) => ({ ...current, [row.id]: moneyInput(amount) })); else setPlannedInputs((current) => ({ ...current, [row.id]: moneyInput(row.plannedMinor) })); }} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} className="w-full h-10 px-3 mt-1 rounded-lg border text-sm font-mono-numbers" /></label>
                   <div className="text-xs"><span className="block">{t(profile, 'Réel · opérations Kenz', 'الفعلي · عمليات كنز', 'Actual · Kenz transactions')}</span><strong className="block mt-2 text-sm font-mono-numbers">{formatMoney(row.actualMinor, profile.preferredCurrency, profile.locale)}</strong></div>
