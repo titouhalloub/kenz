@@ -321,6 +321,11 @@ const translateElementAttributes = (element: Element, language: 'ar' | 'en') => 
 export const translateKenzNode = (node: Node, locale: string) => {
   if (locale === 'fr') return;
   const language = locale === 'ar' ? 'ar' : 'en';
+  const element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
+  // Feature screens with their own keyed translations opt out of the legacy
+  // DOM walker. Their content can be large and must not be recursively scanned
+  // on every React mount or locale refresh.
+  if (element?.closest('[data-kenz-no-auto-translate]')) return;
 
   if (node.nodeType === Node.TEXT_NODE) {
     translateTextNode(node, language);
@@ -331,14 +336,24 @@ export const translateKenzNode = (node: Node, locale: string) => {
     translateElementAttributes(node as Element, language);
   }
 
-  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-  let textNode: Node | null;
-  while ((textNode = walker.nextNode())) translateTextNode(textNode, language);
-
-  const parent = node as ParentNode;
-  parent.querySelectorAll?.<Element>('[placeholder],[title],[aria-label]').forEach((element) => {
-    translateElementAttributes(element, language);
-  });
+  const walker = document.createTreeWalker(
+    node,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(current) {
+        if (current.nodeType === Node.ELEMENT_NODE &&
+            (current as Element).hasAttribute('data-kenz-no-auto-translate')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    },
+  );
+  let current: Node | null;
+  while ((current = walker.nextNode())) {
+    if (current.nodeType === Node.TEXT_NODE) translateTextNode(current, language);
+    else if (current.nodeType === Node.ELEMENT_NODE) translateElementAttributes(current as Element, language);
+  }
 };
 
 /** Full scan is reserved for the initial render or an explicit locale change. */
