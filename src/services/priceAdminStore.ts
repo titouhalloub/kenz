@@ -27,7 +27,6 @@ export interface PendingPriceObservation {
   quality_flags: string[];
   source_reference: string | null;
   ingest_run_id: string | null;
-  /** Present when migration 057 is applied (list_price_observations). */
   status?: 'pending' | 'accepted' | 'rejected';
   source_type?: string;
   base_unit?: string;
@@ -38,6 +37,18 @@ export interface PendingPriceObservation {
 }
 export type PriceQueueStatus = 'pending' | 'accepted' | 'rejected';
 export interface PriceAdminResult<T> { success: boolean; data?: T; error?: string; }
+
+const PRICE_ADMIN_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(request: PromiseLike<T>, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(label + ' timed out after 12 seconds. Check the connection and retry.')), PRICE_ADMIN_TIMEOUT_MS);
+    Promise.resolve(request).then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 function client() {
   const supabase = getSupabaseClient();
@@ -51,15 +62,22 @@ export async function loadPriceAdminData(status: PriceQueueStatus = 'pending'): 
 }>> {
   try {
     const supabase = client();
-    // list_price_observations (migration 057) returns unit, evidence and review history. Until it is
-    // applied, fall back to the original pending-only list so the screen keeps working.
     const listing = async () => {
-      const full = await supabase.rpc('list_price_observations', { p_status: status, p_limit: 150 });
+      const full = await withTimeout(
+        supabase.rpc('list_price_observations', { p_status: status, p_limit: 150 }),
+        'Price review queue request',
+      );
       if (!full.error) return full;
       if (status !== 'pending') throw full.error;
-      return supabase.rpc('list_pending_price_observations', { p_limit: 150 });
+      return withTimeout(
+        supabase.rpc('list_pending_price_observations', { p_limit: 150 }),
+        'Pending price list request',
+      );
     };
-    const [sources, pending] = await Promise.all([supabase.rpc('get_price_source_health'), listing()]);
+    const [sources, pending] = await Promise.all([
+      withTimeout(supabase.rpc('get_price_source_health'), 'Price source health request'),
+      listing(),
+    ]);
     if (sources.error) throw sources.error;
     if (pending.error) throw pending.error;
     return {
@@ -74,10 +92,6 @@ export async function loadPriceAdminData(status: PriceQueueStatus = 'pending'): 
   }
 }
 
-/**
- * Channel 2 (admin): stages validated rows as PENDING through the moderator-only RPC. The rows still
- * need an explicit accept in the review queue. Validation is the shared priceValidation module.
- */
 export async function stageAdminPrices(rows: PriceInputRow[]): Promise<PriceAdminResult<{
   staged: number;
   failed: Array<{ productSlug: string; message: string }>;
@@ -94,14 +108,14 @@ export async function stageAdminPrices(rows: PriceInputRow[]): Promise<PriceAdmi
         failed.push({ productSlug: row.productSlug, message: 'source_reference_required' });
         continue;
       }
-      const { error } = await supabase.rpc('admin_stage_price_observation', {
+      const { error } = await withTimeout(supabase.rpc('admin_stage_price_observation', {
         p_product_slug: checked.row.productSlug,
         p_unit_price_minor: checked.row.unitPriceMinor,
         p_observed_at: checked.row.observedAt,
         p_wilaya_code: checked.row.wilayaCode,
         p_source_reference: checked.row.sourceReference,
         p_note: checked.row.note ?? null,
-      });
+      }), 'Price import request');
       if (error) failed.push({ productSlug: row.productSlug, message: error.message });
       else staged += 1;
     }
@@ -117,11 +131,11 @@ export async function reviewPriceObservation(
   reason: string,
 ): Promise<PriceAdminResult<boolean>> {
   try {
-    const { error } = await client().rpc('review_price_observation', {
+    const { error } = await withTimeout(client().rpc('review_price_observation', {
       p_observation_id: observationId,
       p_decision: decision,
       p_reason: reason,
-    });
+    }), 'Price review decision request');
     if (error) throw error;
     return { success: true, data: true };
   } catch (error) {
