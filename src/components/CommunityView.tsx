@@ -51,6 +51,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
   const [priceAmount, setPriceAmount] = useState('');
   const [priceDate, setPriceDate] = useState(today());
   const [priceConsent, setPriceConsent] = useState(false);
+  const [priceEvidence, setPriceEvidence] = useState('');
   const [priceStatus, setPriceStatus] = useState('');
   const [costByPost, setCostByPost] = useState<Record<string, number | null>>({});
 
@@ -179,13 +180,13 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
     const result = await submitCommunityPrice({
       productSlug: priceSlug, unitPriceMinor: priceMinor,
       observedAt: new Date(priceDate + 'T12:00:00').toISOString(),
-      wilayaCode, consent: true,
+      wilayaCode, consent: true, evidenceUrl: priceEvidence || null,
     });
     setBusy(false);
     setPriceStatus(result.success
       ? 'Contribution envoyée en attente de vérification. Elle ne sera pas publiée automatiquement.'
       : result.error || 'Contribution indisponible.');
-    if (result.success) { setPriceAmount(''); setPriceConsent(false); }
+    if (result.success) { setPriceAmount(''); setPriceConsent(false); setPriceEvidence(''); }
   };
 
 
@@ -329,6 +330,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ user, availableBud
           </select>
           <input inputMode="decimal" value={priceAmount} onChange={(event) => setPriceAmount(event.target.value)} placeholder="Prix en DA par unité de base" className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
           <input type="date" value={priceDate} min={new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)} max={today()} onChange={(event) => setPriceDate(event.target.value)} className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
+          <input value={priceEvidence} onChange={(event) => setPriceEvidence(event.target.value)} placeholder="Preuve (optionnel) : lien https vers un ticket, une photo ou une annonce" className="w-full h-10 rounded-lg bg-slate-950 border border-slate-700 px-3 text-xs text-slate-100" />
           <label className="flex items-start gap-2 text-[11px] text-slate-400">
             <input type="checkbox" checked={priceConsent} onChange={(event) => setPriceConsent(event.target.checked)} />
             J’accepte que ce prix et ma wilaya soient partagés publiquement sous forme agrégée après vérification. Mon identifiant reste privé.

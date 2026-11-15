@@ -10,6 +10,17 @@ export interface SimulatorPrice {
   lastObserved: string;
   areaLevel: 'neighborhood' | 'commune' | 'wilaya' | 'national';
   sourceTiers?: string[];
+  /**
+   * 'market' = aggregate of accepted, source-attributed observations.
+   * 'manual' = a number the user typed (never verified). Absent on legacy values: treated as
+   * market only if it also has observations and source tiers (see isVerifiedMarketPrice).
+   */
+  origin?: 'market' | 'manual';
+}
+
+/** True only for prices backed by accepted observations. Manual estimates never qualify. */
+export function isVerifiedMarketPrice(price: SimulatorPrice | null | undefined): boolean {
+  return Boolean(price) && price!.origin !== 'manual' && price!.nObservations > 0 && (price!.sourceTiers?.length ?? 0) > 0;
 }
 
 export interface SimulatorBasketItem {

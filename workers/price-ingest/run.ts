@@ -1,7 +1,8 @@
-import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { PRODUCT_CATALOG } from '../../src/domain/productCatalog';
+import { PRICE_EXTENDED_WINDOW_DAYS } from '../../src/domain/priceWindow';
 import { PUBLIC_PRICE_SOURCES, scrapePublicSource } from './publicSources';
+import { loadPriceWindows, refreshAllStats, stageCandidates } from './stage';
 
 const dryRun = process.argv.includes('--dry-run');
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -16,10 +17,6 @@ const supabase = !dryRun && supabaseUrl && serviceRoleKey
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
   : null;
-
-function sourceKey(parts: string[]): string {
-  return createHash('sha256').update(parts.join('|')).digest('hex');
-}
 
 async function main() {
   let sourceBySlug = new Map<string, { id: string; enabled: boolean; reviewed: boolean; termsReviewedAt: string | null }>();
@@ -51,6 +48,8 @@ async function main() {
     }
   }
 
+  let extendedDays = PRICE_EXTENDED_WINDOW_DAYS;
+  if (supabase) extendedDays = (await loadPriceWindows(supabase)).extendedDays;
   let failures = 0;
   for (const source of PUBLIC_PRICE_SOURCES) {
     try {
@@ -71,7 +70,9 @@ async function main() {
 
       const scraped = await scrapePublicSource(source);
       if (scraped.length === 0) throw new Error('The source returned no matched product rows; review the parser before trusting this run.');
-      const freshCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+      // Official bulletins are not daily: stage anything inside the extended window. Rows stay
+      // `pending`; a moderator still decides, and aggregates label anything older than 14 days as stale.
+      const freshCutoff = Date.now() - extendedDays * 24 * 60 * 60 * 1000;
       const freshScraped = scraped.filter((row) => {
         const observed = Date.parse(row.normalized.observedAt);
         return Number.isFinite(observed) && observed >= freshCutoff && observed <= Date.now() + 24 * 60 * 60 * 1000;
@@ -105,37 +106,37 @@ async function main() {
       }
 
       try {
-        const observations = freshScraped.flatMap((row) => {
+        // Unit consistency: the scraped unit must match the catalog base unit stored in the database.
+        const unitMismatchRows = freshScraped.filter((row) => {
           const product = productBySlug.get(row.productSlug);
-          if (!product || product.base_unit !== row.normalized.baseUnit) return [];
-          const recordKey = sourceKey([
-            source.slug,
-            product.id,
-            row.normalized.observedAt,
-            row.normalized.wilayaCode || 'DZ',
-            String(row.normalized.unitPriceMinor),
-            row.sourceReference,
-          ]);
-          return [{
-            product_id: product.id,
-            source_id: sourceId!,
-            unit_price_minor: row.normalized.unitPriceMinor,
-            currency: 'DZD',
-            observed_at: row.normalized.observedAt,
-            wilaya_code: row.normalized.wilayaCode || null,
-            source_reference: row.sourceReference,
-            source_record_key: recordKey,
-            ingest_run_id: run.id,
-            status: 'pending',
-            quality_flags: ['public_scrape', 'awaiting_review'],
-          }];
+          return !product || product.base_unit !== row.normalized.baseUnit;
         });
+        const candidates = freshScraped.filter((row) => {
+          const product = productBySlug.get(row.productSlug);
+          return Boolean(product && product.base_unit === row.normalized.baseUnit);
+        }).map((row) => ({
+          productSlug: row.productSlug,
+          unitPriceMinor: row.normalized.unitPriceMinor,
+          observedAt: row.normalized.observedAt,
+          wilayaCode: row.normalized.wilayaCode || null,
+          sourceReference: row.sourceReference,
+        }));
 
-        if (observations.length > 0) {
-          const { error: insertError } = await supabase!
-            .from('price_observations')
-            .upsert(observations, { onConflict: 'source_record_key', ignoreDuplicates: true });
-          if (insertError) throw new Error(`Cannot stage observations: ${insertError.message}`);
+        // Same validation + staging as admin imports: everything lands as `pending`.
+        const report = await stageCandidates(supabase!, {
+          sourceId: sourceId!, sourceSlug: source.slug, ingestRunId: run.id,
+          channelFlags: ['public_scrape', 'awaiting_review'],
+          productIdBySlug: new Map([...productBySlug].map(([slug, product]) => [slug, product.id])),
+          candidates,
+        });
+        const observations = { length: report.staged + report.duplicatesIgnored };
+        const rejectedCount = report.rejected.length + unitMismatchRows.length;
+        const rejectionSummary = [
+          ...report.rejected.slice(0, 5).map((row) => `${row.productSlug}: ${row.errors.join(', ')}`),
+          ...unitMismatchRows.slice(0, 5).map((row) => `${row.productSlug}: unit_mismatch`),
+        ].join('; ');
+        if (rejectedCount > 0) {
+          console.warn(`${source.slug}: ${rejectedCount} rows failed validation and were not staged.`);
         }
 
         const { error: finishError } = await supabase!.from('ingest_runs').update({
@@ -143,11 +144,15 @@ async function main() {
           rows_fetched: scraped.length,
           rows_parsed: freshScraped.length,
           rows_accepted: 0,
-          error_count: 0,
+          error_count: rejectedCount,
           status: 'succeeded',
-          error_summary: observations.length === 0
-            ? (staleRows > 0 ? `All ${staleRows} matched rows were outside the 14-day freshness window.` : 'No fresh product rows matched the curated catalog; nothing was published.')
-            : (staleRows > 0 ? `${staleRows} stale rows were excluded.` : null),
+          error_summary: [
+            rejectedCount > 0 ? `${rejectedCount} rejected row(s): ${rejectionSummary}` : null,
+            staleRows > 0 ? `${staleRows} stale rows were excluded.` : null,
+            observations.length === 0 && rejectedCount === 0
+              ? 'No fresh product rows matched the curated catalog; nothing was published.'
+              : null,
+          ].filter(Boolean).join(' | ') || null,
         }).eq('id', run.id);
         if (finishError) throw new Error(`Cannot finish ingest run: ${finishError.message}`);
         console.log(`${source.slug}: staged ${observations.length} fresh observations; excluded ${staleRows} stale rows (run ${run.id}).`);
@@ -169,6 +174,10 @@ async function main() {
 
   if (dryRun) {
     console.log('Dry run complete. No database credentials were used and no data was written.');
+  } else if (supabase) {
+    // Re-derive aggregates from ALREADY ACCEPTED observations so expired ones age out even when
+    // no moderator acts. This never accepts, edits or creates an observation.
+    await refreshAllStats(supabase);
   }
   if (failures > 0) {
     console.error(`Price ingestion completed with ${failures} source issue(s).`);

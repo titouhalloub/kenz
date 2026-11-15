@@ -45,6 +45,7 @@ import {
   Account,
   CommitmentFrequency,
 } from '../domain/types';
+import { FamilyLifePlannerView } from './FamilyLifePlannerView';
 import { SimulatorView } from './SimulatorView';
 import { getBillReminderPermission, requestBillReminderPermission, dispatchBillReminders, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 import {
@@ -67,7 +68,7 @@ const getLocalDateString = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 interface PlanViewProps {
-  initialTab?: 'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator';
+  initialTab?: 'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator' | 'family';
   categories: Category[];
   budgets: MonthlyBudget[];
   recurringItems: RecurringItem[];
@@ -107,7 +108,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   challengeContributions,
   onAddChallengeContribution,
 }) => {
-  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator'>(initialTab ?? 'budgets');
+  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator' | 'family'>(initialTab ?? 'budgets');
   const [hasOpenedSimulator, setHasOpenedSimulator] = useState(initialTab === 'simulator');
 
   // New recurring state
@@ -322,6 +323,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
           }`}
         >
           {profile.locale === 'ar' ? 'محاكي الشهر' : profile.locale === 'en' ? 'Month simulator' : 'Simulateur du mois'}
+        </button>
+        <button
+          onClick={() => setActiveTab('family')}
+          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
+            activeTab === 'family' ? 'bg-slate-800 text-violet-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {profile.locale === 'ar' ? 'ميزانية الأسرة' : profile.locale === 'en' ? 'Family plan' : 'Plan famille'}
         </button>
       </div>
 
@@ -1000,6 +1009,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
           </div>
         </div>
       )}
+      {activeTab === 'family' && <FamilyLifePlannerView profile={profile} categories={categories} transactions={transactions} recurringItems={recurringItems} />}
       {hasOpenedSimulator && (
         <div className={activeTab === 'simulator' ? '' : 'hidden'}>
           <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />

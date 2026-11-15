@@ -265,12 +265,19 @@ export async function blockCommunityUser(blockerId: string, blockedId: string): 
 export async function submitCommunityPrice(input: {
   productSlug: string; unitPriceMinor: number; observedAt: string;
   wilayaCode: string; communeId?: string | null; consent: boolean;
+  /** Optional https link to a receipt photo, post or listing. Sent only when provided (needs migration 057). */
+  evidenceUrl?: string | null;
 }): Promise<CommunityResult<string>> {
   try {
+    const evidenceUrl = input.evidenceUrl?.trim();
+    if (evidenceUrl && !/^https:\/\/\S{3,490}$/.test(evidenceUrl)) {
+      return { success: false, error: 'La preuve doit être un lien https.' };
+    }
     const { data, error } = await requireClient().rpc('submit_price_observation', {
       p_product_slug: input.productSlug, p_unit_price_minor: input.unitPriceMinor,
       p_observed_at: input.observedAt, p_wilaya_code: input.wilayaCode,
       p_commune_id: input.communeId || null, p_consent: input.consent,
+      ...(evidenceUrl ? { p_evidence_url: evidenceUrl } : {}),
     });
     if (error || !data) throw error || new Error('Price contribution was not submitted.');
     return { success: true, data };
