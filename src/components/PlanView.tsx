@@ -46,13 +46,11 @@ import {
   CommitmentFrequency,
 } from '../domain/types';
 import { FamilyLifePlannerView } from './FamilyLifePlannerView';
-import { SimulatorView } from './SimulatorView';
 import { getBillReminderPermission, requestBillReminderPermission, dispatchBillReminders, daysUntilBill, formatBillDueLabel } from '../services/billReminderService';
 import {
   formatMoney,
   calculateCategoryBudgets,
   parseToMinorUnits,
-  calculateSafeToSpend,
 } from '../domain/financialCalculations';
 
 const getBudgetCategoryIcon = (name?: string) => {
@@ -108,8 +106,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
   challengeContributions,
   onAddChallengeContribution,
 }) => {
-  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges' | 'simulator' | 'family'>(initialTab ?? 'budgets');
-  const [hasOpenedSimulator, setHasOpenedSimulator] = useState(initialTab === 'simulator');
+  const [activeTab, setActiveTab] = useState<'budgets' | 'recurring' | 'goals' | 'challenges'>(() =>
+    initialTab === 'simulator' || initialTab === 'family' ? 'budgets' : initialTab ?? 'budgets'
+  );
 
   // New recurring state
   const [showAddRecurring, setShowAddRecurring] = useState(false);
@@ -164,24 +163,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
     transactions,
     currentDate: today,
   });
-
-  // Keep the simulator's budget context local to this device. It never leaves PlanView.
-  const safeToSpend = calculateSafeToSpend({
-    accounts,
-    transactions,
-    recurringItems,
-    savingsGoals,
-    todayDate: today,
-    paydayDayOfMonth: profile.paydayDayOfMonth,
-    planningPeriodDays: profile.planningPeriodDays,
-  });
-  const foodEnvelope = categoryBudgets.find((item) =>
-    item.categoryName.toLocaleLowerCase().includes('alimentation')
-  );
-  const allActiveAccountsAreDzd = accounts.filter((account) => !account.isArchived).every((account) => account.currency === 'DZD');
-  const simulatorAvailableBudgetMinor = foodEnvelope?.budgetMinor
-    ? Math.max(0, foodEnvelope.remainingMinor)
-    : allActiveAccountsAreDzd ? safeToSpend.safeToSpendMinor : 0;
 
   const handleCreateRecurring = (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,133 +294,11 @@ export const PlanView: React.FC<PlanViewProps> = ({
         >
           Défis d'épargne
         </button>
-        <button
-          onClick={() => {
-            setHasOpenedSimulator(true);
-            setActiveTab('simulator');
-          }}
-          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
-            activeTab === 'simulator' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          {profile.locale === 'ar' ? 'محاكي الشهر' : profile.locale === 'en' ? 'Month simulator' : 'Simulateur du mois'}
-        </button>
-        <button
-          onClick={() => setActiveTab('family')}
-          className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
-            activeTab === 'family' ? 'bg-slate-800 text-violet-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          {profile.locale === 'ar' ? 'ميزانية الأسرة' : profile.locale === 'en' ? 'Family plan' : 'Plan famille'}
-        </button>
+
       </div>
 
-      {/* TAB 1: BUDGETS */}
-      {activeTab === 'budgets' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Rythme de dépenses vs progression du mois</span>
-            <span className="font-mono-numbers">Jour {today.getDate()} du mois</span>
-          </div>
-
-          <div className="space-y-3">
-            {categoryBudgets.map((item) => {
-              const isEditing = editingCatId === item.categoryId;
-              const category = categories.find((entry) => entry.id === item.categoryId);
-              const BudgetIcon = getBudgetCategoryIcon(category?.icon);
-              const accentColor = category?.color || '#7950cf';
-
-              return (
-                <div
-                  key={item.categoryId}
-                  className="kenz-challenge-card rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="kenz-budget-category-icon" style={{ color: accentColor, backgroundColor: `${accentColor}18` }}><BudgetIcon /></span>
-                      <div className="min-w-0">
-                      <span className="text-xs font-semibold text-slate-200 block">
-                        {item.categoryName}
-                      </span>
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
-                        <span>Dépensé: {formatMoney(item.spentMinor, profile.preferredCurrency, profile.locale)}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>
-                          {item.budgetMinor > 0
-                            ? `Budget: ${formatMoney(item.budgetMinor, profile.preferredCurrency, profile.locale)}`
-                            : 'Sans plafond'}
-                        </span>
-                      </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        if (isEditing) {
-                          const minor = parseToMinorUnits(editBudgetAmount);
-                          onUpdateBudget(item.categoryId, minor);
-                          setEditingCatId(null);
-                        } else {
-                          setEditingCatId(item.categoryId);
-                          setEditBudgetAmount((item.budgetMinor / 100).toString());
-                        }
-                      }}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-medium min-h-[44px] px-2 flex items-center cursor-pointer"
-                    >
-                      {isEditing ? 'Valider' : item.budgetMinor > 0 ? 'Modifier' : 'Définir'}
-                    </button>
-                  </div>
-
-                  {isEditing ? (
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={editBudgetAmount}
-                        onChange={(e) => setEditBudgetAmount(e.target.value)}
-                        placeholder="Ex. 25000"
-                        autoFocus
-                        className="flex-1 h-10 px-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono-numbers text-slate-100 focus:outline-none focus:border-emerald-500"
-                      />
-                      <button
-                        onClick={() => setEditingCatId(null)}
-                        className="px-3 h-10 text-xs text-slate-400 hover:text-slate-200 rounded-xl border border-slate-800"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  ) : item.budgetMinor > 0 ? (
-                    <div className="space-y-1.5">
-                      {/* Dual Progress bar with month pace indicator */}
-                      <div className="relative w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            item.isOverBudget
-                              ? 'bg-rose-500'
-                              : item.percentageUsed > item.pacePercentage
-                              ? 'bg-amber-500'
-                              : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${Math.min(100, item.percentageUsed)}%` }}
-                        />
-                      </div>
-
-                      <div className="flex justify-between text-[11px] font-mono-numbers">
-                        <span className={item.isOverBudget ? 'text-rose-400 font-bold' : 'text-slate-400'}>
-                          {item.percentageUsed}% consommé
-                        </span>
-                        <span className="text-slate-400">
-                          Reste: {formatMoney(item.remainingMinor, profile.preferredCurrency, profile.locale)}
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* One monthly budget: all family and meal planning flows share this surface. */}
+      {activeTab === 'budgets' && <FamilyLifePlannerView profile={profile} categories={categories} transactions={transactions} recurringItems={recurringItems} />}
 
       {/* TAB 2: RECURRING ITEMS */}
       {activeTab === 'recurring' && (
@@ -1007,12 +866,6 @@ export const PlanView: React.FC<PlanViewProps> = ({
               </div>
             )}
           </div>
-        </div>
-      )}
-      {activeTab === 'family' && <FamilyLifePlannerView profile={profile} categories={categories} transactions={transactions} recurringItems={recurringItems} />}
-      {hasOpenedSimulator && (
-        <div className={activeTab === 'simulator' ? '' : 'hidden'}>
-          <SimulatorView profile={profile} availableBudgetMinor={simulatorAvailableBudgetMinor} />
         </div>
       )}
 
