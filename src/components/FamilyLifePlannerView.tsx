@@ -89,6 +89,8 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
 
   useEffect(() => {
     const next = readPlan(profile.id, selectedMonth);
+    setMealPlanCostMinor(0);
+    setMealPlanCostComplete(true);
     setPlan(next);
     setSuggestedPlan(null);
     setIncomeInput(moneyInput(next.monthlyIncomeMinor));
