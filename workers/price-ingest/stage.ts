@@ -84,7 +84,7 @@ export async function stageCandidates(
   const rows: Array<Record<string, unknown>> = [];
 
   for (const candidate of params.candidates) {
-    const result = validatePriceInput(candidate, { now: new Date(), windows, referenceMedianBySlug, seenKeys });
+    const result = validatePriceInput(candidate, { now: new Date(), windows, referenceMedianBySlug, seenKeys, requireSourceReference: params.sourceSlug === 'admin-manual-import' });
     const productId = params.productIdBySlug.get(candidate.productSlug);
     if (!result.ok || !result.row || !productId) {
       report.rejected.push({ productSlug: candidate.productSlug, errors: result.errors.length ? result.errors : ['product_not_in_database'] });
