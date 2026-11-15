@@ -236,8 +236,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     if (plan.allocationMode !== 'automatic') return;
     const next = suggestFamilyBudgetAllocations(automaticAllocationPlan);
     const changed = next.categories.some((row, index) =>
-      row.plannedMinor !== plan.categories[index]?.plannedMinor ||
-      row.plannedOverride !== plan.categories[index]?.plannedOverride
+      row.plannedMinor !== plan.categories[index]?.plannedMinor
     );
     if (!changed) return;
     setPlan((current) => {
