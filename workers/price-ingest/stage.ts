@@ -28,9 +28,16 @@ export interface StageReport {
 export async function refreshAllStats(supabase: SupabaseClient): Promise<void> {
   const all = await supabase.rpc('refresh_price_stats_all');
   if (!all.error) return;
+
+  const fallbackErrors: string[] = [];
   for (const windowDays of PRICE_STATS_WINDOWS) {
     const { error } = await supabase.rpc('refresh_price_stats', { p_window_days: windowDays });
-    if (error) console.warn(`Could not refresh ${windowDays}-day price aggregates: ${error.message}`);
+    if (error) fallbackErrors.push(`${windowDays}-day: ${error.message}`);
+  }
+  if (fallbackErrors.length > 0) {
+    throw new Error(
+      `Aggregate refresh failed (refresh_price_stats_all: ${all.error.message}; fallbacks: ${fallbackErrors.join('; ')})`,
+    );
   }
 }
 
