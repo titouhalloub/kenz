@@ -1,5 +1,5 @@
 -- 057_price_stats_windows.sql  (file name kept from the first draft; content = price engine unification)
--- DRAFT FOR OPERATOR APPROVAL. NOT APPLIED. Review before running.
+-- Migration 057: price statistics windows, evidence, and moderator review workflow.
 --
 -- Builds on 036/037/039/043. No new price tables: it extends price_observations / price_sources /
 -- price_stats and the existing RPCs. It does NOT insert, accept, edit or delete any observation,
