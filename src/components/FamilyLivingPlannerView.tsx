@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChefHat, Package, Plus, Trash2, Download, Upload, ShoppingBasket, ClipboardList } from 'lucide-react';
 import type { UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
+import { loadMarketPrices } from '../services/priceStore';
+import { isVerifiedMarketPrice, type SimulatorPrice } from '../domain/simulator';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe,
@@ -9,7 +11,7 @@ import {
   type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
 } from '../domain/familyLiving';
 
-interface Props { profile: UserProfile; month: string; householdSize: number; }
+interface Props { profile: UserProfile; month: string; householdSize: number; onFoodPlanCostChange?: (amountMinor: number, complete: boolean) => void; }
 type Section = 'meals' | 'shopping' | 'pantry' | 'recipes' | 'needs';
 
 const tr = (profile: UserProfile, fr: string, ar: string, en: string) =>
@@ -62,7 +64,7 @@ const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
   } catch { return fallback; }
 };
 
-export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, householdSize }) => {
+export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, householdSize, onFoodPlanCostChange }) => {
   const [plan, setPlan] = useState(() => readLivingPlan(profile.id, month));
   const [section, setSection] = useState<Section>('meals');
   const [mealDate, setMealDate] = useState(monthFirstDay(month));
@@ -70,6 +72,8 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const [recipeId, setRecipeId] = useState(BUILTIN_FAMILY_RECIPES[0].id);
   const [servings, setServings] = useState(String(Math.max(1, householdSize)));
   const [status, setStatus] = useState('');
+  const [marketPrices, setMarketPrices] = useState<Record<string, SimulatorPrice>>({});
+  const [marketLoading, setMarketLoading] = useState(false);
   const [pantryName, setPantryName] = useState('');
   const [pantryUnit, setPantryUnit] = useState<IngredientUnit>('g');
   const [pantryQuantity, setPantryQuantity] = useState('');
@@ -109,6 +113,33 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
   const recipeMap = useMemo(() => new Map<string, FamilyRecipe>(recipes.map((recipe) => [recipe.id, recipe] as const)), [recipes]);
   const requirements = useMemo(() => buildShoppingRequirements(plan), [plan]);
+  const priceSlugs = useMemo(() => [...new Set(requirements.map((row) => row.productId).filter((slug): slug is string => !!slug))], [requirements]);
+  useEffect(() => {
+    let active = true;
+    if (priceSlugs.length === 0) { setMarketPrices({}); onFoodPlanCostChange?.(0, true); return () => { active = false; }; }
+    setMarketLoading(true);
+    loadMarketPrices(priceSlugs).then((result) => {
+      if (!active) return;
+      setMarketPrices(result.pricesBySlug);
+    }).catch(() => {
+      if (active) setMarketPrices({});
+    }).finally(() => { if (active) setMarketLoading(false); });
+    return () => { active = false; };
+  }, [priceSlugs.join('|')]);
+  const foodCost = useMemo(() => {
+    let amountMinor = 0;
+    let complete = true;
+    for (const row of requirements) {
+      if (!row.productId || !row.requiredBaseMilli) { if (row.requiredMilli > 0) complete = false; continue; }
+      const price = marketPrices[row.productId];
+      if (!isVerifiedMarketPrice(price)) { complete = false; continue; }
+      const line = Math.round((row.requiredBaseMilli * price.medianUnitPriceMinor) / 1000);
+      if (!Number.isSafeInteger(line) || !Number.isSafeInteger(amountMinor + line)) { complete = false; continue; }
+      amountMinor += line;
+    }
+    return { amountMinor, complete };
+  }, [requirements, marketPrices]);
+  useEffect(() => { onFoodPlanCostChange?.(foodCost.amountMinor, foodCost.complete); }, [foodCost.amountMinor, foodCost.complete, onFoodPlanCostChange]);
   const selectedRecipe = recipeMap.get(recipeId) || recipes[0];
   const plannedMeals = [...plan.meals].sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot));
   const updatePlan = (updater: (current: FamilyLivingPlan) => FamilyLivingPlan) => {
@@ -331,7 +362,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       {status && <p role="status" className="kenz-family-inline-status">{status}</p>}
 
       {section === 'meals' && <div className="kenz-family-panel space-y-3">
-        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'CALENDRIER', 'التقويم', 'CALENDAR')}</span><h3>{tr(profile, 'Programmer un repas', 'برمجة وجبة', 'Plan a meal')}</h3></div><span className="text-xs text-slate-500">{month}</span></div>
+        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'CALENDRIER', 'التقويم', 'CALENDAR')}</span><h3>{tr(profile, 'Programmer un repas', 'برمجة وجبة', 'Plan a meal')}</h3><p className="mt-1 text-xs text-slate-500">{tr(profile, 'Coût estimé des ingrédients', 'التكلفة المقدرة للمكونات', 'Estimated ingredient cost')}: <strong className="text-violet-700">{formatMoney(foodCost.amountMinor, profile.preferredCurrency, profile.locale)}</strong>{!foodCost.complete && <span className="ml-1 text-amber-700">· {tr(profile, 'partiel, prix manquants', 'جزئي، توجد أسعار ناقصة', 'partial; prices missing')}</span>}</p></div><span className="text-xs text-slate-500">{month}</span></div>
         <div className="grid grid-cols-2 gap-2">
           <label>{tr(profile, 'Date', 'التاريخ', 'Date')}<input type="date" min={monthFirstDay(month)} max={monthLastDay(month)} value={mealDate} onChange={(e) => setMealDate(e.target.value)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label>{tr(profile, 'Repas', 'الوجبة', 'Meal')}<select value={mealSlot} onChange={(e) => setMealSlot(e.target.value as MealSlot)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm"><option value="breakfast">{slotLabel('breakfast')}</option><option value="lunch">{slotLabel('lunch')}</option><option value="dinner">{slotLabel('dinner')}</option></select></label>
@@ -376,9 +407,9 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         </div>
         {requirements.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Planifiez d’abord quelques repas pour générer votre liste.', 'برمج بعض الوجبات أولاً لإنشاء القائمة.', 'Plan a few meals first to generate your list.')}</p> : <div className="space-y-2">{requirements.map((item) => <article key={item.key} className="flex items-center gap-3 rounded-xl border border-violet-100 p-3">
           <div className="min-w-0 flex-1"><strong className="block text-xs">{ingredientLabel(item.name)}{item.approximate && <span className="ml-1 text-[10px] font-normal text-slate-500" title={tr(profile, 'Quantité estimée à partir d’un poids moyen par pièce', 'كمية تقديرية من متوسط وزن الحبة', 'Estimated from an average weight per piece')}>≈</span>}{!item.priced && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" title={item.unpricedReason}>{tr(profile, 'Sans prix', 'غير مسعّر', 'UNPRICED')}</span>}</strong><span className="text-[10px] text-slate-500">{tr(profile, 'Nécessaire', 'المطلوب', 'Needed')}: {formatQuantity(item.requiredMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')} · {tr(profile, 'Stock', 'المخزون', 'Stock')}: {formatQuantity(item.inPantryMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span></div>
-          <strong className="text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>
+          <div className="text-right"><strong className="block text-xs text-violet-800">{item.toBuyMilli > 0 ? formatQuantity(item.toBuyMilli, item.unit, profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US') : tr(profile, 'OK', 'متوفر', 'In stock')}</strong>{item.productId && marketPrices[item.productId] && isVerifiedMarketPrice(marketPrices[item.productId]) ? <span className="block text-[10px] text-emerald-700">{formatMoney(Math.round(((item.toBuyBaseMilli || 0) * marketPrices[item.productId].medianUnitPriceMinor) / 1000), profile.preferredCurrency, profile.locale)} · {new Date(marketPrices[item.productId].lastObserved).toLocaleDateString(profile.locale === 'ar' ? 'ar-DZ' : profile.locale === 'fr' ? 'fr-DZ' : 'en-US')}</span> : item.productId ? <span className="block text-[10px] text-amber-700">{tr(profile, 'Prix vérifié indisponible', 'السعر الموثق غير متاح', 'Verified price unavailable')}</span> : null}</div>
         </article>)}</div>}
-        <p className="text-[10px] text-slate-500">{tr(profile, 'Les prix ne sont pas inventés : les estimations seront ajoutées avec leur source et leur date.', 'لا يتم اختلاق الأسعار؛ ستضاف التقديرات مع مصدرها وتاريخها.', 'Prices are not fabricated; estimates will be added with their source and date.')}</p>
+        <p className="text-[10px] text-slate-500">{marketLoading ? tr(profile, 'Chargement des prix publiés…', 'جارٍ تحميل الأسعار المنشورة…', 'Loading published prices…') : tr(profile, 'Seuls les prix publiés issus d’observations acceptées sont utilisés. Les prix absents restent non chiffrés.', 'تُستخدم الأسعار المنشورة المبنية على ملاحظات مقبولة فقط. تبقى الأسعار غير المتاحة دون تسعير.', 'Only published prices backed by accepted observations are used. Missing prices remain unpriced.')}</p>
       </div>}
 
       {section === 'pantry' && <div className="kenz-family-panel space-y-3">
