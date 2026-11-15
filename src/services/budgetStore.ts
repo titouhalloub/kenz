@@ -465,6 +465,12 @@ async function syncBudgetStateToSupabase(state: BudgetState, deleted: PendingBud
     const supabase = getSupabaseClient();
     const userId = state.profile.id;
     if (!supabase || !isUuid(userId)) return false;
+    // Never invoke a privileged financial RPC with only the public anon key.
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user || authData.user.id !== userId) {
+      console.warn('Skipping Kenz financial sync: no verified matching Supabase user session.');
+      return false;
+    }
     const { error: atomicError } = await supabase.rpc('sync_kenz_financial_snapshot', {
       p_snapshot: toFinancialSyncPayload(state),
       p_base: toFinancialSyncPayload(baseState),
