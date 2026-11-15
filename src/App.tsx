@@ -114,6 +114,8 @@ export default function App() {
   const [festiveBudgets, setFestiveBudgets] = useState<FestiveBudget[]>(() => loadFestiveState(loadCurrentUser().id));
   const [aiWallet, setAiWallet] = useState<AICreditWallet>(() => loadAICreditWallet());
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => loadCurrentUser());
+  // Cloud operations stay disabled until the Supabase session is verified.
+  const [authReady, setAuthReady] = useState(false);
   const [challengeContributions, setChallengeContributions] = useState<SavingsChallengeContribution[]>(() => loadSavingsChallengeContributions(loadCurrentUser().id));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -124,16 +126,21 @@ export default function App() {
   const [isAddDebtModalOpen, setIsAddDebtModalOpen] = useState(false);
   const [kredyPreselectedBiz, setKredyPreselectedBiz] = useState<Business | null>(null);
 
-  // Restore the Supabase identity only. Account data is hydrated by the single
-  // currentUser effect below, so login and session restoration share one path.
+  // Verify the persisted Supabase session before any account-scoped request or
+  // outbox replay. A cached local profile is not proof of authentication.
   useEffect(() => {
     let active = true;
     const supabase = getSupabaseClient();
-    if (!supabase) return () => { active = false; };
-
-    void supabase.auth.getUser().then(({ data, error }) => {
-      if (!active || error || !data.user) return;
-      const authUser = data.user;
+    const setGuestIdentity = () => {
+      const cached = loadCurrentUser();
+      setCurrentUser({
+        ...cached,
+        id: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cached.id)
+          ? 'kenz_local_guest'
+          : cached.id,
+      });
+    };
+    const setAuthenticatedIdentity = (authUser: NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']>) => {
       setCurrentUser({
         id: authUser.id,
         email: authUser.email || '',
@@ -143,14 +150,65 @@ export default function App() {
         membershipTier: authUser.user_metadata?.tier || 'Citoyen Free',
         createdAt: authUser.created_at,
       });
-    }).catch((error) => console.error('Unable to restore Kenz auth session:', error));
+    };
 
-    return () => { active = false; };
+    if (!supabase) {
+      setAuthReady(true);
+      return () => { active = false; };
+    }
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === 'SIGNED_OUT' || !session) {
+        setGuestIdentity();
+        setAuthReady(true);
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        setAuthenticatedIdentity(session.user);
+        setAuthReady(true);
+      }
+    });
+
+    void (async () => {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (!active) return;
+        if (sessionError || !sessionData.session) {
+          setGuestIdentity();
+          setAuthReady(true);
+          return;
+        }
+        const { data, error } = await supabase.auth.getUser();
+        if (!active) return;
+        if (error || !data.user || data.user.id !== sessionData.session.user.id) {
+          console.warn('Kenz session could not be verified; cloud sync remains disabled.', error?.message);
+          await supabase.auth.signOut({ scope: 'local' });
+          if (!active) return;
+          setGuestIdentity();
+          setAuthReady(true);
+          return;
+        }
+        setAuthenticatedIdentity(data.user);
+        setAuthReady(true);
+      } catch (error) {
+        if (!active) return;
+        console.error('Unable to restore Kenz auth session:', error);
+        setGuestIdentity();
+        setAuthReady(true);
+      }
+    })();
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   // One hydration pipeline per authenticated identity. Both fresh login and
   // restored sessions reach this effect; no duplicate fetch/replay path exists.
   useEffect(() => {
+    if (!authReady) return;
     const userId = currentUser.id;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) return;
 
@@ -216,10 +274,11 @@ export default function App() {
 
     void hydrate().catch((error) => console.error('Kenz account hydration failed:', error));
     return () => { active = false; };
-  }, [currentUser.id]);
+  }, [currentUser.id, authReady]);
 
   // Load and replay the append-only savings challenge ledger for this account.
   useEffect(() => {
+    if (!authReady) return;
     let active = true;
     const userId = currentUser.id;
     setChallengeContributions(loadSavingsChallengeContributions(userId));
@@ -248,7 +307,7 @@ export default function App() {
   // Keep Kredy views fresh on other devices. Pending local outboxes are never replayed
   // from realtime callbacks, preventing sync-event loops and stale local overwrites.
   useEffect(() => {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
+    if (!authReady || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
     const supabase = getSupabaseClient();
     if (!supabase) return;
     const channel = supabase
@@ -289,6 +348,7 @@ export default function App() {
 
   // Refresh all cloud-backed financial domains when another device commits a change.
   useEffect(() => {
+    if (!authReady) return;
     const userId = currentUser.id;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) return;
     const supabase = getSupabaseClient();
@@ -363,7 +423,7 @@ export default function App() {
 
   // Replay durable per-user outboxes when connectivity returns while the app remains open.
   useEffect(() => {
-    if (typeof window === 'undefined' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
+    if (!authReady || typeof window === 'undefined' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(currentUser.id)) return;
     const retryCloudWrites = () => {
       void flushPendingBudgetSync(currentUser.id);
       saveBudgetState(budgetState);
@@ -374,7 +434,7 @@ export default function App() {
     };
     window.addEventListener('online', retryCloudWrites);
     return () => window.removeEventListener('online', retryCloudWrites);
-  }, [currentUser.id, budgetState, debts, zakatState, festiveBudgets]);
+  }, [currentUser.id, authReady, budgetState, debts, zakatState, festiveBudgets]);
 
   // Recalculate Safe-To-Spend deterministically
   const safeToSpend = useMemo(() => {
@@ -900,6 +960,7 @@ export default function App() {
           // The currentUser effect owns all account hydration for both login
           // and restored sessions, preventing duplicate Supabase requests.
           setCurrentUser(u);
+          setAuthReady(true);
           setActiveTab('profile');
         }}
       />
