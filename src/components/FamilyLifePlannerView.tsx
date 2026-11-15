@@ -310,7 +310,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   };
 
   return (
-    <section className="kenz-family-planner space-y-4" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
+    <section className="kenz-family-planner space-y-4" data-kenz-no-auto-translate dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
       <header className="kenz-family-hero">
         <div className="kenz-family-hero-icon"><Users /></div>
         <div className="min-w-0 flex-1">
