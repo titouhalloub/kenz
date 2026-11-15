@@ -113,8 +113,30 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
 
   const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
   const recipeMap = useMemo(() => new Map<string, FamilyRecipe>(recipes.map((recipe) => [recipe.id, recipe] as const)), [recipes]);
-  const requirements = useMemo(() => buildShoppingRequirements(plan), [plan]);
-  const priceSlugs = useMemo(() => [...new Set(requirements.map((row) => row.productId).filter((slug): slug is string => !!slug))], [requirements]);
+  // Build the full shopping list only when its tab is opened. The meals view
+  // needs prices for its own recipes, not a pantry reconciliation across every
+  // shopping line; doing both on initial mount caused avoidable main-thread work.
+  const requirements = useMemo(
+    () => section === 'shopping' ? buildShoppingRequirements(plan) : [],
+    [plan, section],
+  );
+  const mealPriceSlugs = useMemo(() => {
+    const slugs = new Set<string>();
+    for (const meal of plan.meals) {
+      const recipe = recipeMap.get(meal.recipeId);
+      if (!recipe) continue;
+      for (const ingredient of recipe.ingredients) {
+        const quantity = scaleIngredient(ingredient.quantityMilli, recipe.baseServings, meal.servings);
+        const resolved = resolveIngredient(ingredient.name, ingredient.unit, quantity, ingredient.productId);
+        if (resolved.status === 'mapped') slugs.add(resolved.productId);
+      }
+    }
+    return [...slugs];
+  }, [plan.meals, recipeMap]);
+  const priceSlugs = useMemo(
+    () => [...new Set([...mealPriceSlugs, ...(section === 'shopping' ? requirements.map((row) => row.productId).filter((slug): slug is string => !!slug) : [])])],
+    [mealPriceSlugs, requirements, section],
+  );
   useEffect(() => {
     let active = true;
     if (profile.preferredCurrency !== 'DZD') {
@@ -380,7 +402,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   const recipeDescription = (recipe: FamilyRecipe) => profile.locale === 'ar' ? recipe.description : recipeCopy[recipe.id]?.[profile.locale === 'fr' ? 'descriptionFr' : 'descriptionEn'] || recipe.description;
 
   return (
-    <section className="kenz-family-living space-y-4" dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
+    <section className="kenz-family-living space-y-4" data-kenz-no-auto-translate dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
       <header className="kenz-family-hero">
         <div className="kenz-family-hero-icon"><ChefHat /></div>
         <div className="min-w-0 flex-1">
