@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { translateKenzDOM, translateKenzNode } from './domain/i18n';
 import {
   LayoutDashboard,
@@ -140,7 +141,7 @@ export default function App() {
           : cached.id,
       });
     };
-    const setAuthenticatedIdentity = (authUser: NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']>) => {
+    const setAuthenticatedIdentity = (authUser: SupabaseAuthUser) => {
       setCurrentUser({
         id: authUser.id,
         email: authUser.email || '',
@@ -875,6 +876,7 @@ export default function App() {
             user={currentUser}
             onUpdateUser={(updated) => setCurrentUser(updated)}
             onLogout={() => {
+              setAuthReady(false);
               logoutUser();
               // Reset the identity so signing back into the same account
               // retriggers the single account-hydration effect.
