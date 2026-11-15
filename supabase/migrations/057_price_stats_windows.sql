@@ -110,9 +110,10 @@ begin
   if p_observed_at is null or p_observed_at < now() - make_interval(days => v_extended) or p_observed_at > now() + interval '1 day' then
     raise exception 'Observation date must be within the last % days', v_extended;
   end if;
-  if p_wilaya_code is null or p_wilaya_code !~ '^(0[1-9]|[1-5][0-9]|6[0-9])
+  if p_wilaya_code is null or p_wilaya_code !~ '^(0[1-9]|[1-5][0-9]|6[0-9])$' then
     raise exception 'Valid wilaya code is required';
   end if;
+  if p_unit_price_minor < 100 then v_flags := array_append(v_flags, 'implausibly_low_price'); end if;
   if p_evidence_url is not null and (p_evidence_url !~ '^https://' or char_length(p_evidence_url) > 500) then
     raise exception 'Evidence must be an https link of at most 500 characters';
   end if;
@@ -203,9 +204,10 @@ begin
   if p_observed_at is null or p_observed_at > now() + interval '1 day' then raise exception 'Invalid observation date'; end if;
   if p_observed_at < now() - make_interval(days => v_fresh) then v_flags := array_append(v_flags,'older_than_fresh_window'); end if;
   if p_observed_at < now() - make_interval(days => v_extended) then v_flags := array_append(v_flags,'older_than_extended_window'); end if;
-  if p_wilaya_code is not null and p_wilaya_code !~ '^(0[1-9]|[1-5][0-9]|6[0-9])
+  if p_wilaya_code is not null and p_wilaya_code !~ '^(0[1-9]|[1-5][0-9]|6[0-9])$' then
     raise exception 'Invalid wilaya code';
   end if;
+  if p_unit_price_minor < 100 then v_flags := array_append(v_flags, 'implausibly_low_price'); end if;
   if char_length(trim(coalesce(p_source_reference,''))) not between 3 and 500 then
     raise exception 'A source reference (bulletin, URL or document) is required';
   end if;
