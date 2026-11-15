@@ -4,7 +4,7 @@ import { FamilyLivingPlannerView } from './FamilyLivingPlannerView';
 import type { Category, RecurringItem, Transaction, UserProfile } from '../domain/types';
 import { formatMoney } from '../domain/financialCalculations';
 import { PRODUCT_CATALOG, productName } from '../domain/productCatalog';
-import { isVerifiedMarketPrice, simulateMonthlyBudget } from '../domain/simulator';
+import { isVerifiedMarketPrice, simulateMonthlyBudget, type SimulatorPrice } from '../domain/simulator';
 import { STARTER_BASKET, toMilliUnits } from '../domain/starterBasket';
 import { loadMarketPrices } from '../services/priceStore';
 import {
@@ -81,7 +81,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
   const [mealPlanCostMinor, setMealPlanCostMinor] = useState(0);
   const [mealPlanCostComplete, setMealPlanCostComplete] = useState(true);
-  const [foodSimulation, setFoodSimulation] = useState<{ amountMinor: number; complete: boolean; pricedProducts: number; totalProducts: number } | null>(null);
+  const [marketPrices, setMarketPrices] = useState<Record<string, SimulatorPrice>>({});
   const [priceLoadStatus, setPriceLoadStatus] = useState<'loading' | 'live' | 'cache' | 'unavailable'>('loading');
   const handleFoodPlanCostChange = useCallback((amountMinor: number, complete: boolean) => {
     setMealPlanCostMinor(Number.isSafeInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0);
@@ -169,11 +169,11 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     actualByCategory,
   ), [plan, monthlyIncomeMinor, actualByCategory, recurringPlannedByCategory]);
 
-  // Reuse the simulator's published-price engine automatically; no manual basket is required.
+  // Load published market prices once; household and income changes only rerun the local calculation.
   useEffect(() => {
     let active = true;
     if (profile.preferredCurrency !== 'DZD') {
-      setFoodSimulation(null);
+      setMarketPrices({});
       setPriceLoadStatus('unavailable');
       return () => { active = false; };
     }
@@ -181,41 +181,45 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     const slugs = STARTER_BASKET.map((row) => row.slug);
     loadMarketPrices(slugs).then((loaded) => {
       if (!active) return;
+      setMarketPrices(loaded.pricesBySlug);
       setPriceLoadStatus(loaded.source === 'live' ? 'live' : loaded.source === 'cache' ? 'cache' : 'unavailable');
-      const items = STARTER_BASKET.flatMap((row) => {
-        const product = PRODUCT_CATALOG.find((candidate) => candidate.slug === row.slug);
-        if (!product) return [];
-        const price = loaded.pricesBySlug[row.slug];
-        return [{
-          productId: product.slug,
-          name: productName(product, profile.locale),
-          category: product.category,
-          baseUnit: product.baseUnit,
-          ...(product.substituteGroup ? { substituteGroup: product.substituteGroup } : {}),
-          quantityPerPersonPerDayMilliUnits: toMilliUnits(product.baseUnit, row.perDay),
-          ...(isVerifiedMarketPrice(price) ? { price } : {}),
-        }];
-      });
-      const result = simulateMonthlyBudget({
-        month: selectedMonth,
-        household: { adults: Math.max(1, plan.adults), children: plan.children },
-        availableBudgetMinor: monthlyIncomeMinor,
-        items,
-      });
-      setFoodSimulation({
-        amountMinor: result.pricedSubtotal.expectedMinor,
-        complete: result.complete,
-        pricedProducts: result.dataQuality.pricedProducts,
-        totalProducts: items.length,
-      });
     }).catch(() => {
-      if (active) {
-        setPriceLoadStatus('unavailable');
-        setFoodSimulation({ amountMinor: 0, complete: false, pricedProducts: 0, totalProducts: slugs.length });
-      }
+      if (!active) return;
+      setMarketPrices({});
+      setPriceLoadStatus('unavailable');
     });
     return () => { active = false; };
-  }, [selectedMonth, plan.adults, plan.children, monthlyIncomeMinor, profile.preferredCurrency, profile.locale]);
+  }, [profile.preferredCurrency]);
+
+  const foodSimulation = useMemo(() => {
+    if (profile.preferredCurrency !== 'DZD' || priceLoadStatus === 'loading') return null;
+    const items = STARTER_BASKET.flatMap((row) => {
+      const product = PRODUCT_CATALOG.find((candidate) => candidate.slug === row.slug);
+      if (!product) return [];
+      const price = marketPrices[row.slug];
+      return [{
+        productId: product.slug,
+        name: productName(product, profile.locale),
+        category: product.category,
+        baseUnit: product.baseUnit,
+        ...(product.substituteGroup ? { substituteGroup: product.substituteGroup } : {}),
+        quantityPerPersonPerDayMilliUnits: toMilliUnits(product.baseUnit, row.perDay),
+        ...(isVerifiedMarketPrice(price) ? { price } : {}),
+      }];
+    });
+    const result = simulateMonthlyBudget({
+      month: selectedMonth,
+      household: { adults: Math.max(1, plan.adults), children: plan.children },
+      availableBudgetMinor: monthlyIncomeMinor,
+      items,
+    });
+    return {
+      amountMinor: result.pricedSubtotal.expectedMinor,
+      complete: result.complete,
+      pricedProducts: result.dataQuality.pricedProducts,
+      totalProducts: items.length,
+    };
+  }, [selectedMonth, plan.adults, plan.children, monthlyIncomeMinor, profile.preferredCurrency, profile.locale, marketPrices, priceLoadStatus]);
 
   // Verified market prices always contribute to the food envelope. Partial baskets are
   // shown as a lower bound in the UI, never presented as a complete total.
