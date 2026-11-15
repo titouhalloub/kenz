@@ -18,10 +18,11 @@ describe('family living planner', () => {
       { id: 'm2', date: '2026-11-02', slot: 'dinner', recipeId: 'dz-tomato-pasta', servings: 2 },
     ];
     plan.pantry = [{ id: 'p1', name: 'طماطم', unit: 'piece', quantityMilli: 3000 }];
-    const tomato = buildShoppingRequirements(plan).find((row) => row.key === ingredientKey('طماطم', 'piece'));
-    expect(tomato?.requiredMilli).toBe(6000);
-    expect(tomato?.inPantryMilli).toBe(3000);
-    expect(tomato?.toBuyMilli).toBe(3000);
+    const tomato = buildShoppingRequirements(plan).find((row) => row.productId === 'tomate');
+    // 6 pieces × 120 g average = 720 g; 3 pieces in the pantry = 360 g.
+    expect(tomato?.requiredMilli).toBe(720000);
+    expect(tomato?.inPantryMilli).toBe(360000);
+    expect(tomato?.toBuyMilli).toBe(360000);
   });
 
   it('does not produce negative shopping quantities when stock exceeds need', () => {
@@ -40,11 +41,14 @@ describe('family living planner', () => {
       { id: 's2', name: 'lessive', unit: 'ml', quantityMilli: 2000, category: 'cleaning' },
     ];
     plan.pantry = [{ id: 'p1', name: 'طماطم', unit: 'piece', quantityMilli: 3000 }];
-    const tomato = buildShoppingRequirements(plan).find((row) => row.key === ingredientKey('طماطم', 'piece'));
+    const tomato = buildShoppingRequirements(plan).find((row) => row.productId === 'tomate');
     const detergent = buildShoppingRequirements(plan).find((row) => row.name === 'lessive');
-    expect(tomato?.requiredMilli).toBe(5000);
-    expect(tomato?.toBuyMilli).toBe(2000);
+    // 4 recipe pieces + 1 extra piece = 5 × 120 g; pantry 3 pieces = 360 g.
+    expect(tomato?.requiredMilli).toBe(600000);
+    expect(tomato?.toBuyMilli).toBe(240000);
+    // "lessive" is ambiguous (powder vs liquid): kept as an UNPRICED line, quantity preserved.
     expect(detergent?.toBuyMilli).toBe(2000);
+    expect(detergent?.priced).toBe(false);
   });
 
   it('matches common grocery names across Arabic and French', () => {

@@ -1,8 +1,12 @@
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
-export type IngredientUnit = 'g' | 'ml' | 'piece';
+import { getCatalogProduct, type BaseUnit } from './productCatalog';
+import { resolveIngredient, resolveProduct, convertToCanonical, canonicalToBaseMilli, type IngredientUnit, type UnpricedReason } from './ingredientMapping';
+export type { IngredientUnit, UnpricedReason } from './ingredientMapping';
 
 export interface RecipeIngredient {
   name: string;
+  /** Author-asserted catalog product slug. Absent when the ingredient has no reliable catalog match (it then stays UNPRICED). */
+  productId?: string;
   quantityMilli: number;
   unit: IngredientUnit;
 }
@@ -75,10 +79,24 @@ export interface FamilyLivingPlan {
 export interface ShoppingRequirement {
   key: string;
   name: string;
+  /** Display unit. Mapped rows use the product's canonical unit (g / ml / piece). */
   unit: IngredientUnit;
   requiredMilli: number;
   inPantryMilli: number;
   toBuyMilli: number;
+  /** Catalog product this row maps to. Absent = UNPRICED. */
+  productId?: string;
+  /** Catalog base unit (kg / l / unit) the future price lookup uses. Present only when mapped. */
+  baseUnit?: BaseUnit;
+  /** Quantities in the catalog base unit, milli-units (g = milli-kg). Present only when mapped. */
+  requiredBaseMilli?: number;
+  toBuyBaseMilli?: number;
+  /** True when a declared average piece weight was used for some quantity. */
+  approximate?: boolean;
+  priced: boolean;
+  unpricedReason?: UnpricedReason;
+  /** Catalog products the user could choose from when the name is ambiguous. */
+  candidates?: string[];
 }
 
 export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
@@ -86,9 +104,9 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-lentil-soup', imageUrl: 'https://images.rawpixel.com/image_social_landscape/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI1LTA0L3NyLWltYWdlLTA4MDQyNS1rbmEwNy1zLTI3NV8xLmpwZw.jpg', title: 'شوربة العدس', description: 'شوربة دافئة واقتصادية للغداء أو العشاء',
     baseServings: 4, prepMinutes: 35, origin: 'builtin',
     ingredients: [
-      { name: 'عدس', quantityMilli: 300000, unit: 'g' }, { name: 'بصل', quantityMilli: 2000, unit: 'piece' },
-      { name: 'جزر', quantityMilli: 2000, unit: 'piece' }, { name: 'ثوم', quantityMilli: 2000, unit: 'piece' },
-      { name: 'زيت', quantityMilli: 30000, unit: 'ml' }, { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
+      { name: 'عدس', productId: 'lentilles', quantityMilli: 300000, unit: 'g' }, { name: 'بصل', productId: 'oignon', quantityMilli: 2000, unit: 'piece' },
+      { name: 'جزر', productId: 'carotte', quantityMilli: 2000, unit: 'piece' }, { name: 'ثوم', productId: 'ail', quantityMilli: 2000, unit: 'piece' },
+      { name: 'زيت', productId: 'huile-table', quantityMilli: 30000, unit: 'ml' }, { name: 'طماطم', productId: 'tomate', quantityMilli: 2000, unit: 'piece' },
     ],
     steps: ['اغسل العدس وقطّع الخضروات.', 'شوّح البصل والجزر والثوم بقليل من الزيت.', 'أضف العدس والطماطم والماء والتوابل واتركه حتى ينضج.', 'اخلط جزءاً من الشوربة إذا رغبت وقدّمها ساخنة.'],
   },
@@ -96,10 +114,10 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-couscous-vegetables', imageUrl: 'https://comerbeber.com/archivos/imagen/2023/02/cocina-aregelina-as_353624679_1200.jpg', title: 'كسكس بالخضار', description: 'طبق عائلي بالخضروات الموسمية',
     baseServings: 4, prepMinutes: 60, origin: 'builtin',
     ingredients: [
-      { name: 'كسكس', quantityMilli: 500000, unit: 'g' }, { name: 'جزر', quantityMilli: 3000, unit: 'piece' },
-      { name: 'لفت', quantityMilli: 2000, unit: 'piece' }, { name: 'كوسة', quantityMilli: 2000, unit: 'piece' },
-      { name: 'حمص', quantityMilli: 150000, unit: 'g' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
-      { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
+      { name: 'كسكس', productId: 'couscous', quantityMilli: 500000, unit: 'g' }, { name: 'جزر', productId: 'carotte', quantityMilli: 3000, unit: 'piece' },
+      { name: 'لفت', productId: 'navet', quantityMilli: 2000, unit: 'piece' }, { name: 'كوسة', productId: 'courgette', quantityMilli: 2000, unit: 'piece' },
+      { name: 'حمص', productId: 'pois-chiches', quantityMilli: 150000, unit: 'g' }, { name: 'بصل', productId: 'oignon', quantityMilli: 1000, unit: 'piece' },
+      { name: 'طماطم', productId: 'tomate', quantityMilli: 2000, unit: 'piece' },
     ],
     steps: ['حضّر مرق الخضار والحمص حتى يقترب من النضج.', 'فَوّر الكسكس حسب تعليمات العبوة.', 'أضف الكوسة واترك الخضار حتى تنضج.', 'قدّم الكسكس مع المرق والخضار.'],
   },
@@ -107,8 +125,8 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-omelette', imageUrl: 'https://images.rawpixel.com/image_social_landscape/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDI1LTA0L3NyLWltYWdlLTA4MDQyNS1rbmEwNy1zLTI3NV8xLmpwZw.jpg', title: 'عجة البيض بالخضار', description: 'وجبة سريعة للفطور أو العشاء',
     baseServings: 2, prepMinutes: 15, origin: 'builtin',
     ingredients: [
-      { name: 'بيض', quantityMilli: 4000, unit: 'piece' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
-      { name: 'طماطم', quantityMilli: 1000, unit: 'piece' }, { name: 'زيت', quantityMilli: 15000, unit: 'ml' },
+      { name: 'بيض', productId: 'oeufs', quantityMilli: 4000, unit: 'piece' }, { name: 'بصل', productId: 'oignon', quantityMilli: 1000, unit: 'piece' },
+      { name: 'طماطم', productId: 'tomate', quantityMilli: 1000, unit: 'piece' }, { name: 'زيت', productId: 'huile-table', quantityMilli: 15000, unit: 'ml' },
     ],
     steps: ['قطّع البصل والطماطم.', 'اطههما قليلاً في مقلاة.', 'أضف البيض المخفوق واتركه حتى ينضج.'],
   },
@@ -116,9 +134,9 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-tomato-pasta', imageUrl: 'https://comerbeber.com/archivos/imagen/2023/02/cocina-aregelina-as_353624679_1200.jpg', title: 'معكرونة بصلصة الطماطم', description: 'طبق بسيط بمكونات متوفرة غالباً',
     baseServings: 4, prepMinutes: 25, origin: 'builtin',
     ingredients: [
-      { name: 'معكرونة', quantityMilli: 400000, unit: 'g' }, { name: 'طماطم', quantityMilli: 4000, unit: 'piece' },
-      { name: 'ثوم', quantityMilli: 2000, unit: 'piece' }, { name: 'زيت', quantityMilli: 30000, unit: 'ml' },
-      { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
+      { name: 'معكرونة', productId: 'pates-spaghetti', quantityMilli: 400000, unit: 'g' }, { name: 'طماطم', productId: 'tomate', quantityMilli: 4000, unit: 'piece' },
+      { name: 'ثوم', productId: 'ail', quantityMilli: 2000, unit: 'piece' }, { name: 'زيت', productId: 'huile-table', quantityMilli: 30000, unit: 'ml' },
+      { name: 'بصل', productId: 'oignon', quantityMilli: 1000, unit: 'piece' },
     ],
     steps: ['اسلق المعكرونة في الماء.', 'حضّر صلصة الطماطم مع البصل والثوم والزيت.', 'اخلط المعكرونة مع الصلصة وقدّمها.'],
   },
@@ -126,9 +144,9 @@ export const BUILTIN_FAMILY_RECIPES: FamilyRecipe[] = [
     id: 'dz-chickpea-salad', imageUrl: 'https://res.cloudinary.com/hv9ssmzrz/image/fetch/c_fill%2Cf_auto%2Ch_844%2Cq_auto%3Aeco%2Cw_1500/https%3A/s3-eu-west-1.amazonaws.com/images-ca-1-0-1-eu/recipe_photos/original/205483/open-uri20210102-52-2ua12m', title: 'سلطة الحمص', description: 'وجبة خفيفة ومشبعة ويمكن تحضيرها مسبقاً',
     baseServings: 3, prepMinutes: 15, origin: 'builtin',
     ingredients: [
-      { name: 'حمص مطبوخ', quantityMilli: 300000, unit: 'g' }, { name: 'طماطم', quantityMilli: 2000, unit: 'piece' },
-      { name: 'خيار', quantityMilli: 1000, unit: 'piece' }, { name: 'بصل', quantityMilli: 1000, unit: 'piece' },
-      { name: 'زيت', quantityMilli: 20000, unit: 'ml' },
+      { name: 'حمص مطبوخ', quantityMilli: 300000, unit: 'g' }, { name: 'طماطم', productId: 'tomate', quantityMilli: 2000, unit: 'piece' },
+      { name: 'خيار', productId: 'concombre', quantityMilli: 1000, unit: 'piece' }, { name: 'بصل', productId: 'oignon', quantityMilli: 1000, unit: 'piece' },
+      { name: 'زيت', productId: 'huile-table', quantityMilli: 20000, unit: 'ml' },
     ],
     steps: ['قطّع الخضروات إلى مكعبات صغيرة.', 'أضف الحمص المطبوخ.', 'تبّل بالزيت والملح والليمون حسب الرغبة.'],
   },
@@ -178,37 +196,97 @@ export function scaleIngredient(quantityMilli: number, baseServings: number, ser
   return scaled;
 }
 
+interface RequirementDraft {
+  row: ShoppingRequirement;
+  /** Legacy name+unit keys of everything merged into this row (used for pantry matching on unmapped rows). */
+  legacyKeys: Set<string>;
+}
+
+/**
+ * Aggregates the month's meals and extras into one shopping list.
+ * Each line goes through the ingredient mapping layer: mapped lines are merged by
+ * catalog product (summed in the product's exact canonical unit, converted to the base
+ * unit once at the end); anything unmapped / ambiguous / not convertible stays a separate
+ * UNPRICED line keyed by name + unit. Pantry stock is deducted only through a valid
+ * conversion.
+ */
 export function buildShoppingRequirements(plan: FamilyLivingPlan): ShoppingRequirement[] {
   const recipes = new Map<string, FamilyRecipe>([...BUILTIN_FAMILY_RECIPES, ...plan.recipes].map((recipe) => [recipe.id, recipe] as const));
-  const totals = new Map<string, ShoppingRequirement>();
+  const drafts = new Map<string, RequirementDraft>();
+
+  const addLine = (name: string, unit: IngredientUnit, quantityMilli: number, productId?: string) => {
+    const resolved = resolveIngredient(name, unit, quantityMilli, productId);
+    const legacyKey = ingredientKey(name, unit);
+    if (resolved.status === 'mapped') {
+      const key = 'product::' + resolved.productId;
+      const existing = drafts.get(key);
+      if (existing) {
+        existing.row.requiredMilli += resolved.canonicalMilli;
+        if (!Number.isSafeInteger(existing.row.requiredMilli)) throw new RangeError('Combined shopping quantity is too large.');
+        existing.row.approximate = existing.row.approximate || resolved.approximate;
+        existing.legacyKeys.add(legacyKey);
+      } else {
+        const product = getCatalogProduct(resolved.productId)!;
+        drafts.set(key, {
+          legacyKeys: new Set([legacyKey]),
+          row: {
+            key, name, unit: resolved.canonicalUnit, requiredMilli: resolved.canonicalMilli,
+            inPantryMilli: 0, toBuyMilli: resolved.canonicalMilli, productId: resolved.productId, baseUnit: resolved.baseUnit,
+            approximate: resolved.approximate, priced: true,
+          },
+        });
+      }
+      return;
+    }
+    const key = legacyKey;
+    const existing = drafts.get(key);
+    if (existing) {
+      existing.row.requiredMilli += quantityMilli;
+      if (!Number.isSafeInteger(existing.row.requiredMilli)) throw new RangeError('Combined shopping quantity is too large.');
+    } else {
+      drafts.set(key, {
+        legacyKeys: new Set([legacyKey]),
+        row: {
+          key, name, unit, requiredMilli: quantityMilli, inPantryMilli: 0, toBuyMilli: quantityMilli,
+          priced: false, unpricedReason: resolved.reason, ...(resolved.candidates ? { candidates: resolved.candidates } : {}),
+        },
+      });
+    }
+  };
+
   for (const meal of plan.meals) {
     const recipe = recipes.get(meal.recipeId);
     if (!recipe) continue;
     for (const ingredient of recipe.ingredients) {
-      const key = ingredientKey(ingredient.name, ingredient.unit);
-      const quantity = scaleIngredient(ingredient.quantityMilli, recipe.baseServings, meal.servings);
-      const current = totals.get(key);
-      if (current) {
-        current.requiredMilli += quantity;
-        if (!Number.isSafeInteger(current.requiredMilli)) throw new RangeError('Combined shopping quantity is too large.');
-      }
-      else totals.set(key, { key, name: ingredient.name, unit: ingredient.unit, requiredMilli: quantity, inPantryMilli: 0, toBuyMilli: quantity });
+      addLine(ingredient.name, ingredient.unit, scaleIngredient(ingredient.quantityMilli, recipe.baseServings, meal.servings), ingredient.productId);
     }
   }
-  for (const extra of plan.shoppingExtras || []) {
-    const key = ingredientKey(extra.name, extra.unit);
-    const current = totals.get(key);
-    if (current) {
-      current.requiredMilli += extra.quantityMilli;
-      if (!Number.isSafeInteger(current.requiredMilli)) throw new RangeError('Combined shopping quantity is too large.');
-    } else totals.set(key, { key, name: extra.name, unit: extra.unit, requiredMilli: extra.quantityMilli, inPantryMilli: 0, toBuyMilli: extra.quantityMilli });
-  }
-  for (const row of totals.values()) {
-    const stock = plan.pantry.find((item) => ingredientKey(item.name, item.unit) === row.key)?.quantityMilli ?? 0;
+  for (const extra of plan.shoppingExtras || []) addLine(extra.name, extra.unit, extra.quantityMilli);
+
+  for (const { row, legacyKeys } of drafts.values()) {
+    let stock = 0;
+    for (const item of plan.pantry) {
+      if (row.productId) {
+        const product = getCatalogProduct(row.productId)!;
+        // Pantry stock counts when its name maps to the same product, or when it is literally
+        // the same name+unit that fed this row (e.g. a bare "زيت" the recipe author mapped).
+        const pantryProduct = resolveProduct(item.name);
+        const sameProduct = pantryProduct.status === 'mapped' && pantryProduct.productId === row.productId;
+        if (!sameProduct && !legacyKeys.has(ingredientKey(item.name, item.unit))) continue;
+        const converted = convertToCanonical(product, item.unit, item.quantityMilli);
+        if (converted.ok && converted.canonicalUnit === row.unit) stock += converted.canonicalMilli;
+      } else if (legacyKeys.has(ingredientKey(item.name, item.unit))) {
+        stock += item.quantityMilli;
+      }
+    }
     row.inPantryMilli = stock;
     row.toBuyMilli = Math.max(0, row.requiredMilli - stock);
+    if (row.productId && row.baseUnit) {
+      row.requiredBaseMilli = canonicalToBaseMilli(row.baseUnit, row.requiredMilli);
+      row.toBuyBaseMilli = canonicalToBaseMilli(row.baseUnit, row.toBuyMilli);
+    }
   }
-  return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [...drafts.values()].map((draft) => draft.row).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function validateFamilyLivingPlan(value: unknown, userId: string, month: string): FamilyLivingPlan | null {
@@ -245,7 +323,8 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     Number.isInteger(recipe.prepMinutes) && recipe.prepMinutes >= 0 && recipe.prepMinutes <= 600 &&
     Array.isArray(recipe.ingredients) && recipe.ingredients.length >= 1 && recipe.ingredients.length <= 100 &&
     recipe.ingredients.every((ingredient) => ingredient && validText(ingredient.name, 80) &&
-      validUnit(ingredient.unit) && validRecipeQuantity(ingredient.quantityMilli)) &&
+      validUnit(ingredient.unit) && validRecipeQuantity(ingredient.quantityMilli) &&
+      (ingredient.productId === undefined || validText(ingredient.productId, 80))) &&
     Array.isArray(recipe.steps) && recipe.steps.length >= 1 && recipe.steps.length <= 30 &&
     recipe.steps.every((step) => validText(step, 500)) &&
     (recipe.origin === 'community' || recipe.origin === 'builtin'));
@@ -366,7 +445,12 @@ export function parseCommunityRecipe(value: unknown, id: string): FamilyRecipe |
   return {
     id, title: candidate.title.trim(), description: candidate.description.trim(),
     baseServings: candidate.baseServings!, prepMinutes: candidate.prepMinutes!,
-    ingredients: candidate.ingredients.map((item) => ({ name: item.name.trim(), quantityMilli: item.quantityMilli, unit: item.unit })),
+    // An imported productId is trusted only if it is a real catalog product; otherwise it is dropped
+    // and the ingredient falls back to exact-name matching (or stays UNPRICED).
+    ingredients: candidate.ingredients.map((item) => ({
+      name: item.name.trim(), quantityMilli: item.quantityMilli, unit: item.unit,
+      ...(typeof item.productId === 'string' && getCatalogProduct(item.productId) ? { productId: item.productId } : {}),
+    })),
     steps: candidate.steps.map((step) => step.trim()), origin: 'community',
     ...(candidate.author && validText(candidate.author, 80) ? { author: candidate.author.trim() } : {}),
   };
