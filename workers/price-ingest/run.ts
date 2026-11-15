@@ -107,17 +107,20 @@ async function main() {
 
       try {
         // Unit consistency: the scraped unit must match the catalog base unit stored in the database.
-        const candidates = freshScraped.flatMap((row) => {
+        const unitMismatchRows = freshScraped.filter((row) => {
           const product = productBySlug.get(row.productSlug);
-          if (!product || product.base_unit !== row.normalized.baseUnit) return [];
-          return [{
-            productSlug: row.productSlug,
-            unitPriceMinor: row.normalized.unitPriceMinor,
-            observedAt: row.normalized.observedAt,
-            wilayaCode: row.normalized.wilayaCode || null,
-            sourceReference: row.sourceReference,
-          }];
+          return !product || product.base_unit !== row.normalized.baseUnit;
         });
+        const candidates = freshScraped.filter((row) => {
+          const product = productBySlug.get(row.productSlug);
+          return Boolean(product && product.base_unit === row.normalized.baseUnit);
+        }).map((row) => ({
+          productSlug: row.productSlug,
+          unitPriceMinor: row.normalized.unitPriceMinor,
+          observedAt: row.normalized.observedAt,
+          wilayaCode: row.normalized.wilayaCode || null,
+          sourceReference: row.sourceReference,
+        }));
 
         // Same validation + staging as admin imports: everything lands as `pending`.
         const report = await stageCandidates(supabase!, {
@@ -127,18 +130,29 @@ async function main() {
           candidates,
         });
         const observations = { length: report.staged + report.duplicatesIgnored };
-        if (report.rejected.length > 0) console.warn(`${source.slug}: ${report.rejected.length} rows failed validation and were not staged.`);
+        const rejectedCount = report.rejected.length + unitMismatchRows.length;
+        const rejectionSummary = [
+          ...report.rejected.slice(0, 5).map((row) => `${row.productSlug}: ${row.errors.join(', ')}`),
+          ...unitMismatchRows.slice(0, 5).map((row) => `${row.productSlug}: unit_mismatch`),
+        ].join('; ');
+        if (rejectedCount > 0) {
+          console.warn(`${source.slug}: ${rejectedCount} rows failed validation and were not staged.`);
+        }
 
         const { error: finishError } = await supabase!.from('ingest_runs').update({
           finished_at: new Date().toISOString(),
           rows_fetched: scraped.length,
           rows_parsed: freshScraped.length,
           rows_accepted: 0,
-          error_count: 0,
+          error_count: rejectedCount,
           status: 'succeeded',
-          error_summary: observations.length === 0
-            ? (staleRows > 0 ? `All ${staleRows} matched rows were outside the ${extendedDays}-day window.` : 'No fresh product rows matched the curated catalog; nothing was published.')
-            : (staleRows > 0 ? `${staleRows} stale rows were excluded.` : null),
+          error_summary: [
+            rejectedCount > 0 ? `${rejectedCount} rejected row(s): ${rejectionSummary}` : null,
+            staleRows > 0 ? `${staleRows} stale rows were excluded.` : null,
+            observations.length === 0 && rejectedCount === 0
+              ? 'No fresh product rows matched the curated catalog; nothing was published.'
+              : null,
+          ].filter(Boolean).join(' | ') || null,
         }).eq('id', run.id);
         if (finishError) throw new Error(`Cannot finish ingest run: ${finishError.message}`);
         console.log(`${source.slug}: staged ${observations.length} fresh observations; excluded ${staleRows} stale rows (run ${run.id}).`);
