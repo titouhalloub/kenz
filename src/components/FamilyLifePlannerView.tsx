@@ -227,7 +227,9 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     if (plan.allocationMode !== 'automatic') return effectivePlan;
     const recurringFood = recurringPlannedByCategory.get('food') || 0;
     const simulatedFood = foodSimulation?.amountMinor || 0;
-    const plannedMeals = mealPlanCostComplete ? mealPlanCostMinor : 0;
+    // Even with missing ingredient prices, the verified subtotal is a real lower bound.
+    // Keep it in the food envelope instead of silently treating planned meals as zero.
+    const plannedMeals = mealPlanCostMinor;
     const foodEnvelope = Math.max(recurringFood, simulatedFood, plannedMeals);
     return {
       ...effectivePlan,
@@ -325,9 +327,10 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
         <button onClick={() => setActiveSection('living')} className={activeSection === 'living' ? 'active' : ''}>{t(profile, 'Repas & maison', 'الوجبات والمنزل', 'Meals & home')}</button>
       </div>
 
-      {activeSection === 'living' ? (
+      <div className={activeSection === 'living' ? '' : 'hidden'}>
         <FamilyLivingPlannerView profile={profile} month={selectedMonth} householdSize={Math.max(1, plan.adults + plan.children)} onFoodPlanCostChange={handleFoodPlanCostChange} />
-      ) : <>
+      </div>
+      {activeSection === 'budget' && <>
         <div className="kenz-family-panel space-y-3">
           <div className="kenz-section-heading">
             <div><span className="kenz-card-kicker">{t(profile, 'PÉRIODE', 'الفترة', 'PERIOD')}</span><h3>{t(profile, 'Vue financière du foyer', 'الوضع المالي للأسرة', 'Household finances')}</h3></div>
