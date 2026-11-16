@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan,
-  ingredientKey, scaleIngredient, validateFamilyLivingPlan, parseCommunityRecipe, suggestFamilyWeek, suggestFamilyMonth,
+  ingredientKey, scaleIngredient, validateFamilyLivingPlan, parseCommunityRecipe, suggestFamilyWeek, suggestFamilyMonth, regenerateFamilyMonth,
 } from './familyLiving';
 
 describe('family living planner', () => {
@@ -100,6 +100,20 @@ describe('family living planner', () => {
     expect(result.find((meal) => meal.id === 'keep-lunch')).toMatchObject({ servings: 4, recipeId: 'dz-couscous-vegetables' });
     expect(new Set(result.map((meal) => meal.date + '::' + meal.slot)).size).toBe(31 * 3);
     expect(result.filter((meal) => meal.servings === 4)).toHaveLength(31 * 3 - 1);
+  });
+
+  it('regenerates suggested meals for the new household size and preserves manually added meals', () => {
+    const existing = [
+      { id: 'suggested-2026-11-01-breakfast', date: '2026-11-01', slot: 'breakfast' as const, recipeId: 'dz-omelette', servings: 3 },
+      { id: 'suggested-2026-11-01-lunch', date: '2026-11-01', slot: 'lunch' as const, recipeId: 'dz-tomato-pasta', servings: 3 },
+      { id: 'manual-dinner', date: '2026-11-01', slot: 'dinner' as const, recipeId: 'dz-lentil-soup', servings: 2 },
+    ];
+    const result = regenerateFamilyMonth(existing, '2026-11', 12);
+    expect(result).toHaveLength(30 * 3);
+    expect(result.find((meal) => meal.id === 'manual-dinner')).toMatchObject({ servings: 2, recipeId: 'dz-lentil-soup' });
+    expect(result.filter((meal) => meal.id.startsWith('suggested-'))).toHaveLength(30 * 3 - 1);
+    expect(result.filter((meal) => meal.id.startsWith('suggested-')).every((meal) => meal.servings === 12)).toBe(true);
+    expect(new Set(result.map((meal) => meal.date + '::' + meal.slot)).size).toBe(30 * 3);
   });
 
   it('handles February and rejects invalid monthly planning inputs', () => {
