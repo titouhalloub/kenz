@@ -107,6 +107,70 @@ import { kenzText } from './domain/i18n';
 
 type NavTab = 'home' | 'transactions' | 'reports' | 'plan' | 'nearby' | 'community' | 'channels' | 'simulator' | 'debts' | 'zakat' | 'settings' | 'profile';
 
+type MobileMoreNavigationProps = {
+  locale: string;
+  activeTab: NavTab;
+  onNavigate: (tab: NavTab) => void;
+};
+
+/**
+ * Keep the More sheet's open/close state outside App. Toggling this lightweight
+ * navigation surface must not rerender the dashboard and its data-heavy views.
+ */
+function MobileMoreNavigation({ locale, activeTab, onNavigate }: MobileMoreNavigationProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const isPrimaryTab = (['home', 'reports', 'plan'] as NavTab[]).includes(activeTab);
+  const labels = {
+    home: locale === 'en' ? 'Home' : locale === 'ar' ? 'الرئيسية' : 'Accueil',
+    reports: locale === 'en' ? 'Reports' : locale === 'ar' ? 'التقارير' : 'Rapports',
+    plan: locale === 'en' ? 'Plan' : locale === 'ar' ? 'الخطة' : 'Budgets',
+    more: locale === 'en' ? 'More' : locale === 'ar' ? 'المزيد' : 'Plus',
+  };
+
+  const destinations = [
+    ['transactions', locale === 'en' ? 'Transactions' : locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
+    ['nearby', locale === 'en' ? 'Nearby' : locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
+    ['community', locale === 'en' ? 'Community' : locale === 'ar' ? 'المجتمع' : 'Communauté', MessageCircle],
+    ['simulator', locale === 'en' ? 'Month simulator' : locale === 'ar' ? 'محاكي الشهر' : 'Simulateur du mois', Calculator],
+    ['channels', locale === 'en' ? 'Channels' : locale === 'ar' ? 'القنوات' : 'Chaînes', Video],
+    ['debts', 'Kredy', BookOpen],
+    ['zakat', 'Zakat', Moon],
+    ['settings', locale === 'en' ? 'Settings' : locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],
+    ['profile', locale === 'en' ? 'Profile' : locale === 'ar' ? 'الملف الشخصي' : 'Profil', Sparkles],
+  ] as const;
+
+  const navigate = (tab: NavTab) => {
+    setIsOpen(false);
+    onNavigate(tab);
+  };
+
+  return (
+    <>
+      <nav aria-label="Navigation principale" className="kenz-mobile-nav md:hidden">
+        <div className="kenz-mobile-nav-inner">
+          <button type="button" onClick={() => navigate('home')} className={activeTab === 'home' ? 'kenz-nav-item active' : 'kenz-nav-item'}><LayoutDashboard /><span>{labels.home}</span></button>
+          <button type="button" onClick={() => navigate('reports')} className={activeTab === 'reports' ? 'kenz-nav-item active' : 'kenz-nav-item'}><BarChart3 /><span>{labels.reports}</span></button>
+          <button type="button" onClick={() => navigate('plan')} className={activeTab === 'plan' ? 'kenz-nav-item active' : 'kenz-nav-item'}><CalendarDays /><span>{labels.plan}</span></button>
+          <button type="button" aria-haspopup="dialog" aria-expanded={isOpen} onClick={() => setIsOpen(open => !open)} className={isOpen || !isPrimaryTab ? 'kenz-nav-item active' : 'kenz-nav-item'}><Grid3X3 /><span>{labels.more}</span></button>
+        </div>
+      </nav>
+      {isOpen && (
+        <div className="kenz-more-overlay" role="presentation" onClick={() => setIsOpen(false)}>
+          <section className="kenz-more-sheet" role="dialog" aria-modal="true" aria-label={locale === 'en' ? 'More destinations' : locale === 'ar' ? 'المزيد' : 'Plus de destinations'} onClick={event => event.stopPropagation()}>
+            <div className="kenz-sheet-handle" />
+            <div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{locale === 'en' ? 'Explore' : locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div><button type="button" aria-label={locale === 'ar' ? 'إغلاق' : 'Close'} onClick={() => setIsOpen(false)}>×</button></div>
+            <div className="kenz-more-grid">
+              {destinations.map(([tab, label, Icon]) => (
+                <button type="button" key={tab} onClick={() => navigate(tab)} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}><span><Icon /></span><b>{label}</b></button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function App() {
   const [budgetState, setBudgetState] = useState<BudgetState>(() => loadBudgetState());
   const [directoryState, setDirectoryState] = useState<DirectoryState>(() => loadDirectoryState());
@@ -119,7 +183,6 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [challengeContributions, setChallengeContributions] = useState<SavingsChallengeContribution[]>(() => loadSavingsChallengeContributions(loadCurrentUser().id));
   const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReceiptScannerOpen, setIsReceiptScannerOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -891,36 +954,11 @@ export default function App() {
         )}
       </main>
 
-      <nav aria-label="Navigation principale" className="kenz-mobile-nav md:hidden">
-        <div className="kenz-mobile-nav-inner">
-          <button type="button" onClick={() => {setActiveTab('home');setIsMoreMenuOpen(false);}} className={activeTab === 'home' ? 'kenz-nav-item active' : 'kenz-nav-item'}><LayoutDashboard /><span>{budgetState.profile.locale === 'en' ? 'Home' : budgetState.profile.locale === 'ar' ? 'الرئيسية' : 'Accueil'}</span></button>
-          <button type="button" onClick={() => {setActiveTab('reports');setIsMoreMenuOpen(false);}} className={activeTab === 'reports' ? 'kenz-nav-item active' : 'kenz-nav-item'}><BarChart3 /><span>{kenzText(budgetState.profile.locale, 'reports', 'Rapports')}</span></button>
-          <button type="button" onClick={() => {setActiveTab('plan');setIsMoreMenuOpen(false);}} className={activeTab === 'plan' ? 'kenz-nav-item active' : 'kenz-nav-item'}><CalendarDays /><span>{budgetState.profile.locale === 'en' ? 'Plan' : budgetState.profile.locale === 'ar' ? 'الخطة' : 'Budgets'}</span></button>
-          <button type="button" aria-haspopup="dialog" aria-expanded={isMoreMenuOpen} onClick={() => setIsMoreMenuOpen(open => !open)} className={isMoreMenuOpen || !(['home','reports','plan'] as NavTab[]).includes(activeTab) ? 'kenz-nav-item active' : 'kenz-nav-item'}><Grid3X3 /><span>{budgetState.profile.locale === 'en' ? 'More' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus'}</span></button>
-        </div>
-      </nav>
-      {isMoreMenuOpen && (
-        <div className="kenz-more-overlay" role="presentation" onClick={() => setIsMoreMenuOpen(false)}>
-          <section className="kenz-more-sheet" role="dialog" aria-modal="true" aria-label={budgetState.profile.locale === 'en' ? 'More destinations' : budgetState.profile.locale === 'ar' ? 'المزيد' : 'Plus de destinations'} onClick={event => event.stopPropagation()}>
-            <div className="kenz-sheet-handle" />
-            <div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{budgetState.profile.locale === 'en' ? 'Explore' : budgetState.profile.locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div><button type="button" aria-label="Fermer" onClick={() => setIsMoreMenuOpen(false)}>×</button></div>
-            <div className="kenz-more-grid">
-              {([
-                ['transactions', budgetState.profile.locale === 'en' ? 'Transactions' : budgetState.profile.locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
-                ['nearby', budgetState.profile.locale === 'en' ? 'Nearby' : budgetState.profile.locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
-                ['community', budgetState.profile.locale === 'en' ? 'Community' : budgetState.profile.locale === 'ar' ? 'المجتمع' : 'Communauté', MessageCircle],
-                ['simulator', budgetState.profile.locale === 'en' ? 'Month simulator' : budgetState.profile.locale === 'ar' ? 'محاكي الشهر' : 'Simulateur du mois', Calculator],
-                ['channels', budgetState.profile.locale === 'en' ? 'Channels' : budgetState.profile.locale === 'ar' ? 'القنوات' : 'Chaînes', Video],
-                ['debts', 'Kredy', BookOpen], ['zakat', 'Zakat', Moon],
-                ['settings', budgetState.profile.locale === 'en' ? 'Settings' : budgetState.profile.locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],
-                ['profile', budgetState.profile.locale === 'en' ? 'Profile' : budgetState.profile.locale === 'ar' ? 'الملف الشخصي' : 'Profil', Sparkles],
-              ] as const).map(([tab,label,Icon]) => (
-                <button type="button" key={tab} onClick={() => {setActiveTab(tab);setIsMoreMenuOpen(false);}} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}><span><Icon /></span><b>{label}</b></button>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
+      <MobileMoreNavigation
+        locale={budgetState.profile.locale}
+        activeTab={activeTab}
+        onNavigate={setActiveTab}
+      />
 
       {/* Add Transaction Modal */}
       <AddTransactionModal
