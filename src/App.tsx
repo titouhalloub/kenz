@@ -126,7 +126,6 @@ function MobileMoreNavigation({ locale, activeTab, onNavigate }: MobileMoreNavig
     plan: locale === 'en' ? 'Plan' : locale === 'ar' ? 'الخطة' : 'Budgets',
     more: locale === 'en' ? 'More' : locale === 'ar' ? 'المزيد' : 'Plus',
   };
-
   const destinations = [
     ['transactions', locale === 'en' ? 'Transactions' : locale === 'ar' ? 'المعاملات' : 'Opérations', Receipt],
     ['nearby', locale === 'en' ? 'Nearby' : locale === 'ar' ? 'المتاجر القريبة' : 'À proximité', Store],
@@ -138,15 +137,14 @@ function MobileMoreNavigation({ locale, activeTab, onNavigate }: MobileMoreNavig
     ['settings', locale === 'en' ? 'Settings' : locale === 'ar' ? 'الإعدادات' : 'Paramètres', SettingsIcon],
     ['profile', locale === 'en' ? 'Profile' : locale === 'ar' ? 'الملف الشخصي' : 'Profil', Sparkles],
   ] as const;
-
   const navigate = (tab: NavTab) => {
     setIsOpen(false);
     onNavigate(tab);
   };
 
   return (
-    <>
-      <nav aria-label="Navigation principale" className="kenz-mobile-nav md:hidden">
+    <div className="kenz-mobile-navigation md:hidden" data-kenz-no-auto-translate>
+      <nav aria-label="Navigation principale" className="kenz-mobile-nav">
         <div className="kenz-mobile-nav-inner">
           <button type="button" onClick={() => navigate('home')} className={activeTab === 'home' ? 'kenz-nav-item active' : 'kenz-nav-item'}><LayoutDashboard /><span>{labels.home}</span></button>
           <button type="button" onClick={() => navigate('reports')} className={activeTab === 'reports' ? 'kenz-nav-item active' : 'kenz-nav-item'}><BarChart3 /><span>{labels.reports}</span></button>
@@ -155,19 +153,17 @@ function MobileMoreNavigation({ locale, activeTab, onNavigate }: MobileMoreNavig
         </div>
       </nav>
       {isOpen && (
-        <div className="kenz-more-overlay" role="presentation" onClick={() => setIsOpen(false)}>
-          <section className="kenz-more-sheet" role="dialog" aria-modal="true" aria-label={locale === 'en' ? 'More destinations' : locale === 'ar' ? 'المزيد' : 'Plus de destinations'} onClick={event => event.stopPropagation()}>
-            <div className="kenz-sheet-handle" />
-            <div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{locale === 'en' ? 'Explore' : locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div><button type="button" aria-label={locale === 'ar' ? 'إغلاق' : 'Close'} onClick={() => setIsOpen(false)}>×</button></div>
-            <div className="kenz-more-grid">
-              {destinations.map(([tab, label, Icon]) => (
-                <button type="button" key={tab} onClick={() => navigate(tab)} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}><span><Icon /></span><b>{label}</b></button>
-              ))}
-            </div>
-          </section>
-        </div>
+        <section className="kenz-more-sheet" role="dialog" aria-modal="false" aria-label={locale === 'en' ? 'More destinations' : locale === 'ar' ? 'المزيد' : 'Plus de destinations'}>
+          <div className="kenz-sheet-handle" />
+          <div className="kenz-section-heading"><div><span className="kenz-card-kicker">KENZ</span><h2>{locale === 'en' ? 'Explore' : locale === 'ar' ? 'استكشف' : 'Explorer'}</h2></div><button type="button" aria-label={locale === 'ar' ? 'إغلاق' : 'Close'} onClick={() => setIsOpen(false)}>×</button></div>
+          <div className="kenz-more-grid">
+            {destinations.map(([tab, label, Icon]) => (
+              <button type="button" key={tab} onClick={() => navigate(tab)} className={activeTab === tab ? 'kenz-more-item active' : 'kenz-more-item'}><span><Icon /></span><b>{label}</b></button>
+            ))}
+          </div>
+        </section>
       )}
-    </>
+    </div>
   );
 }
 
