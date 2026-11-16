@@ -6,7 +6,7 @@ import { loadMarketPrices } from '../services/priceStore';
 import { isVerifiedMarketPrice, type SimulatorPrice } from '../domain/simulator';
 import { resolveIngredient } from '../domain/ingredientMapping';
 import {
-  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth,
+  BUILTIN_FAMILY_RECIPES, buildShoppingRequirements, createFamilyLivingPlan, suggestFamilyWeek, suggestFamilyMonth, regenerateFamilyMonth,
   exportCommunityRecipe, familyLivingStorageKey, ingredientKey, parseCommunityRecipe, scaleIngredient,
   validateFamilyLivingPlan, type FamilyLivingPlan, type FamilyRecipe, type IngredientUnit,
   type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
@@ -228,20 +228,25 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
   };
 
   const suggestMonth = () => {
-    let added = 0;
+    let generated = 0;
+    let preserved = 0;
     updatePlan((current) => {
-      const nextMeals = suggestFamilyMonth(
+      const nextMeals = regenerateFamilyMonth(
         current.meals,
         month,
         Math.max(1, Math.min(40, householdSize)),
         recipes,
       );
-      added = nextMeals.length - current.meals.length;
+      generated = nextMeals.filter((meal) => meal.id.startsWith('suggested-')).length;
+      preserved = nextMeals.filter((meal) => !meal.id.startsWith('suggested-')).length;
       return { ...current, meals: nextMeals };
     });
-    setStatus(added
-      ? tr(profile, added + ' repas ont été planifiés pour le mois complet. Vous pouvez modifier ou supprimer chaque repas.', added + ' وجبة تمت برمجتها للشهر كاملاً. يمكنك تعديل أو حذف كل وجبة.', added + ' meals were planned for the full month. You can edit or remove any meal.')
-      : tr(profile, 'Le calendrier mensuel est déjà complet.', 'تقويم الشهر مكتمل بالفعل.', 'The monthly calendar is already complete.'));
+    setStatus(tr(
+      profile,
+      generated + ' repas suggérés régénérés pour ' + Math.max(1, Math.min(40, householdSize)) + ' personnes. ' + preserved + ' repas ajoutés manuellement conservés.',
+      'تمت إعادة إنشاء ' + generated + ' وجبة مقترحة لـ ' + Math.max(1, Math.min(40, householdSize)) + ' أفراد. تم الحفاظ على ' + preserved + ' وجبة أضيفت يدوياً.',
+      generated + ' suggested meals regenerated for ' + Math.max(1, Math.min(40, householdSize)) + ' people. ' + preserved + ' manually added meals kept.',
+    ));
   };
 
   const addMeal = () => {
@@ -455,7 +460,8 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
           <ol className="mt-3 list-decimal space-y-1 ps-4 text-xs text-violet-900">{recipeSteps(selectedRecipe).map((step, index) => <li key={index}>{step}</li>)}</ol>
         </div>}
         <button onClick={addMeal} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter au calendrier', 'إضافة إلى التقويم', 'Add to calendar')}</button>
-        <button onClick={suggestMonth} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white">{tr(profile, 'Générer le planning du mois complet', 'إنشاء برنامج الشهر كاملاً', 'Generate the full-month plan')}</button>
+        <button onClick={suggestMonth} className="w-full min-h-11 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white">{tr(profile, 'إعادة إنشاء برنامج الشهر لـ ' + householdSize + ' أشخاص', 'إعادة إنشاء برنامج الشهر لـ ' + householdSize + ' أشخاص', 'Regenerate month for ' + householdSize + ' people')}</button>
+        <p className="text-[10px] leading-4 text-slate-500">{tr(profile, 'La régénération remplace les repas suggérés automatiquement et recalcule leurs portions selon la taille actuelle du foyer. Les repas ajoutés manuellement sont conservés.', 'إعادة الإنشاء تستبدل الوجبات المقترحة تلقائياً وتعيد حساب حصصها حسب حجم الأسرة الحالي. الوجبات المضافة يدوياً تبقى محفوظة.', 'Regeneration replaces automatically suggested meals and recalculates their servings for the current household size. Manually added meals are preserved.')}</p>
         <button onClick={suggestWeek} className="w-full min-h-10 rounded-xl border border-violet-200 px-4 text-xs font-bold text-violet-700">{tr(profile, 'Suggérer les repas de 7 jours', 'اقترح وجبات 7 أيام', 'Suggest 7 days of meals')}</button>
         <div className="pt-2">
           <h3 className="mb-2 text-sm font-bold">{tr(profile, 'Repas prévus ce mois', 'وجبات هذا الشهر', 'Meals planned this month')} ({plannedMeals.length})</h3>
