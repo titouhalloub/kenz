@@ -426,6 +426,22 @@ export function suggestFamilyMonth(
   return result;
 }
 
+/**
+ * Rebuilds automatically suggested meals for the current household size while
+ * preserving meals explicitly added by the user. Suggested IDs are stable and
+ * are regenerated from an empty generated-meal set, so old serving counts
+ * cannot silently survive a household-size change.
+ */
+export function regenerateFamilyMonth(
+  existing: PlannedMeal[],
+  month: string,
+  householdSize: number,
+  recipeCollection: FamilyRecipe[] = BUILTIN_FAMILY_RECIPES,
+): PlannedMeal[] {
+  const userMeals = existing.filter((meal) => !meal.id.startsWith('suggested-'));
+  return suggestFamilyMonth(userMeals, month, householdSize, recipeCollection);
+}
+
 export function familyLivingStorageKey(userId: string, month: string): string {
   return `kenz_family_living_v1_${encodeURIComponent(userId)}_${month}`;
 }
