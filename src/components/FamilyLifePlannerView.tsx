@@ -9,7 +9,7 @@ import { STARTER_BASKET, toMilliUnits } from '../domain/starterBasket';
 import { loadMarketPrices } from '../services/priceStore';
 import {
   applyFamilyBudgetSources, countRecurringOccurrencesInMonth, createFamilyBudgetPlan, familyBudgetStorageKey, summarizeFamilyBudget,
-  validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, normalizeLegacyAutoAllocation, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
+  validateFamilyBudgetPlan, suggestFamilyBudgetAllocations, normalizeLegacyAutoAllocation, updateFamilyCategory, type FamilyBudgetCategoryId, type FamilyBudgetPlan,
 } from '../domain/familyBudget';
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
   categories: Category[];
   transactions: Transaction[];
   recurringItems: RecurringItem[];
+  onUpdateProfile: (updates: Partial<UserProfile>) => void;
 }
 
 const labels: Record<FamilyBudgetCategoryId, { fr: string; ar: string; en: string; icon: React.ElementType }> = {
@@ -73,10 +74,12 @@ const familyCategoryFor = (name?: string): FamilyBudgetCategoryId => {
   return 'other';
 };
 
-export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, transactions, recurringItems }) => {
+export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, transactions, recurringItems, onUpdateProfile }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, currentMonth()));
-  const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, currentMonth()).monthlyIncomeMinor));
+  const [incomeInput, setIncomeInput] = useState(() => moneyInput(profile.expectedIncomeMinor || readPlan(profile.id, currentMonth()).monthlyIncomeMinor));
+  const [editingCategory, setEditingCategory] = useState<FamilyBudgetCategoryId | null>(null);
+  const [categoryAmountInput, setCategoryAmountInput] = useState('');
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
   const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
   const [mealPlanCostMinor, setMealPlanCostMinor] = useState(0);
@@ -128,9 +131,11 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     recurringItems.some((item) => item.userId === profile.id && item.isActive && item.type === 'income' &&
       item.currency === profile.preferredCurrency &&
       countRecurringOccurrencesInMonth(item.frequency, item.nextDueDate, selectedMonth, item.billingDayOfMonth) > 0);
-  const monthlyIncomeMinor = plan.monthlyIncomeOverrideMinor != null
-    ? plan.monthlyIncomeOverrideMinor
-    : hasIncomeSource ? incomeSourceMinor : plan.monthlyIncomeMinor;
+  // One app-wide profile income is authoritative; month-level legacy overrides are fallback only.
+  const monthlyIncomeMinor = profile.expectedIncomeMinor > 0
+    ? profile.expectedIncomeMinor
+    : plan.monthlyIncomeOverrideMinor != null ? plan.monthlyIncomeOverrideMinor
+      : hasIncomeSource ? incomeSourceMinor : plan.monthlyIncomeMinor;
 
   useEffect(() => {
     setIncomeInput(moneyInput(monthlyIncomeMinor));
@@ -290,10 +295,11 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     const amount = parseBudgetInput(incomeInput);
     if (amount === null || amount <= 0) { setIncomeInput(moneyInput(monthlyIncomeMinor)); return; }
     // One income entry resets legacy manual envelopes and runs the existing allocator automatically.
+    onUpdateProfile({ expectedIncomeMinor: amount });
     setPlan((current) => ({
       ...current,
       monthlyIncomeMinor: amount,
-      monthlyIncomeOverrideMinor: hasIncomeSource ? amount : null,
+      monthlyIncomeOverrideMinor: null,
       allocationMode: 'automatic',
       categories: current.categories.map((row) => ({ ...row, plannedOverride: false })),
       updatedAt: new Date().toISOString(),
@@ -301,6 +307,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   };
 
   const resetIncomeToKenz = () => {
+    onUpdateProfile({ expectedIncomeMinor: incomeSourceMinor });
     setPlan((current) => ({
       ...current,
       monthlyIncomeOverrideMinor: null,
@@ -309,6 +316,25 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
       updatedAt: new Date().toISOString(),
     }));
     setIncomeInput(moneyInput(incomeSourceMinor));
+  };
+
+  const saveCategoryAmount = () => {
+    if (!editingCategory) return;
+    const amount = parseBudgetInput(categoryAmountInput);
+    if (amount === null) return;
+    setPlan((current) => updateFamilyCategory(current, editingCategory, 'plannedMinor', amount));
+    setEditingCategory(null);
+    setCategoryAmountInput('');
+  };
+
+  const restoreAutomaticAllocation = () => {
+    setPlan((current) => ({
+      ...current,
+      allocationMode: 'automatic',
+      categories: current.categories.map((row) => ({ ...row, plannedOverride: false })),
+      updatedAt: new Date().toISOString(),
+    }));
+    setEditingCategory(null);
   };
 
   return (
@@ -355,6 +381,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <label className="block text-xs text-slate-600">{t(profile, 'Revenu mensuel total (DA)', 'الدخل الشهري الإجمالي (دج)', 'Total monthly income (DA)')}
             <input inputMode="decimal" value={incomeInput} onChange={(e) => setIncomeInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setIncome(); }} className="mt-1 w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-lg font-semibold font-mono-numbers shadow-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
           </label>
+          <p className="text-[10px] leading-4 text-slate-500">{t(profile, 'Ce revenu est partagé dans Kenz sur cet appareil. La synchronisation entre appareils nécessitera une étape cloud dédiée.', 'هذا الدخل موحد داخل كنز على هذا الجهاز. مزامنته بين الأجهزة تحتاج خطوة سحابية مستقلة.', 'This income is shared throughout Kenz on this device. Cross-device sync needs a separate cloud step.')}</p>
           <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-3 sm:p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <strong className="text-sm text-slate-800">{t(profile, 'Composition de la famille', 'تركيبة الأسرة', 'Family members')}</strong>
@@ -376,7 +403,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
             : hasIncomeSource
               ? t(profile, 'تم اكتشاف الدخل من عمليات كنز. يمكنك إدخال مبلغ آخر ثم تشغيل الحساب.', 'Revenu détecté depuis les opérations Kenz. Vous pouvez saisir un autre montant puis lancer le calcul.', 'Income detected from Kenz transactions. You can enter another amount and run the calculation.')
               : t(profile, 'أدخل دخلك الشهري مرة واحدة. سيتولى كنز توزيع المبلغ تلقائياً.', 'Saisissez votre revenu une seule fois. Kenz répartira automatiquement le montant.', 'Enter your monthly income once. Kenz will allocate it automatically.')}</p>
-          {hasIncomeSource && <button type="button" onClick={resetIncomeToKenz} className="text-[10px] font-semibold text-violet-700 underline">{t(profile, 'استعادة دخل كنز التلقائي', 'Revenir au revenu Kenz', 'Restore automatic Kenz income')}</button>}
+          {(hasIncomeSource || (profile.expectedIncomeMinor ?? 0) > 0) && <button type="button" onClick={resetIncomeToKenz} className="text-[10px] font-semibold text-violet-700 underline">{t(profile, 'استعادة دخل كنز التلقائي', 'Revenir au revenu Kenz', 'Restore automatic Kenz income')}</button>}
         </div>
 
         <div className="kenz-family-panel space-y-3">
@@ -407,17 +434,25 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <p className="text-xs text-slate-500">{t(profile, 'Les enveloppes sont calculées automatiquement à partir du revenu, des engagements, des prix du marché et des repas planifiés. Les dépenses réelles viennent des opérations Kenz.', 'تُحسب المخصصات تلقائياً من دخلك والتزاماتك وأسعار السوق والوجبات المخططة. المصروفات الفعلية تأتي من سجل عمليات كنز.', 'Allocations are calculated automatically from income, commitments, market prices and planned meals. Actual expenses come from Kenz transactions.')}</p>
           <p className="text-[10px] leading-4 text-slate-500">{t(profile, 'Calcul de l’enveloppe alimentaire : en mode automatique, Kenz compare les engagements récurrents, l’estimation du panier de marché et le coût des repas programmés, puis retient le montant le plus élevé. Il s’agit d’un montant prévu, pas d’une dépense réelle.', 'طريقة حساب مخصص الغذاء: في الوضع التلقائي، يقارن كنز الالتزامات الدورية وتقدير سلة السوق وتكلفة الوجبات المخططة، ثم يعتمد المبلغ الأعلى. هذا مبلغ مخطط وليس إنفاقاً فعلياً.', 'Food allocation: in automatic mode, Kenz compares recurring commitments, the market-basket estimate and planned-meal cost, then uses the highest amount. This is a planned amount, not actual spending.')}</p>
 
-          <div className="space-y-2">
+          {plan.allocationMode === 'custom' && <button type="button" className="kenz-family-auto-reset" onClick={restoreAutomaticAllocation}>{t(profile, 'Revenir à la répartition automatique', 'إعادة التوزيع التلقائي', 'Restore automatic allocation')}</button>}
+          <div className="kenz-family-budget-cards">
             {effectivePlan.categories.map((row) => {
               const item = labels[row.id]; const Icon = item.icon;
-              const categoryMealCost = row.id === 'food' ? mealPlanCostMinor : 0;
-              const remaining = row.plannedMinor - row.actualMinor - categoryMealCost;
-              return <article className="kenz-family-category" key={profile.id + '-' + row.id}>
-                <div className="kenz-family-category-title" onClick={row.id === 'food' ? () => setActiveSection('living') : undefined} onKeyDown={row.id === 'food' ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveSection('living'); } } : undefined} role={row.id === 'food' ? 'button' : undefined} tabIndex={row.id === 'food' ? 0 : undefined} style={row.id === 'food' ? { cursor: 'pointer' } : undefined}><span><Icon /></span><strong>{item[profile.locale]}</strong><small>{formatMoney(remaining, profile.preferredCurrency, profile.locale)} {t(profile, 'restant', 'متبقٍ', 'left')}</small>{row.id === 'food' && <><span className="text-[10px] font-medium text-violet-700">{t(profile, 'Voir les repas', 'عرض الوجبات', 'View meal plan')} · {formatMoney(mealPlanCostMinor, profile.preferredCurrency, profile.locale)} {t(profile, 'repas planifiés', 'الوجبات المخططة', 'planned meals')}</span><span className="mt-1 block text-[10px] leading-4 text-slate-500">{t(profile, 'Source : somme des coûts des ingrédients des recettes programmées dans le calendrier du mois, selon les quantités, les portions et les prix vérifiés disponibles. Le total est partiel si certains prix manquent.', 'المصدر: مجموع تكلفة مكونات الوصفات المبرمجة في تقويم الشهر، حسب الكميات والحصص وأسعار السوق الموثقة المتاحة. يكون المجموع جزئياً عند غياب أسعار بعض المكونات.', 'Source: total ingredient cost for recipes scheduled in this month’s calendar, based on quantities, servings and available verified market prices. The total is partial when some ingredient prices are missing.')}</span></>}</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="text-xs"><span className="block">{t(profile, 'Enveloppe automatique', 'المخصص التلقائي', 'Automatic allocation')}</span><strong className="block mt-2 text-sm font-mono-numbers">{formatMoney(row.plannedMinor, profile.preferredCurrency, profile.locale)}</strong></div>
-                  <div className="text-xs"><span className="block">{t(profile, 'Réel · opérations Kenz', 'الفعلي · عمليات كنز', 'Actual · Kenz transactions')}</span><strong className="block mt-2 text-sm font-mono-numbers">{formatMoney(row.actualMinor, profile.preferredCurrency, profile.locale)}</strong></div>
+              const remaining = row.plannedMinor - row.actualMinor;
+              const spentRatio = row.plannedMinor > 0 ? Math.min(100, row.actualMinor / row.plannedMinor * 100) : 0;
+              return <article className="kenz-family-category kenz-family-category-modern" key={profile.id + '-' + row.id}>
+                <div className="kenz-family-category-title" onClick={row.id === 'food' ? () => setActiveSection('living') : undefined} onKeyDown={row.id === 'food' ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveSection('living'); } } : undefined} role={row.id === 'food' ? 'button' : undefined} tabIndex={row.id === 'food' ? 0 : undefined} style={row.id === 'food' ? { cursor: 'pointer' } : undefined}>
+                  <span className="kenz-family-category-icon"><Icon /></span><div className="kenz-family-category-name"><strong>{item[profile.locale]}</strong>{row.id === 'food' && <small>{t(profile, 'Ouvrir le calendrier des repas', 'فتح تقويم الوجبات', 'Open meal calendar')}</small>}</div>
                 </div>
+                <button type="button" className="kenz-family-edit-btn" onClick={() => { setEditingCategory(row.id); setCategoryAmountInput(moneyInput(row.plannedMinor)); }} aria-label={t(profile, 'Modifier le budget', 'تعديل المخصص', 'Edit allocation')}>{t(profile, 'Modifier', 'تعديل', 'Edit')}</button>
+                <div className="kenz-family-category-values">
+                  <div><span>{t(profile, 'Budget prévu', 'المخصص', 'Allocated')}</span><strong>{formatMoney(row.plannedMinor, profile.preferredCurrency, profile.locale)}</strong></div>
+                  <div><span>{t(profile, 'Dépenses réelles', 'المصروف الفعلي', 'Actual spent')}</span><strong className="kenz-family-actual">{formatMoney(row.actualMinor, profile.preferredCurrency, profile.locale)}</strong></div>
+                </div>
+                <div className="kenz-family-progress-track"><div className="kenz-family-progress-fill" style={{ width: `${spentRatio}%` }} /></div>
+                <div className="kenz-family-category-footer"><span>{t(profile, 'Reste disponible', 'المتبقي', 'Remaining')}</span><strong className={remaining < 0 ? 'kenz-family-overrun' : ''}>{formatMoney(remaining, profile.preferredCurrency, profile.locale)}</strong></div>
+                {row.id === 'food' && <div className="kenz-family-meal-cost">{t(profile, 'Repas planifiés', 'الوجبات المخططة', 'Planned meals')}: {formatMoney(mealPlanCostMinor, profile.preferredCurrency, profile.locale)}{!mealPlanCostComplete ? ` · ${t(profile, 'estimation partielle', 'تقدير جزئي', 'partial estimate')}` : ''}</div>}
+                {editingCategory === row.id && <div className="kenz-family-category-editor"><label>{t(profile, 'Nouveau montant mensuel', 'المبلغ الشهري الجديد', 'New monthly allocation')}<input inputMode="decimal" value={categoryAmountInput} onChange={(e) => setCategoryAmountInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveCategoryAmount(); }} /></label><div className="kenz-family-editor-actions"><button type="button" onClick={saveCategoryAmount}>{t(profile, 'Enregistrer', 'حفظ', 'Save')}</button><button type="button" onClick={() => setEditingCategory(null)}>{t(profile, 'Annuler', 'إلغاء', 'Cancel')}</button></div></div>}
               </article>;
             })}
           </div>

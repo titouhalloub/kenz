@@ -17,6 +17,8 @@ export interface UserProfile {
   locale: 'ar' | 'fr' | 'en';
   paydayDayOfMonth?: number; // 1-31
   planningPeriodDays: number; // default 30
+  /** App-wide monthly income used by shared budget views. Persisted locally until cloud profile sync is added. */
+  expectedIncomeMinor?: number;
   syncUpdatedAt?: string;
 }
 
