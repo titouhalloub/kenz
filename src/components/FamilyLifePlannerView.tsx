@@ -435,7 +435,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <p className="text-[10px] leading-4 text-slate-500">{t(profile, 'Calcul de l’enveloppe alimentaire : en mode automatique, Kenz compare les engagements récurrents, l’estimation du panier de marché et le coût des repas programmés, puis retient le montant le plus élevé. Il s’agit d’un montant prévu, pas d’une dépense réelle.', 'طريقة حساب مخصص الغذاء: في الوضع التلقائي، يقارن كنز الالتزامات الدورية وتقدير سلة السوق وتكلفة الوجبات المخططة، ثم يعتمد المبلغ الأعلى. هذا مبلغ مخطط وليس إنفاقاً فعلياً.', 'Food allocation: in automatic mode, Kenz compares recurring commitments, the market-basket estimate and planned-meal cost, then uses the highest amount. This is a planned amount, not actual spending.')}</p>
 
           {plan.allocationMode === 'custom' && <button type="button" className="kenz-family-auto-reset" onClick={restoreAutomaticAllocation}>{t(profile, 'Revenir à la répartition automatique', 'إعادة التوزيع التلقائي', 'Restore automatic allocation')}</button>}
-          <div className="space-y-2">
+          <div className="kenz-family-budget-cards">
             {effectivePlan.categories.map((row) => {
               const item = labels[row.id]; const Icon = item.icon;
               const remaining = row.plannedMinor - row.actualMinor;
