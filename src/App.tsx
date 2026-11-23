@@ -834,6 +834,7 @@ export default function App() {
             savingsGoals={budgetState.savingsGoals}
             transactions={budgetState.transactions}
             profile={budgetState.profile}
+            onUpdateProfile={(updates) => setBudgetState((current) => updateProfile(current, updates))}
             onUpdateBudget={(catId, minor) =>
               setBudgetState(
                 updateBudget(
