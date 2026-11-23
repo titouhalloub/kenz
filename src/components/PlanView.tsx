@@ -74,6 +74,7 @@ interface PlanViewProps {
   savingsGoals: SavingsGoal[];
   transactions: Transaction[];
   profile: UserProfile;
+  onUpdateProfile: (updates: Partial<UserProfile>) => void;
   onUpdateBudget: (categoryId: string, budgetMinor: number) => void;
   onAddRecurring: (data: Omit<RecurringItem, 'id'>) => void;
   onDeleteRecurring: (id: string) => void;
@@ -95,6 +96,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   savingsGoals,
   transactions,
   profile,
+  onUpdateProfile,
   onUpdateBudget,
   onAddRecurring,
   onDeleteRecurring,
@@ -298,7 +300,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
       </div>
 
       {/* One monthly budget: all family and meal planning flows share this surface. */}
-      {activeTab === 'budgets' && <FamilyLifePlannerView profile={profile} categories={categories} transactions={transactions} recurringItems={recurringItems} />}
+      {activeTab === 'budgets' && <FamilyLifePlannerView profile={profile} categories={categories} transactions={transactions} recurringItems={recurringItems} onUpdateProfile={onUpdateProfile} />}
 
       {/* TAB 2: RECURRING ITEMS */}
       {activeTab === 'recurring' && (
