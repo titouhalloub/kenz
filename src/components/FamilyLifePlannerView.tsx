@@ -381,6 +381,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
           <label className="block text-xs text-slate-600">{t(profile, 'Revenu mensuel total (DA)', 'الدخل الشهري الإجمالي (دج)', 'Total monthly income (DA)')}
             <input inputMode="decimal" value={incomeInput} onChange={(e) => setIncomeInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setIncome(); }} className="mt-1 w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-lg font-semibold font-mono-numbers shadow-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
           </label>
+          <p className="text-[10px] leading-4 text-slate-500">{t(profile, 'Ce revenu est partagé dans Kenz sur cet appareil. La synchronisation entre appareils nécessitera une étape cloud dédiée.', 'هذا الدخل موحد داخل كنز على هذا الجهاز. مزامنته بين الأجهزة تحتاج خطوة سحابية مستقلة.', 'This income is shared throughout Kenz on this device. Cross-device sync needs a separate cloud step.')}</p>
           <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-3 sm:p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <strong className="text-sm text-slate-800">{t(profile, 'Composition de la famille', 'تركيبة الأسرة', 'Family members')}</strong>
