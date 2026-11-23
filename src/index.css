@@ -204,5 +204,5 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-family-editor-actions button{flex:1;min-height:38px;border-radius:10px;border:1px solid #e0e4ec;background:#fff;color:#4f596e;font-size:12px;font-weight:750}
 .kenz-family-editor-actions button:first-child{background:#5d4b88;color:#fff;border-color:#5d4b88}
 .kenz-family-auto-reset{border:1px solid #e2e5ec;background:#fafbfc;color:#505a70;border-radius:10px;padding:8px 12px;font-size:11px;font-weight:750}
-@media(min-width:1100px){.kenz-family-budget-cards{grid-template-columns:repeat(3,minmax(0,1fr)}}
+@media(min-width:1100px){.kenz-family-budget-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:640px){.kenz-family-budget-cards{grid-template-columns:1fr;gap:10px}.kenz-family-category-modern{padding:13px}.kenz-family-category-values>div{padding:9px}}
