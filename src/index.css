@@ -174,3 +174,33 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-mobile-navigation .kenz-more-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .kenz-mobile-navigation .kenz-more-item{min-height:72px}
 @media(min-width:768px){.kenz-mobile-navigation{display:none!important}}
+
+/* Family budget visual refresh: card hierarchy, readable amounts, editable envelopes. */
+.kenz-family-planner .kenz-family-panel{background:#fff;border:1px solid #e8e2f2;border-radius:22px;padding:clamp(14px,3vw,22px);box-shadow:0 8px 24px rgba(43,25,88,.045)}
+.kenz-family-planner .kenz-family-category-modern{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;background:linear-gradient(180deg,#fff 0%,#fcfbff 100%);border:1px solid #e8e2f2;border-radius:20px;padding:16px;box-shadow:0 5px 18px rgba(49,30,94,.035)}
+.kenz-family-category-modern .kenz-family-category-title{display:flex;align-items:center;gap:12px;min-width:0}
+.kenz-family-category-icon{width:48px;height:48px;flex:0 0 48px;display:grid;place-items:center;background:#f1ebff;color:#5b2bc5;border-radius:16px}
+.kenz-family-category-icon svg{width:24px;height:24px;stroke-width:2}
+.kenz-family-category-name{display:flex;flex-direction:column;gap:4px;min-width:0}
+.kenz-family-category-name strong{font-size:14px;line-height:1.35;color:#261b49;font-weight:800}
+.kenz-family-category-name small{font-size:10px;color:#766c8b}
+.kenz-family-edit-btn{border:1px solid #ddd2f7;background:#f8f5ff;color:#5727bd;border-radius:12px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer}
+.kenz-family-category-values{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kenz-family-category-values>div{display:flex;flex-direction:column;gap:6px;background:#f8f7fb;border:1px solid #efebf6;border-radius:14px;padding:12px;min-width:0}
+.kenz-family-category-values span,.kenz-family-category-footer span{font-size:10px;color:#81778f;font-weight:600}
+.kenz-family-category-values strong{font-size:16px;line-height:1.2;font-weight:800;color:#34205e;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kenz-family-category-values .kenz-family-actual{color:#167c5d}
+.kenz-family-progress-track{grid-column:1/-1;height:7px;background:#efebf6;border-radius:99px;overflow:hidden}
+.kenz-family-progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#a68be8,#5b2bc5);transition:width .25s ease}
+.kenz-family-category-footer{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.kenz-family-category-footer strong{font-size:13px;font-weight:800;color:#178261;font-variant-numeric:tabular-nums}
+.kenz-family-category-footer strong.kenz-family-overrun{color:#c43c52}
+.kenz-family-meal-cost{grid-column:1/-1;border-radius:12px;padding:9px 11px;background:#f3efff;color:#5a30b5;font-size:10px;font-weight:700}
+.kenz-family-category-editor{grid-column:1/-1;background:#f7f4ff;border:1px solid #e5dcfa;border-radius:15px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.kenz-family-category-editor label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:#574579}
+.kenz-family-category-editor input{min-height:42px;border:1px solid #d8caef;border-radius:12px;padding:8px 12px;background:white;font-size:16px;font-weight:700;color:#2a1b50}
+.kenz-family-editor-actions{display:flex;gap:8px}
+.kenz-family-editor-actions button{flex:1;min-height:40px;border-radius:11px;border:1px solid #ddd2f7;background:#fff;color:#5b2bc5;font-size:12px;font-weight:800}
+.kenz-family-editor-actions button:first-child{background:#5b2bc5;color:#fff;border-color:#5b2bc5}
+.kenz-family-auto-reset{border:1px solid #ddd2f7;background:#f8f5ff;color:#5727bd;border-radius:12px;padding:9px 13px;font-size:11px;font-weight:800}
+@media(max-width:520px){.kenz-family-planner .kenz-family-category-modern{padding:13px;gap:10px}.kenz-family-category-icon{width:42px;height:42px;flex-basis:42px;border-radius:14px}.kenz-family-category-values>div{padding:10px}.kenz-family-category-values strong{font-size:14px}}
