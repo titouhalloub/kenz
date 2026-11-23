@@ -245,6 +245,8 @@ export async function loadBudgetStateFromSupabase(profile: UserProfile, persistL
   const state: BudgetState = {
     profile: {
       ...profile,
+      // Preserve the local unified-income setting when cloud profile rows hydrate.
+      expectedIncomeMinor: loadBudgetState(profile).profile.expectedIncomeMinor,
       displayName: p?.display_name || profile.displayName,
       preferredCurrency: p?.preferred_currency || profile.preferredCurrency,
       locale: p?.locale === 'ar' || p?.locale === 'en' ? p.locale : p?.locale === 'fr' ? 'fr' : profile.locale,
