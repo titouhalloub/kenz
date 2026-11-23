@@ -77,7 +77,7 @@ const familyCategoryFor = (name?: string): FamilyBudgetCategoryId => {
 export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, transactions, recurringItems, onUpdateProfile }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [plan, setPlan] = useState<FamilyBudgetPlan>(() => readPlan(profile.id, currentMonth()));
-  const [incomeInput, setIncomeInput] = useState(() => moneyInput(readPlan(profile.id, currentMonth()).monthlyIncomeMinor));
+  const [incomeInput, setIncomeInput] = useState(() => moneyInput(profile.expectedIncomeMinor || readPlan(profile.id, currentMonth()).monthlyIncomeMinor));
   const [editingCategory, setEditingCategory] = useState<FamilyBudgetCategoryId | null>(null);
   const [categoryAmountInput, setCategoryAmountInput] = useState('');
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
@@ -402,7 +402,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
             : hasIncomeSource
               ? t(profile, 'تم اكتشاف الدخل من عمليات كنز. يمكنك إدخال مبلغ آخر ثم تشغيل الحساب.', 'Revenu détecté depuis les opérations Kenz. Vous pouvez saisir un autre montant puis lancer le calcul.', 'Income detected from Kenz transactions. You can enter another amount and run the calculation.')
               : t(profile, 'أدخل دخلك الشهري مرة واحدة. سيتولى كنز توزيع المبلغ تلقائياً.', 'Saisissez votre revenu une seule fois. Kenz répartira automatiquement le montant.', 'Enter your monthly income once. Kenz will allocate it automatically.')}</p>
-          {hasIncomeSource && <button type="button" onClick={resetIncomeToKenz} className="text-[10px] font-semibold text-violet-700 underline">{t(profile, 'استعادة دخل كنز التلقائي', 'Revenir au revenu Kenz', 'Restore automatic Kenz income')}</button>}
+          {(hasIncomeSource || (profile.expectedIncomeMinor ?? 0) > 0) && <button type="button" onClick={resetIncomeToKenz} className="text-[10px] font-semibold text-violet-700 underline">{t(profile, 'استعادة دخل كنز التلقائي', 'Revenir au revenu Kenz', 'Restore automatic Kenz income')}</button>}
         </div>
 
         <div className="kenz-family-panel space-y-3">
