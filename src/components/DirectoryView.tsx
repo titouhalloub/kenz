@@ -109,10 +109,11 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="kenz-neighborhood space-y-4 pb-24" data-kenz-no-auto-translate>
       {/* Header bar */}
-      <div className="flex items-center justify-between">
+      <div className="kenz-neighborhood-hero flex items-center justify-between">
         <div>
+          <span className="kenz-neighborhood-eyebrow">KENZ · LOCAL</span>
           <h1 className="text-lg font-bold text-slate-100">Commerces & Services de Quartier</h1>
           <p className="text-xs text-slate-400">
             Professionnels locaux vérifiés par pièces justificatives à Alger et environs.
@@ -130,7 +131,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
       </div>
 
       {/* Search Bar */}
-      <div className="relative">
+      <div className="kenz-neighborhood-search relative">
         <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
           type="text"
@@ -142,7 +143,7 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
       </div>
 
       {/* Filter and View Controls Bar */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
+      <div className="kenz-neighborhood-filters flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
         {/* Category Pills (Functional Buttons) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
           {categories.map((cat) => (
@@ -308,12 +309,12 @@ export const DirectoryView: React.FC<DirectoryViewProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="kenz-neighborhood-grid grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {filtered.map((biz) => (
             <div
               key={biz.id}
               onClick={() => setSelectedBusiness(biz)}
-              className="rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3 hover:border-slate-700 transition cursor-pointer flex flex-col justify-between"
+              className="kenz-neighborhood-card rounded-2xl bg-slate-900 border border-slate-800 p-4 space-y-3 hover:border-slate-700 transition cursor-pointer flex flex-col justify-between"
             >
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
