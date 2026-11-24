@@ -132,8 +132,9 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
       item.currency === profile.preferredCurrency &&
       countRecurringOccurrencesInMonth(item.frequency, item.nextDueDate, selectedMonth, item.billingDayOfMonth) > 0);
   // One app-wide profile income is authoritative; month-level legacy overrides are fallback only.
-  const monthlyIncomeMinor = profile.expectedIncomeMinor > 0
-    ? profile.expectedIncomeMinor
+  const sharedIncomeMinor = profile.expectedIncomeMinor ?? 0;
+  const monthlyIncomeMinor = sharedIncomeMinor > 0
+    ? sharedIncomeMinor
     : plan.monthlyIncomeOverrideMinor != null ? plan.monthlyIncomeOverrideMinor
       : hasIncomeSource ? incomeSourceMinor : plan.monthlyIncomeMinor;
 

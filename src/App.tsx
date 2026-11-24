@@ -966,7 +966,7 @@ export default function App() {
         recurringItems={budgetState.recurringItems}
         preferredCurrency={budgetState.profile.preferredCurrency}
         onSave={(txData) => {
-          setBudgetState(addTransaction(budgetState, { ...txData, userId: budgetState.profile.id }));
+          setBudgetState((current) => addTransaction(current, { ...txData, userId: current.profile.id }));
         }}
       />
 
