@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, ArrowDownRight, ArrowUpRight, ArrowLeftRight } from 'lucide-react';
 import { Account, Category, RecurringItem, TransactionType } from '../domain/types';
 import { parseToMinorUnits } from '../domain/financialCalculations';
@@ -45,11 +45,19 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   const [description, setDescription] = useState('');
   const [recurringItemId, setRecurringItemId] = useState('');
   const [error, setError] = useState('');
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) { submittingRef.current = false; return; }
+    if (!accounts.some((account) => account.id === accountId)) setAccountId(accounts[0]?.id || '');
+    if (!categories.some((category) => category.id === categoryId)) setCategoryId(categories[0]?.id || '');
+  }, [isOpen, accounts, categories, accountId, categoryId]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     setError('');
 
     const minor = parseToMinorUnits(amountStr);
@@ -74,7 +82,9 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       }
     }
 
-    onSave({
+    submittingRef.current = true;
+    try {
+      onSave({
       accountId,
       type,
       amountMinor: minor,
@@ -84,13 +94,16 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       destinationAccountId: type === 'transfer' ? destinationAccountId : undefined,
       transactionDate,
       description: description.trim() || undefined,
-    });
-
-    // Reset and close
-    setAmountStr('');
-    setDescription('');
-    setRecurringItemId('');
-    onClose();
+      });
+      setAmountStr('');
+      setDescription('');
+      setRecurringItemId('');
+      onClose();
+    } catch (saveError) {
+      submittingRef.current = false;
+      setError('Impossible d’enregistrer cette opération. Réessayez.');
+      console.error('Kenz transaction save failed:', saveError);
+    }
   };
 
   const filteredCategories = categories.filter((c) =>
@@ -173,7 +186,6 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 placeholder="0.00"
                 value={amountStr}
                 onChange={(e) => setAmountStr(e.target.value)}
-                autoFocus
                 className="w-full h-12 px-4 text-xl font-bold font-mono-numbers bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none">
@@ -286,7 +298,8 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors shadow-lg shadow-emerald-950/40 cursor-pointer min-h-[44px]"
+              disabled={!accountId || !amountStr.trim()}
+              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition-colors shadow-lg shadow-emerald-950/40 cursor-pointer min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Enregistrer l'opération
             </button>
