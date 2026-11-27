@@ -417,17 +417,21 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         </div>
       </header>
 
-      <div className="kenz-family-subtabs kenz-family-section-tabs">
+      <nav className="kenz-family-tabs" aria-label={tr(profile, 'Sections du plan familial', 'أقسام التخطيط العائلي', 'Family planning sections')}>
         {([
-          ['meals', CalendarDays, tr(profile, 'Repas', 'الوجبات', 'Meals')],
-          ['shopping', ShoppingBasket, tr(profile, 'Courses', 'المشتريات', 'Shopping')],
-          ['pantry', Package, tr(profile, 'Réserves', 'المخزون', 'Pantry')],
-          ['recipes', ChefHat, tr(profile, 'Recettes', 'الوصفات', 'Recipes')],
-          ['needs', ClipboardList, tr(profile, 'Besoins', 'الاحتياجات', 'Needs')],
-        ] as const).map(([id, Icon, label]) => (
-          <button key={id} onClick={() => setSection(id)} className={section === id ? 'active' : ''}><Icon />{label}</button>
+          ['meals', CalendarDays, tr(profile, 'Repas', 'الوجبات', 'Meals'), tr(profile, 'Calendrier des repas', 'جدول الوجبات', 'Meal calendar')],
+          ['shopping', ShoppingBasket, tr(profile, 'Courses', 'المشتريات', 'Groceries'), tr(profile, 'Liste des achats', 'قائمة المشتريات', 'Shopping list')],
+          ['pantry', Package, tr(profile, 'Réserves', 'المخزون', 'Pantry'), tr(profile, 'Stock à la maison', 'المخزون المنزلي', 'Home stock')],
+          ['recipes', ChefHat, tr(profile, 'Recettes', 'الوصفات', 'Recipes'), tr(profile, 'Collection familiale', 'مجموعة العائلة', 'Family collection')],
+          ['needs', ClipboardList, tr(profile, 'Besoins', 'الاحتياجات', 'Needs'), tr(profile, 'Autres dépenses', 'مصاريف أخرى', 'Other expenses')],
+        ] as const).map(([id, Icon, label, hint]) => (
+          <button key={id} type="button" onClick={() => setSection(id)} aria-current={section === id ? 'page' : undefined} className={section === id ? 'kenz-family-tab active' : 'kenz-family-tab'}>
+            <span className="kenz-family-tab-icon"><Icon aria-hidden="true" /></span>
+            <span className="kenz-family-tab-copy"><strong>{label}</strong><small>{hint}</small></span>
+            <span className="kenz-family-tab-indicator" aria-hidden="true" />
+          </button>
         ))}
-      </div>
+      </nav>
 
       {status && <p role="status" className="kenz-family-inline-status">{status}</p>}
 
@@ -476,7 +480,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
       </div>}
 
       {section === 'shopping' && <div className="kenz-family-panel space-y-3">
-        <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'LISTE AUTOMATIQUE', 'قائمة تلقائية', 'AUTO LIST')}</span><h3>{tr(profile, 'À acheter', 'قائمة المشتريات', 'Shopping list')}</h3></div><span className="text-xs text-slate-500">{requirements.filter((row) => row.toBuyMilli > 0).length} {tr(profile, 'articles', 'مواد', 'items')}</span></div>
+        <div className="kenz-section-heading"><div><span className="kenz-family-auto-label"><ShoppingBasket aria-hidden="true" />{tr(profile, 'LISTE AUTOMATIQUE', 'قائمة تلقائية', 'AUTO-GENERATED LIST')}</span><h3>{tr(profile, 'Liste de courses', 'قائمة المشتريات', 'Shopping list')}</h3></div><span className="text-xs text-slate-500">{requirements.filter((row) => row.toBuyMilli > 0).length} {tr(profile, 'articles', 'مواد', 'items')}</span></div>
         <p className="text-xs text-slate-500">{tr(profile, 'Les ingrédients des repas sont regroupés. Le stock enregistré est déduit automatiquement. Les quantités restent modifiables dans les réserves.', 'تُجمع مكونات الوجبات ويُخصم المخزون المسجل تلقائياً. يمكن تعديل الكميات من قسم المخزون.', 'Meal ingredients are combined and saved pantry stock is deducted automatically. Adjust stock in the pantry section.')}</p>
         <div className="rounded-xl bg-teal-50 p-3 space-y-2">
           <h4 className="text-xs font-bold text-teal-950">{tr(profile, 'Ajouter un produit hors recette', 'إضافة منتج خارج الوصفات', 'Add a non-recipe item')}</h4>
