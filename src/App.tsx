@@ -679,7 +679,7 @@ export default function App() {
           <button
             onClick={() => setActiveTab('reports')}
             className={`whitespace-nowrap transition-colors min-h-[44px] flex items-center cursor-pointer ${
-              activeTab === 'reports' ? 'text-violet-300 font-bold' : 'hover:text-slate-200'
+              activeTab === 'reports' ? 'text-teal-700 font-bold' : 'hover:text-slate-200'
             }`}
           >
             {budgetState.profile.locale === 'ar' ? 'التقارير' : 'Rapports'}
