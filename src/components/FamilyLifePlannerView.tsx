@@ -305,7 +305,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     if (amount === null) return;
     setPlan((current) => ({
       ...current,
-      allocationMode: 'manual',
+      allocationMode: 'custom',
       categories: current.categories.map((row) => row.id === categoryId
         ? { ...row, plannedMinor: amount, plannedOverride: true }
         : row),
