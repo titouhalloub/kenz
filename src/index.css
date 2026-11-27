@@ -174,3 +174,28 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-mobile-navigation .kenz-more-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 .kenz-mobile-navigation .kenz-more-item{min-height:72px}
 @media(min-width:768px){.kenz-mobile-navigation{display:none!important}}
+
+
+/* Family planning: clear teal navigation cards and readable section labels. */
+.kenz-family-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;padding:0;margin:0;align-items:stretch}
+.kenz-family-tab{position:relative;min-width:0;min-height:86px;display:flex;align-items:center;gap:10px;padding:12px 11px;border:1px solid #e3eeeb;border-radius:17px;background:linear-gradient(155deg,#fff 0%,#f9fcfb 100%);color:#62716e;text-align:start;box-shadow:0 3px 12px rgba(25,75,67,.035);cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}
+.kenz-family-tab:hover{border-color:#b8d9d2;box-shadow:0 6px 16px rgba(25,100,88,.08);transform:translateY(-1px)}
+.kenz-family-tab.active{border-color:#75b9ad;background:linear-gradient(145deg,#effaf7 0%,#fff 100%);color:#155f55;box-shadow:0 5px 17px rgba(24,112,98,.11)}
+.kenz-family-tab-icon{width:39px;height:39px;flex:0 0 39px;display:grid;place-items:center;border:1px solid #e1efeb;border-radius:13px;background:#f0f8f6;color:#36877b}
+.kenz-family-tab-icon svg{width:20px;height:20px;stroke-width:2}
+.kenz-family-tab.active .kenz-family-tab-icon{border-color:#c7e6df;background:#dff4ee;color:#146b5e}
+.kenz-family-tab-copy{min-width:0;display:flex;flex:1;flex-direction:column;gap:4px}
+.kenz-family-tab-copy strong{display:block;overflow-wrap:anywhere;color:inherit;font-size:12px;font-weight:800;line-height:1.25}
+.kenz-family-tab-copy small{display:block;overflow-wrap:anywhere;color:#8a9895;font-size:9px;line-height:1.3}
+.kenz-family-tab-indicator{position:absolute;inset-inline-end:10px;top:10px;width:6px;height:6px;border-radius:50%;background:transparent}
+.kenz-family-tab.active .kenz-family-tab-indicator{background:#218879;box-shadow:0 0 0 3px rgba(33,136,121,.10)}
+.kenz-family-panel{min-width:0;padding:16px;border:1px solid #e5efed;border-radius:21px;background:linear-gradient(160deg,#fff 0%,#fcfefd 100%);box-shadow:0 6px 22px rgba(25,75,67,.045)}
+.kenz-family-auto-label{width:max-content;max-width:100%;display:inline-flex;align-items:center;gap:7px;margin-bottom:7px;padding:6px 9px;border:1px solid #d5ebe5;border-radius:999px;background:#edf8f5;color:#176b5f;font-size:9px;font-weight:850;letter-spacing:.075em;line-height:1.2;white-space:normal}
+.kenz-family-auto-label svg{width:13px;height:13px;flex:0 0 auto}
+.kenz-family-panel .kenz-section-heading{align-items:flex-start;gap:12px}
+.kenz-family-panel .kenz-section-heading h3{margin:0;color:#263f3b;font-size:16px;font-weight:850;line-height:1.3}
+.kenz-family-panel input:not([type=checkbox]),.kenz-family-panel select,.kenz-family-panel textarea{min-width:0;border-color:#dfeae7;border-radius:12px;background:#fff;color:#30433f}
+.kenz-family-panel input:focus,.kenz-family-panel select:focus,.kenz-family-panel textarea:focus{border-color:#65aa9e;outline:2px solid rgba(34,133,117,.12)}
+.kenz-family-inline-status{padding:11px 13px;border:1px solid #cce9e1;border-radius:13px;background:#effaf6;color:#176b5f;font-size:12px;line-height:1.45}
+@media(max-width:760px){.kenz-family-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.kenz-family-tab{min-height:72px;padding:10px}.kenz-family-tab-icon{width:36px;height:36px;flex-basis:36px}.kenz-family-tab-copy strong{font-size:12px}.kenz-family-tab-copy small{font-size:9px}.kenz-family-panel{padding:13px;border-radius:18px}}
+@media(max-width:360px){.kenz-family-tab{gap:7px;padding:9px}.kenz-family-tab-icon{width:32px;height:32px;flex-basis:32px;border-radius:10px}.kenz-family-tab-icon svg{width:17px;height:17px}.kenz-family-tab-copy strong{font-size:11px}}
