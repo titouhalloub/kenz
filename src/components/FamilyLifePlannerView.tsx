@@ -85,7 +85,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const [marketPrices, setMarketPrices] = useState<Record<string, SimulatorPrice>>({});
   const [priceLoadStatus, setPriceLoadStatus] = useState<'loading' | 'live' | 'cache' | 'unavailable'>('loading');
   const handleNeedsTotalsChange = useCallback((totals: Partial<Record<FamilyBudgetCategoryId, { plannedMinor: number; actualMinor: number }>>) => setNeedTotals(totals), []);
-  const handleFoodPlanCostChange((amountMinor: number, complete: boolean) => {
+  const handleFoodPlanCostChange = useCallback((amountMinor: number, complete: boolean) => {
     setMealPlanCostMinor(Number.isSafeInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0);
     setMealPlanCostComplete(complete);
   }, []);
