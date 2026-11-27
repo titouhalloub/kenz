@@ -199,3 +199,30 @@ html[dir="rtl"]{direction:rtl}html[dir="rtl"] body{text-align:right}[dir="rtl"] 
 .kenz-family-inline-status{padding:11px 13px;border:1px solid #cce9e1;border-radius:13px;background:#effaf6;color:#176b5f;font-size:12px;line-height:1.45}
 @media(max-width:760px){.kenz-family-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.kenz-family-tab{min-height:72px;padding:10px}.kenz-family-tab-icon{width:36px;height:36px;flex-basis:36px}.kenz-family-tab-copy strong{font-size:12px}.kenz-family-tab-copy small{font-size:9px}.kenz-family-panel{padding:13px;border-radius:18px}}
 @media(max-width:360px){.kenz-family-tab{gap:7px;padding:9px}.kenz-family-tab-icon{width:32px;height:32px;flex-basis:32px;border-radius:10px}.kenz-family-tab-icon svg{width:17px;height:17px}.kenz-family-tab-copy strong{font-size:11px}}
+
+
+/* Automatic allocation cards — same polished teal card language as planner tabs. */
+.kenz-allocation-card{display:flex;flex-direction:column;gap:13px;min-width:0;padding:15px;border:1px solid #e1eeea;border-radius:18px;background:linear-gradient(145deg,#fff 0%,#f9fcfb 100%);box-shadow:0 4px 14px rgba(22,82,72,.045);transition:border-color .16s,box-shadow .16s}
+.kenz-allocation-card:hover{border-color:#c5e1da;box-shadow:0 7px 20px rgba(22,82,72,.075)}
+.kenz-allocation-heading,.kenz-allocation-identity{display:flex;align-items:center;min-width:0}
+.kenz-allocation-heading{justify-content:space-between;gap:10px}
+.kenz-allocation-identity{gap:11px;flex:1}
+.kenz-allocation-icon{width:43px;height:43px;display:grid;place-items:center;flex:0 0 43px;border:1px solid #dceee8;border-radius:14px;background:linear-gradient(145deg,#eaf7f2,#f5fbf8);color:#237d70}
+.kenz-allocation-icon svg{width:21px;height:21px;stroke-width:1.9}
+.kenz-allocation-name{display:flex;flex-direction:column;gap:4px;min-width:0}
+.kenz-allocation-name>strong{color:#263f3b;font-size:13px;font-weight:850;line-height:1.3}
+.kenz-allocation-remaining{color:#71817d;font-size:10px;font-weight:650;line-height:1.35}
+.kenz-allocation-link{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;padding:7px 9px;border:1px solid #d3eae3;border-radius:10px;background:#f0f9f5;color:#176b5e;font-size:10px;font-weight:800;cursor:pointer}
+.kenz-allocation-link:hover{background:#e5f5ef;border-color:#acd7cb}
+.kenz-allocation-meals{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 10px;padding:10px 12px;border:1px solid #dcefe8;border-radius:13px;background:#f3faf7}
+.kenz-allocation-meals>span{color:#637b74;font-size:10px;font-weight:700}
+.kenz-allocation-meals>strong{color:#176b5e;font-size:13px;font-weight:850;font-variant-numeric:tabular-nums}
+.kenz-allocation-meals>p{grid-column:1/-1;margin:3px 0 0;color:#82918c;font-size:9px;line-height:1.5}
+.kenz-allocation-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.kenz-allocation-metric{display:flex;flex-direction:column;justify-content:space-between;gap:9px;min-width:0;padding:11px 12px;border:1px solid #e7efed;border-radius:13px;background:#fbfdfc}
+.kenz-allocation-metric.planned{border-color:#dceee8;background:linear-gradient(145deg,#f0f9f5,#fbfdfc)}
+.kenz-allocation-metric.actual{background:#fafcfc}
+.kenz-allocation-metric>span{color:#788984;font-size:9px;font-weight:700;line-height:1.35}
+.kenz-allocation-metric>strong{overflow-wrap:anywhere;color:#24423c;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;font-weight:850;font-variant-numeric:tabular-nums;line-height:1.3}
+.kenz-allocation-metric.actual>strong{color:#536c65}
+@media(max-width:480px){.kenz-allocation-card{padding:12px;gap:11px}.kenz-allocation-icon{width:39px;height:39px;flex-basis:39px}.kenz-allocation-metric{padding:10px}.kenz-allocation-metric>strong{font-size:12px}.kenz-allocation-link{padding:6px 7px;font-size:9px}}
