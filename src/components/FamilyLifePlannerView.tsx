@@ -300,6 +300,28 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     }));
   };
 
+  const updateAllocationAmount = (categoryId: FamilyBudgetCategoryId, raw: string) => {
+    const amount = parseBudgetInput(raw);
+    if (amount === null) return;
+    setPlan((current) => ({
+      ...current,
+      allocationMode: 'manual',
+      categories: current.categories.map((row) => row.id === categoryId
+        ? { ...row, plannedMinor: amount, plannedOverride: true }
+        : row),
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const resetAllocationsToAutomatic = () => {
+    setPlan((current) => ({
+      ...current,
+      allocationMode: 'automatic',
+      categories: current.categories.map((row) => ({ ...row, plannedOverride: false })),
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
   const resetIncomeToKenz = () => {
     setPlan((current) => ({
       ...current,
@@ -322,9 +344,9 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
         </div>
       </header>
 
-      <div className="kenz-family-subtabs kenz-family-main-tabs">
-        <button onClick={() => setActiveSection('budget')} className={activeSection === 'budget' ? 'active' : ''}>{t(profile, 'Budget du mois', 'ميزانية الشهر', 'Monthly budget')}</button>
-        <button onClick={() => setActiveSection('living')} className={activeSection === 'living' ? 'active' : ''}>{t(profile, 'Repas & maison', 'الوجبات والمنزل', 'Meals & home')}</button>
+      <div className="kenz-family-tabs kenz-family-main-tabs">
+        <button type="button" onClick={() => setActiveSection('budget')} aria-current={activeSection === 'budget' ? 'page' : undefined} className={activeSection === 'budget' ? 'kenz-family-main-tab active' : 'kenz-family-main-tab'}><span className="kenz-family-main-tab-icon"><Wallet aria-hidden="true" /></span><span><strong>{t(profile, 'Budget du mois', 'ميزانية الشهر', 'Monthly budget')}</strong><small>{t(profile, 'Revenus, enveloppes et suivi', 'الدخل والمخصصات والمتابعة', 'Income, allocations & tracking')}</small></span></button>
+        <button type="button" onClick={() => setActiveSection('living')} aria-current={activeSection === 'living' ? 'page' : undefined} className={activeSection === 'living' ? 'kenz-family-main-tab active' : 'kenz-family-main-tab'}><span className="kenz-family-main-tab-icon"><Utensils aria-hidden="true" /></span><span><strong>{t(profile, 'Repas & maison', 'الوجبات والمنزل', 'Meals & home')}</strong><small>{t(profile, 'Repas, courses et réserves', 'الوجبات والمشتريات والمخزون', 'Meals, groceries & pantry')}</small></span></button>
       </div>
 
       <div className={activeSection === 'living' ? '' : 'hidden'}>
@@ -405,7 +427,8 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
         <div className="kenz-family-panel space-y-3">
           <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{t(profile, 'PLANIFICATION', 'التخطيط', 'PLANNING')}</span><h3>{t(profile, 'Répartition automatique', 'التوزيع التلقائي', 'Automatic allocation')}</h3></div></div>
           <p className="text-xs text-slate-500">{t(profile, 'Les enveloppes sont calculées automatiquement à partir du revenu, des engagements, des prix du marché et des repas planifiés. Les dépenses réelles viennent des opérations Kenz.', 'تُحسب المخصصات تلقائياً من دخلك والتزاماتك وأسعار السوق والوجبات المخططة. المصروفات الفعلية تأتي من سجل عمليات كنز.', 'Allocations are calculated automatically from income, commitments, market prices and planned meals. Actual expenses come from Kenz transactions.')}</p>
-          <p className="text-[10px] leading-4 text-slate-500">{t(profile, 'Calcul de l’enveloppe alimentaire : en mode automatique, Kenz compare les engagements récurrents, l’estimation du panier de marché et le coût des repas programmés, puis retient le montant le plus élevé. Il s’agit d’un montant prévu, pas d’une dépense réelle.', 'طريقة حساب مخصص الغذاء: في الوضع التلقائي، يقارن كنز الالتزامات الدورية وتقدير سلة السوق وتكلفة الوجبات المخططة، ثم يعتمد المبلغ الأعلى. هذا مبلغ مخطط وليس إنفاقاً فعلياً.', 'Food allocation: in automatic mode, Kenz compares recurring commitments, the market-basket estimate and planned-meal cost, then uses the highest amount. This is a planned amount, not actual spending.')}</p>
+
+          <div className="kenz-allocation-mode-row"><span>{plan.allocationMode === 'automatic' ? t(profile, 'Mode automatique', 'الوضع التلقائي', 'Automatic mode') : t(profile, 'Montants personnalisés', 'مبالغ مخصصة', 'Custom amounts')}</span>{plan.allocationMode !== 'automatic' && <button type="button" onClick={resetAllocationsToAutomatic}>{t(profile, 'Recalculer automatiquement', 'إعادة الحساب تلقائياً', 'Recalculate automatically')}</button>}</div>          <p className="text-[10px] leading-4 text-slate-500">{t(profile, 'Calcul de l’enveloppe alimentaire : en mode automatique, Kenz compare les engagements récurrents, l’estimation du panier de marché et le coût des repas programmés, puis retient le montant le plus élevé. Il s’agit d’un montant prévu, pas d’une dépense réelle.', 'طريقة حساب مخصص الغذاء: في الوضع التلقائي، يقارن كنز الالتزامات الدورية وتقدير سلة السوق وتكلفة الوجبات المخططة، ثم يعتمد المبلغ الأعلى. هذا مبلغ مخطط وليس إنفاقاً فعلياً.', 'Food allocation: in automatic mode, Kenz compares recurring commitments, the market-basket estimate and planned-meal cost, then uses the highest amount. This is a planned amount, not actual spending.')}</p>
 
           <div className="space-y-2">
             {effectivePlan.categories.map((row) => {
@@ -431,7 +454,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
                 <div className="kenz-allocation-metrics">
                   <div className="kenz-allocation-metric planned">
                     <span>{t(profile, 'Enveloppe automatique', 'المخصص التلقائي', 'Automatic allocation')}</span>
-                    <strong>{formatMoney(row.plannedMinor, profile.preferredCurrency, profile.locale)}</strong>
+                    <label className="kenz-allocation-edit"><input aria-label={t(profile, 'Montant planifié', 'المبلغ المخطط', 'Planned amount')} inputMode="decimal" value={moneyInput(row.plannedMinor)} onChange={(e) => updateAllocationAmount(row.id, e.target.value)} /><span>{t(profile, 'DA', 'دج', 'DA')}</span></label>
                   </div>
                   <div className="kenz-allocation-metric actual">
                     <span>{t(profile, 'Réel · opérations Kenz', 'الفعلي · عمليات كنز', 'Actual · Kenz transactions')}</span>
