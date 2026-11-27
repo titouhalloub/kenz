@@ -12,11 +12,18 @@ import {
   type MealSlot, type HouseholdNeedCategory, type ClothingSeason, type ShoppingExtraCategory,
 } from '../domain/familyLiving';
 
-interface Props { profile: UserProfile; month: string; householdSize: number; onFoodPlanCostChange?: (amountMinor: number, complete: boolean) => void; }
+interface Props { profile: UserProfile; month: string; householdSize: number; onFoodPlanCostChange?: (amountMinor: number, complete: boolean) => void; onNeedsTotalsChange?: (totals: Partial<Record<HouseholdNeedCategory, { plannedMinor: number; actualMinor: number }>>) => void; }
 type Section = 'meals' | 'shopping' | 'pantry' | 'recipes' | 'needs';
 
-const tr = (profile: UserProfile, fr: string, ar: string, en: string) =>
-  profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
+const tr = (profile: UserProfile, fr: string, ar: string, en: string) => profile.locale === 'ar' ? ar : profile.locale === 'en' ? en : fr;
+const NEED_CATEGORY_LABELS: Record<HouseholdNeedCategory, { fr: string; ar: string; en: string }> = {
+housing:{fr:'Logement & factures',ar:'السكن والفواتير',en:'Housing & bills'},food:{fr:'Alimentation & courses',ar:'الغذاء والمشتريات',en:'Food & groceries'},
+cleaning:{fr:'Nettoyage & entretien',ar:'التنظيف والمنظفات',en:'Cleaning supplies'},hygiene:{fr:'Hygiène personnelle',ar:'النظافة الشخصية',en:'Personal hygiene'},
+clothing:{fr:'Vêtements & chaussures',ar:'الملابس والأحذية',en:'Clothing & footwear'},transport:{fr:'Transport',ar:'النقل',en:'Transport'},
+education:{fr:'Éducation & école',ar:'التعليم والمدرسة',en:'Education & school'},health:{fr:'Santé & pharmacie',ar:'الصحة والصيدلية',en:'Health & pharmacy'},
+communications:{fr:'Internet & téléphone',ar:'الإنترنت والهاتف',en:'Internet & phone'},maintenance:{fr:'Entretien du logement',ar:'صيانة المنزل',en:'Home maintenance'},
+debt:{fr:'Remboursements',ar:'تسديد الديون',en:'Debt payments'},savings:{fr:'Épargne & urgence',ar:'الادخار والطوارئ',en:'Savings & emergency'},
+other:{fr:'Autres besoins',ar:'احتياجات أخرى',en:'Other needs'} };
 const monthFirstDay = (month: string) => `${month}-01`;
 const isValidCalendarDate = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -65,7 +72,7 @@ const readLivingPlan = (userId: string, month: string): FamilyLivingPlan => {
   } catch { return fallback; }
 };
 
-export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, householdSize, onFoodPlanCostChange }) => {
+export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, householdSize, onFoodPlanCostChange, onNeedsTotalsChange }) => {
   const [plan, setPlan] = useState(() => readLivingPlan(profile.id, month));
   const [section, setSection] = useState<Section>('meals');
   const [mealDate, setMealDate] = useState(monthFirstDay(month));
@@ -111,6 +118,12 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
     } catch { setStatus(tr(profile, 'Stockage local indisponible.', 'التخزين المحلي غير متاح.', 'Local storage is unavailable.')); }
   }, [plan, profile.id, month, profile.locale]);
 
+  const needsTotals = useMemo(() => plan.needs.reduce((totals, need) => {
+    const current = totals[need.category] || { plannedMinor: 0, actualMinor: 0 };
+    totals[need.category] = { plannedMinor: current.plannedMinor + need.plannedMinor, actualMinor: current.actualMinor + need.actualMinor };
+    return totals;
+  }, {} as Partial<Record<HouseholdNeedCategory, { plannedMinor: number; actualMinor: number }>>), [plan.needs]);
+  useEffect(() => { onNeedsTotalsChange?.(needsTotals); }, [needsTotals, onNeedsTotalsChange]);
   const recipes = useMemo(() => [...BUILTIN_FAMILY_RECIPES, ...plan.recipes], [plan.recipes]);
   const recipeMap = useMemo(() => new Map<string, FamilyRecipe>(recipes.map((recipe) => [recipe.id, recipe] as const)), [recipes]);
   // Build the full shopping list only when its tab is opened. The meals view
@@ -521,14 +534,7 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         <p className="text-xs text-slate-500">{tr(profile, 'Ajoutez les achats prévus : vêtements par membre, chaussures, lessive, savon, fournitures scolaires, transport, entretien et tout besoin personnalisé.', 'أضف المشتريات المخططة: ملابس لكل فرد، أحذية، مسحوق الغسيل، الصابون، اللوازم المدرسية، النقل والصيانة وكل احتياج خاص.', 'Track planned purchases: clothing per family member, shoes, laundry detergent, soap, school supplies, transport, maintenance and any custom need.')}</p>
         <div className="grid grid-cols-2 gap-2">
           <label>{tr(profile, 'Catégorie', 'الفئة', 'Category')}<select value={needCategory} onChange={(e) => setNeedCategory(e.target.value as HouseholdNeedCategory)} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm">
-            <option value="clothing">{tr(profile, 'Vêtements & chaussures', 'ملابس وأحذية', 'Clothing & footwear')}</option>
-            <option value="cleaning">{tr(profile, 'Nettoyage', 'التنظيف', 'Cleaning')}</option>
-            <option value="hygiene">{tr(profile, 'Hygiène', 'النظافة الشخصية', 'Personal hygiene')}</option>
-            <option value="school">{tr(profile, 'École', 'المدرسة', 'School')}</option>
-            <option value="transport">{tr(profile, 'Transport', 'النقل', 'Transport')}</option>
-            <option value="health">{tr(profile, 'Santé', 'الصحة', 'Health')}</option>
-            <option value="home">{tr(profile, 'Maison', 'المنزل', 'Home')}</option>
-            <option value="other">{tr(profile, 'Autre', 'أخرى', 'Other')}</option>
+            {Object.entries(NEED_CATEGORY_LABELS).map(([id, labels]) => <option key={id} value={id}>{tr(profile, labels.fr, labels.ar, labels.en)}</option>)}
           </select></label>
           <label>{tr(profile, 'Montant prévu (DA)', 'المبلغ المخطط (دج)', 'Planned amount (DA)')}<input inputMode="decimal" value={needPlanned} onChange={(e) => setNeedPlanned(e.target.value)} placeholder="0.00" className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
           <label className="col-span-2">{tr(profile, 'Article / besoin', 'المنتج / الاحتياج', 'Item / need')}<input value={needName} onChange={(e) => setNeedName(e.target.value)} placeholder={tr(profile, 'Ex. veste hiver, lessive, cahiers…', 'مثلاً معطف شتوي، مسحوق غسيل، كراريس…', 'e.g. winter jacket, detergent, notebooks…')} className="mt-1 w-full h-11 rounded-xl border px-3 text-sm" /></label>
@@ -538,10 +544,10 @@ export const FamilyLivingPlannerView: React.FC<Props> = ({ profile, month, house
         </div>
         <button onClick={addNeed} className="w-full min-h-11 rounded-xl bg-teal-700 px-4 text-sm font-bold text-white"><Plus className="inline mr-2 h-4 w-4" />{tr(profile, 'Ajouter le besoin', 'إضافة الاحتياج', 'Add need')}</button>
         {plan.needs.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">{tr(profile, 'Aucun besoin détaillé pour ce mois.', 'لا توجد احتياجات مفصلة لهذا الشهر.', 'No detailed needs for this month yet.')}</p> : <div className="space-y-2">{plan.needs.map((item) => <article key={item.id} className="rounded-xl border border-teal-100 p-3">
-          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, item.category === 'clothing' ? 'Vêtements' : item.category === 'cleaning' ? 'Nettoyage' : item.category === 'hygiene' ? 'Hygiène' : item.category === 'school' ? 'École' : item.category === 'transport' ? 'Transport' : item.category === 'health' ? 'Santé' : item.category === 'home' ? 'Maison' : 'Autre', item.category === 'clothing' ? 'ملابس' : item.category === 'cleaning' ? 'تنظيف' : item.category === 'hygiene' ? 'نظافة' : item.category === 'school' ? 'مدرسة' : item.category === 'transport' ? 'نقل' : item.category === 'health' ? 'صحة' : item.category === 'home' ? 'منزل' : 'أخرى', item.category)}{item.member ? ' · ' + item.member : ''}{item.season ? ' · ' + tr(profile, item.season === 'spring' ? 'Printemps' : item.season === 'summer' ? 'Été' : item.season === 'autumn' ? 'Automne' : item.season === 'winter' ? 'Hiver' : 'Toute saison', item.season === 'spring' ? 'الربيع' : item.season === 'summer' ? 'الصيف' : item.season === 'autumn' ? 'الخريف' : item.season === 'winter' ? 'الشتاء' : 'كل المواسم', item.season) : ''}{item.size ? ' · ' + item.size : ''}{item.dueDate ? ' · ' + item.dueDate : ''}</span><span className="mt-1 block text-[10px] text-slate-500">{tr(profile, 'Prévu', 'مخطط', 'Planned')}: {formatMoney(item.plannedMinor, profile.preferredCurrency, profile.locale)}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, needs: current.needs.filter((need) => need.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></div>
+          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><strong className="block text-xs">{item.name}</strong><span className="text-[10px] text-slate-500">{tr(profile, NEED_CATEGORY_LABELS[item.category].fr, NEED_CATEGORY_LABELS[item.category].ar, NEED_CATEGORY_LABELS[item.category].en)}{item.member ? ' · ' + item.member : ''}{item.season ? ' · ' + tr(profile, item.season === 'spring' ? 'Printemps' : item.season === 'summer' ? 'Été' : item.season === 'autumn' ? 'Automne' : item.season === 'winter' ? 'Hiver' : 'Toute saison', item.season === 'spring' ? 'الربيع' : item.season === 'summer' ? 'الصيف' : item.season === 'autumn' ? 'الخريف' : item.season === 'winter' ? 'الشتاء' : 'كل المواسم', item.season) : ''}{item.size ? ' · ' + item.size : ''}{item.dueDate ? ' · ' + item.dueDate : ''}</span><span className="mt-1 block text-[10px] text-slate-500">{tr(profile, 'Prévu', 'مخطط', 'Planned')}: {formatMoney(item.plannedMinor, profile.preferredCurrency, profile.locale)}</span></div><button aria-label={tr(profile, 'Supprimer', 'حذف', 'Delete')} onClick={() => updatePlan((current) => ({ ...current, needs: current.needs.filter((need) => need.id !== item.id) }))} className="rounded-lg p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button></div>
           <label className="mt-2">{tr(profile, 'Montant réellement dépensé', 'المبلغ المصروف فعلياً', 'Actual amount spent')}<input key={item.id + '-actual'} inputMode="decimal" defaultValue={moneyField(item.actualMinor)} onBlur={(e) => { const next = updateNeedActual(item.id, e.currentTarget.value, item.actualMinor); e.currentTarget.value = moneyField(next); }} className="mt-1 w-full h-10 rounded-lg border px-3 text-sm font-mono-numbers" /></label>
         </article>)}</div>}
-        <p className="text-[10px] text-slate-500">{tr(profile, 'Ces lignes détaillent les achats. Elles ne modifient pas automatiquement les enveloppes du budget principal afin d’éviter les doubles comptages.', 'هذه البنود تفصل المشتريات ولا تعدّل تلقائياً مخصصات الميزانية الرئيسية لتجنب احتساب المصروف مرتين.', 'These line items detail purchases and do not automatically change the main budget envelopes, to avoid double counting.')}</p>
+        <p className="text-[10px] text-slate-500">{tr(profile, 'Les montants prévus sont ajoutés à l’enveloppe de leur catégorie. Le montant réel est intégré au suivi des dépenses ; un montant déjà couvert par les opérations Kenz n’est pas ajouté une seconde fois.', 'تُضاف المبالغ المخططة إلى مخصص الفئة المناسبة. ويُدمج المصروف الفعلي في متابعة الإنفاق دون إضافة مبلغ تغطيه عمليات كنز مرة ثانية.', 'Planned amounts are added to their category envelope. Actual amounts are included in spending; amounts already covered by Kenz transactions are not added again.')}</p>
       </div>}
       {section === 'recipes' && <div className="kenz-family-panel space-y-3">
         <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{tr(profile, 'COLLECTION', 'مجموعة الوصفات', 'COLLECTION')}</span><h3>{tr(profile, 'Recettes familiales', 'وصفات عائلية', 'Family recipes')}</h3></div><span className="text-xs text-slate-500">{recipes.length}</span></div>

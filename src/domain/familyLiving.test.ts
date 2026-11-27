@@ -82,6 +82,17 @@ describe('family living planner', () => {
     expect(validateFamilyLivingPlan(plan, 'u1', '2026-11')).toBeNull();
   });
 
+  it('migrates legacy need categories to the matching budget categories', () => {
+    const plan = createFamilyLivingPlan('u1', '2026-11');
+    plan.needs = [
+      { id: 'old-school', category: 'school' as never, name: 'Notebooks', plannedMinor: 1200, actualMinor: 0 },
+      { id: 'old-home', category: 'home' as never, name: 'Repair', plannedMinor: 2500, actualMinor: 500 },
+      { id: 'new-debt', category: 'debt', name: 'Repayment', plannedMinor: 3000, actualMinor: 1000 },
+    ];
+    const restored = validateFamilyLivingPlan(plan, 'u1', '2026-11');
+    expect(restored?.needs.map((need) => need.category)).toEqual(['education', 'maintenance', 'debt']);
+  });
+
   it('rejects cross-user, cross-month, duplicate and malformed data', () => {
     const plan = createFamilyLivingPlan('u1', '2026-11');
     expect(validateFamilyLivingPlan(plan, 'u2', '2026-11')).toBeNull();

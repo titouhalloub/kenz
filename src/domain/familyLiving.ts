@@ -1,3 +1,4 @@
+import type { FamilyBudgetCategoryId } from './familyBudget';
 export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
 import { getCatalogProduct, type BaseUnit } from './productCatalog';
 import { resolveIngredient, resolveProduct, convertToCanonical, canonicalToBaseMilli, type IngredientUnit, type UnpricedReason } from './ingredientMapping';
@@ -40,7 +41,7 @@ export interface PantryItem {
 }
 
 export type ClothingSeason = 'spring' | 'summer' | 'autumn' | 'winter' | 'all';
-export type HouseholdNeedCategory = 'clothing' | 'cleaning' | 'hygiene' | 'school' | 'transport' | 'health' | 'home' | 'other';
+export type HouseholdNeedCategory = FamilyBudgetCategoryId;
 
 export interface HouseholdNeed {
   id: string;
@@ -296,7 +297,9 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
       !Array.isArray(row.meals) || !Array.isArray(row.pantry) || (row.shoppingExtras !== undefined && !Array.isArray(row.shoppingExtras)) || (row.needs !== undefined && !Array.isArray(row.needs)) || !Array.isArray(row.recipes) ||
       row.meals.length > 400 || row.pantry.length > 500 || (Array.isArray(row.shoppingExtras) && row.shoppingExtras.length > 500) || (Array.isArray(row.needs) && row.needs.length > 1000) || row.recipes.length > 500) return null;
   const shoppingExtras = Array.isArray(row.shoppingExtras) ? row.shoppingExtras : [];
-  const needs = Array.isArray(row.needs) ? row.needs : [];
+  const legacyNeedCategoryMap: Record<string, HouseholdNeedCategory> = { clothing:'clothing',cleaning:'cleaning',hygiene:'hygiene',school:'education',transport:'transport',health:'health',home:'maintenance',other:'other' };
+  const needs = Array.isArray(row.needs) ? row.needs.map((need) => need && typeof need === 'object'
+    ? { ...need, category: legacyNeedCategoryMap[String(need.category)] || need.category } : need) : [];
 
   const mealsValid = row.meals.every((meal) => meal && validText(meal.id, 120) &&
     validDate(meal.date) && meal.date.slice(0, 7) === month &&
@@ -308,8 +311,7 @@ export function validateFamilyLivingPlan(value: unknown, userId: string, month: 
     validUnit(extra.unit) && validRecipeQuantity(extra.quantityMilli) &&
     (extra.category === 'grocery' || extra.category === 'cleaning' || extra.category === 'hygiene' || extra.category === 'other'));
   const needsValid = needs.every((need) => need && validText(need.id, 120) &&
-    (need.category === 'clothing' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'school' ||
-      need.category === 'transport' || need.category === 'health' || need.category === 'home' || need.category === 'other') &&
+    (need.category === 'housing' || need.category === 'food' || need.category === 'cleaning' || need.category === 'hygiene' || need.category === 'clothing' || need.category === 'transport' || need.category === 'education' || need.category === 'health' || need.category === 'communications' || need.category === 'maintenance' || need.category === 'debt' || need.category === 'savings' || need.category === 'other') &&
     validText(need.name, 100) && (need.member === undefined || validText(need.member, 80)) &&
     (need.season === undefined || need.season === 'spring' || need.season === 'summer' || need.season === 'autumn' || need.season === 'winter' || need.season === 'all') &&
     (need.size === undefined || validText(need.size, 40)) &&

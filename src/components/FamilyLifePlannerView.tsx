@@ -80,10 +80,12 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const [saveState, setSaveState] = useState<'saved' | 'error'>('saved');
   const [activeSection, setActiveSection] = useState<'budget' | 'living'>('budget');
   const [mealPlanCostMinor, setMealPlanCostMinor] = useState(0);
+  const [needTotals, setNeedTotals] = useState<Partial<Record<FamilyBudgetCategoryId, { plannedMinor: number; actualMinor: number }>>>({});
   const [mealPlanCostComplete, setMealPlanCostComplete] = useState(true);
   const [marketPrices, setMarketPrices] = useState<Record<string, SimulatorPrice>>({});
   const [priceLoadStatus, setPriceLoadStatus] = useState<'loading' | 'live' | 'cache' | 'unavailable'>('loading');
-  const handleFoodPlanCostChange = useCallback((amountMinor: number, complete: boolean) => {
+  const handleNeedsTotalsChange = useCallback((totals: Partial<Record<FamilyBudgetCategoryId, { plannedMinor: number; actualMinor: number }>>) => setNeedTotals(totals), []);
+  const handleFoodPlanCostChange((amountMinor: number, complete: boolean) => {
     setMealPlanCostMinor(Number.isSafeInteger(amountMinor) && amountMinor >= 0 ? amountMinor : 0);
     setMealPlanCostComplete(complete);
   }, []);
@@ -92,6 +94,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     const next = readPlan(profile.id, selectedMonth);
     setMealPlanCostMinor(0);
     setMealPlanCostComplete(true);
+    setNeedTotals({});
     setPlan(next);
     setIncomeInput(moneyInput(next.monthlyIncomeMinor));
   }, [profile.id, selectedMonth]);
@@ -163,11 +166,18 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     return totals;
   }, [recurringItems, categories, profile.id, profile.preferredCurrency, selectedMonth]);
 
-  const effectivePlan = useMemo(() => applyFamilyBudgetSources(
-    { ...plan, monthlyIncomeMinor },
-    recurringPlannedByCategory,
-    actualByCategory,
+  const allocationSourcePlan = useMemo(() => applyFamilyBudgetSources(
+    { ...plan, monthlyIncomeMinor }, recurringPlannedByCategory, actualByCategory,
   ), [plan, monthlyIncomeMinor, actualByCategory, recurringPlannedByCategory]);
+  const effectivePlan = useMemo(() => ({
+    ...allocationSourcePlan,
+    categories: allocationSourcePlan.categories.map((row) => {
+      const needs = needTotals[row.id];
+      if (!needs) return row;
+      // max() prevents double-counting a purchase also recorded in Kenz.
+      return { ...row, plannedMinor: row.plannedMinor + needs.plannedMinor, actualMinor: Math.max(row.actualMinor, needs.actualMinor) };
+    }),
+  }), [allocationSourcePlan, needTotals]);
 
   // Load published market prices once; household and income changes only rerun the local calculation.
   useEffect(() => {
@@ -224,7 +234,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   // Verified market prices always contribute to the food envelope. Partial baskets are
   // shown as a lower bound in the UI, never presented as a complete total.
   const automaticAllocationPlan = useMemo(() => {
-    if (plan.allocationMode !== 'automatic') return effectivePlan;
+    if (plan.allocationMode !== 'automatic') return allocationSourcePlan;
     const recurringFood = recurringPlannedByCategory.get('food') || 0;
     const simulatedFood = foodSimulation?.amountMinor || 0;
     // Even with missing ingredient prices, the verified subtotal is a real lower bound.
@@ -232,12 +242,12 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
     const plannedMeals = mealPlanCostMinor;
     const foodEnvelope = Math.max(recurringFood, simulatedFood, plannedMeals);
     return {
-      ...effectivePlan,
-      categories: effectivePlan.categories.map((row) => row.id === 'food'
+      ...allocationSourcePlan,
+      categories: allocationSourcePlan.categories.map((row) => row.id === 'food'
         ? { ...row, plannedMinor: foodEnvelope, plannedOverride: true }
         : row),
     };
-  }, [plan.allocationMode, effectivePlan, recurringPlannedByCategory, foodSimulation, mealPlanCostComplete, mealPlanCostMinor]);
+  }, [plan.allocationMode, allocationSourcePlan, recurringPlannedByCategory, foodSimulation, mealPlanCostComplete, mealPlanCostMinor]);
 
   useEffect(() => {
     if (plan.userId !== profile.id || plan.month !== selectedMonth) return;
@@ -303,11 +313,12 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
   const updateAllocationAmount = (categoryId: FamilyBudgetCategoryId, raw: string) => {
     const amount = parseBudgetInput(raw);
     if (amount === null) return;
+    const baseAmount = Math.max(0, amount - (needTotals[categoryId]?.plannedMinor || 0));
     setPlan((current) => ({
       ...current,
       allocationMode: 'custom',
       categories: current.categories.map((row) => row.id === categoryId
-        ? { ...row, plannedMinor: amount, plannedOverride: true }
+        ? { ...row, plannedMinor: baseAmount, plannedOverride: true }
         : row),
       updatedAt: new Date().toISOString(),
     }));
@@ -350,7 +361,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
       </div>
 
       <div className={activeSection === 'living' ? '' : 'hidden'}>
-        <FamilyLivingPlannerView profile={profile} month={selectedMonth} householdSize={Math.max(1, plan.adults + plan.children)} onFoodPlanCostChange={handleFoodPlanCostChange} />
+        <FamilyLivingPlannerView profile={profile} month={selectedMonth} householdSize={Math.max(1, plan.adults + plan.children)} onFoodPlanCostChange={handleFoodPlanCostChange} onNeedsTotalsChange={handleNeedsTotalsChange} />
       </div>
       {activeSection === 'budget' && <>
         <div className="kenz-family-panel space-y-3">
