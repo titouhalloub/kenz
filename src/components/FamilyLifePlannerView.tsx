@@ -372,7 +372,7 @@ export const FamilyLifePlannerView: React.FC<Props> = ({ profile, categories, tr
               : t(profile, 'Aucun revenu Kenz enregistré pour ce mois : saisissez votre estimation.', 'لا يوجد دخل مسجل في كنز لهذا الشهر: أدخل تقديرك.', 'No Kenz income is recorded for this month; enter your estimate.')}</p>
         </div>
 
-        <div className="kenz-family-panel space-y-3">
+        <div className="kenz-family-panel space-y-3" data-kenz-no-auto-translate dir={profile.locale === 'ar' ? 'rtl' : 'ltr'}>
           <div className="kenz-section-heading"><div><span className="kenz-card-kicker">{t(profile, 'VOTRE REVENU', 'دخلك الشهري', 'YOUR INCOME')}</span><h3>{t(profile, 'Un montant pour tout Kenz', 'مبلغ واحد لكل كنز', 'One amount for all of Kenz')}</h3></div></div>
           <label className="block text-xs text-slate-600">{t(profile, 'Revenu mensuel total (DA)', 'الدخل الشهري الإجمالي (دج)', 'Total monthly income (DA)')}
             <input inputMode="decimal" value={incomeInput} onChange={(e) => setIncomeInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setIncome(); }} className="mt-1 w-full h-12 rounded-xl border border-slate-200 bg-white px-4 text-lg font-semibold font-mono-numbers shadow-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100" />
