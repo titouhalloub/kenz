@@ -89,7 +89,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       <section className="kenz-quick-actions" aria-label="Actions rapides">
-        <button type="button" onClick={onOpenAddModal}><span className="kenz-action-icon kenz-action-purple"><PlusCircle /></span><span>{profile.locale === 'en' ? 'Add expense' : profile.locale === 'ar' ? 'إضافة مصروف' : 'Ajouter une dépense'}</span></button>
+        <button type="button" onClick={onOpenAddModal}><span className="kenz-action-icon kenz-action-accent"><PlusCircle /></span><span>{profile.locale === 'en' ? 'Add expense' : profile.locale === 'ar' ? 'إضافة مصروف' : 'Ajouter une dépense'}</span></button>
         <button type="button" onClick={onOpenReceiptScanner}><span className="kenz-action-icon kenz-action-green"><ScanLine /></span><span>{profile.locale === 'en' ? 'Scan receipt' : profile.locale === 'ar' ? 'مسح إيصال' : 'Scanner un reçu'}</span></button>
         <button type="button" onClick={() => onNavigate('plan')}><span className="kenz-action-icon kenz-action-amber"><Landmark /></span><span>{profile.locale === 'en' ? 'My budgets' : profile.locale === 'ar' ? 'ميزانياتي' : 'Mes budgets'}</span></button>
         <button type="button" onClick={() => onNavigate('reports')}><span className="kenz-action-icon kenz-action-blue"><BarChart3 /></span><span>{profile.locale === 'en' ? 'Reports' : profile.locale === 'ar' ? 'التقارير' : 'Rapports'}</span></button>
