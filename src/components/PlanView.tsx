@@ -255,13 +255,13 @@ export const PlanView: React.FC<PlanViewProps> = ({
       </div>
 
       {/* Segmented Sub-navigation */}
-      <div className="kenz-plan-tabs flex items-center gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+      <div className="kenz-plan-tabs kenz-plan-tabs-teal">
         <button
           onClick={() => setActiveTab('budgets')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
             activeTab === 'budgets'
-              ? 'bg-slate-800 text-slate-100 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'kenz-plan-tab-active'
+              : 'kenz-plan-tab-inactive'
           }`}
         >
           Enveloppes du mois
@@ -270,8 +270,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
           onClick={() => setActiveTab('recurring')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
             activeTab === 'recurring'
-              ? 'bg-slate-800 text-slate-100 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'kenz-plan-tab-active'
+              : 'kenz-plan-tab-inactive'
           }`}
         >
           Charges & Salaires
@@ -280,8 +280,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
           onClick={() => setActiveTab('goals')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
             activeTab === 'goals'
-              ? 'bg-slate-800 text-slate-100 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'kenz-plan-tab-active'
+              : 'kenz-plan-tab-inactive'
           }`}
         >
           Objectifs d'épargne
@@ -289,7 +289,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <button
           onClick={() => setActiveTab('challenges')}
           className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition min-h-[44px] cursor-pointer ${
-            activeTab === 'challenges' ? 'bg-slate-800 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+            activeTab === 'challenges' ? 'kenz-plan-tab-active' : 'kenz-plan-tab-inactive'
           }`}
         >
           Défis d'épargne
